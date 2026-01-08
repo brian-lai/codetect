@@ -197,8 +197,15 @@ func chunkByLines(path string, lines []string, config ChunkerConfig) []Chunk {
 
 	var chunks []Chunk
 	current := 0
+	prevCurrent := -1 // Track previous position to avoid infinite loops
 
 	for current < len(lines) {
+		// Prevent infinite loop
+		if current == prevCurrent {
+			break
+		}
+		prevCurrent = current
+
 		end := current + config.MaxChunkLines
 		if end > len(lines) {
 			end = len(lines)
@@ -216,11 +223,18 @@ func chunkByLines(path string, lines []string, config ChunkerConfig) []Chunk {
 			chunks = append(chunks, chunk)
 		}
 
-		// Move to next chunk with overlap
-		current = end - config.ChunkOverlap
-		if current <= 0 || current >= len(lines)-MinChunkLines {
+		// If we've reached the end, stop
+		if end >= len(lines) {
 			break
 		}
+
+		// Move to next chunk with overlap
+		nextCurrent := end - config.ChunkOverlap
+		if nextCurrent <= current {
+			// Ensure we always make progress
+			nextCurrent = current + 1
+		}
+		current = nextCurrent
 	}
 
 	// If we have no chunks but have content, create one chunk

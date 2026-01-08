@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# repo-search Claude wrapper
+# Runs indexing (no-op in Phase 1) and then launches Claude Code
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Phase 1: indexing is a fast no-op
+# Phase 2+: this will build/update the symbol index
+if [[ -f "$REPO_ROOT/Makefile" ]]; then
+    make -C "$REPO_ROOT" -s index >/dev/null 2>&1 || true
+fi
+
+exec claude "$@"

@@ -1,0 +1,25 @@
+# Build artifacts
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local index storage
+.repo_search/
+
+# OS files
+.DS_Store
+Thumbs.db

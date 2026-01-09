@@ -1,5 +1,6 @@
 BINARY=dist/repo-search
 INDEXER=dist/repo-search-index
+DAEMON=dist/repo-search-daemon
 
 # Installation prefix (default: ~/.local)
 PREFIX ?= $(HOME)/.local
@@ -8,11 +9,12 @@ SHARE_DIR = $(PREFIX)/share/repo-search
 
 .PHONY: build mcp index embed doctor clean test install uninstall
 
-# Build both binaries
+# Build all binaries
 build:
 	@mkdir -p dist
 	go build -o $(BINARY) ./cmd/repo-search
 	go build -o $(INDEXER) ./cmd/repo-search-index
+	go build -o $(DAEMON) ./cmd/repo-search-daemon
 
 # Run MCP server (used by .mcp.json)
 mcp: build
@@ -97,8 +99,9 @@ install: build
 	@mkdir -p $(BIN_DIR) $(SHARE_DIR)/templates
 	@cp $(BINARY) $(BIN_DIR)/repo-search-mcp
 	@cp $(INDEXER) $(BIN_DIR)/repo-search-index
+	@cp $(DAEMON) $(BIN_DIR)/repo-search-daemon
 	@cp scripts/repo-search-wrapper.sh $(BIN_DIR)/repo-search
-	@chmod +x $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index
+	@chmod +x $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon
 	@cp templates/mcp.json $(SHARE_DIR)/templates/
 	@echo ""
 	@echo "✓ Installed to $(PREFIX)"
@@ -110,11 +113,11 @@ install: build
 	@echo "  cd /path/to/your/project"
 	@echo "  repo-search init"
 	@echo "  repo-search index"
-	@echo "  repo-search doctor"
+	@echo "  repo-search daemon start"
 
 # Uninstall
 uninstall:
 	@echo "Uninstalling from $(PREFIX)..."
-	@rm -f $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index
+	@rm -f $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon
 	@rm -rf $(SHARE_DIR)
 	@echo "✓ Uninstalled"

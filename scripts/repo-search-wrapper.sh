@@ -268,6 +268,19 @@ cmd_stats() {
     echo "Database size: $size"
 }
 
+cmd_update() {
+    local source_dir="${REPO_SEARCH_SOURCE:-$HOME/dev/repo-search}"
+
+    if [[ ! -f "$source_dir/scripts/update.sh" ]]; then
+        error "Update script not found"
+        info "Set REPO_SEARCH_SOURCE to the location of your repo-search clone"
+        info "Default: $source_dir"
+        return 1
+    fi
+
+    exec "$source_dir/scripts/update.sh"
+}
+
 cmd_help() {
     echo -e "${CYAN}repo-search${NC} - MCP server for codebase search & navigation"
     echo ""
@@ -280,6 +293,7 @@ cmd_help() {
     echo "  init [-f]     Create .mcp.json in current directory"
     echo "  doctor        Check installation and dependencies"
     echo "  stats         Show index statistics"
+    echo "  update        Update to latest version from GitHub"
     echo "  help          Show this help message"
     echo ""
     echo "Configuration:"
@@ -318,6 +332,9 @@ main() {
             ;;
         stats)
             cmd_stats "$@"
+            ;;
+        update)
+            cmd_update "$@"
             ;;
         help|--help|-h)
             cmd_help

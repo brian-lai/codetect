@@ -132,17 +132,17 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 		report.Summary.WithMCP.AvgAccuracy*100,
 		report.Summary.WithoutMCP.AvgAccuracy*100,
 		report.Summary.AccuracyImprovement)
-	fmt.Fprintf(w, "| %-18s | %,15.0f | %,15.0f | %+14.1f%% |\n",
+	fmt.Fprintf(w, "| %-18s | %15.0f | %15.0f | %+14.1f%% |\n",
 		"Input Tokens",
 		report.Summary.WithMCP.AvgInputTokens,
 		report.Summary.WithoutMCP.AvgInputTokens,
 		calcReduction(report.Summary.WithoutMCP.AvgInputTokens, report.Summary.WithMCP.AvgInputTokens))
-	fmt.Fprintf(w, "| %-18s | %,15.0f | %,15.0f | %+14.1f%% |\n",
+	fmt.Fprintf(w, "| %-18s | %15.0f | %15.0f | %+14.1f%% |\n",
 		"Output Tokens",
 		report.Summary.WithMCP.AvgOutputTokens,
 		report.Summary.WithoutMCP.AvgOutputTokens,
 		calcReduction(report.Summary.WithoutMCP.AvgOutputTokens, report.Summary.WithMCP.AvgOutputTokens))
-	fmt.Fprintf(w, "| %-18s | %,15.0f | %,15.0f | %+14.1f%% |\n",
+	fmt.Fprintf(w, "| %-18s | %15.0f | %15.0f | %+14.1f%% |\n",
 		"Total Tokens",
 		report.Summary.WithMCP.AvgTotalTokens,
 		report.Summary.WithoutMCP.AvgTotalTokens,
@@ -238,4 +238,13 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dms", d.Milliseconds())
 	}
 	return fmt.Sprintf("%.1fs", d.Seconds())
+}
+
+// calcReduction calculates the percentage reduction from baseline to new value.
+// Positive result means reduction (new is smaller), negative means increase.
+func calcReduction(baseline, new float64) float64 {
+	if baseline == 0 {
+		return 0
+	}
+	return ((baseline - new) / baseline) * 100
 }

@@ -66,7 +66,7 @@ For working on repo-search itself:
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourorg/repo-search.git
+git clone https://github.com/brian-lai/repo-search.git
 cd repo-search
 
 # Check dependencies

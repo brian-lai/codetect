@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	DefaultMaxChunkLines    = 50
-	DefaultChunkOverlap     = 10
-	MinChunkLines           = 5
+	DefaultMaxChunkLines = 30
+	DefaultChunkOverlap  = 15
+	MinChunkLines        = 5
 )
 
 // Chunk represents a code chunk for embedding

@@ -1,13 +1,14 @@
 BINARY=dist/repo-search
 INDEXER=dist/repo-search-index
 DAEMON=dist/repo-search-daemon
+EVAL=dist/repo-search-eval
 
 # Installation prefix (default: ~/.local)
 PREFIX ?= $(HOME)/.local
 BIN_DIR = $(PREFIX)/bin
 SHARE_DIR = $(PREFIX)/share/repo-search
 
-.PHONY: build mcp index embed doctor clean test install uninstall
+.PHONY: build mcp index embed doctor clean test install uninstall eval
 
 # Build all binaries
 build:
@@ -15,6 +16,7 @@ build:
 	go build -o $(BINARY) ./cmd/repo-search
 	go build -o $(INDEXER) ./cmd/repo-search-index
 	go build -o $(DAEMON) ./cmd/repo-search-daemon
+	go build -o $(EVAL) ./cmd/repo-search-eval
 
 # Run MCP server (used by .mcp.json)
 mcp: build
@@ -121,3 +123,16 @@ uninstall:
 	@rm -f $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon
 	@rm -rf $(SHARE_DIR)
 	@echo "✓ Uninstalled"
+
+# Run MCP evaluation tests
+eval: build
+	@echo "Running MCP evaluation..."
+	@./$(EVAL) run --verbose
+
+# List evaluation test cases
+eval-list: build
+	@./$(EVAL) list
+
+# Show latest evaluation report
+eval-report: build
+	@./$(EVAL) report

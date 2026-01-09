@@ -1,0 +1,251 @@
+package evals
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+)
+
+// Runner executes evaluation test cases.
+type Runner struct {
+	config EvalConfig
+}
+
+// NewRunner creates a new evaluation runner.
+func NewRunner(config EvalConfig) *Runner {
+	return &Runner{config: config}
+}
+
+// LoadTestCases loads test cases from JSONL files in the cases directory.
+func (r *Runner) LoadTestCases(casesDir string) ([]TestCase, error) {
+	var cases []TestCase
+
+	// Find all JSONL files
+	files, err := filepath.Glob(filepath.Join(casesDir, "*.jsonl"))
+	if err != nil {
+		return nil, fmt.Errorf("finding test case files: %w", err)
+	}
+
+	for _, file := range files {
+		fileCases, err := r.loadJSONLFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("loading %s: %w", file, err)
+		}
+
+		// Filter by category if specified
+		for _, tc := range fileCases {
+			if len(r.config.Categories) == 0 || contains(r.config.Categories, tc.Category) {
+				// Filter by test case ID if specified
+				if len(r.config.TestCaseIDs) == 0 || contains(r.config.TestCaseIDs, tc.ID) {
+					cases = append(cases, tc)
+				}
+			}
+		}
+	}
+
+	return cases, nil
+}
+
+func (r *Runner) loadJSONLFile(path string) ([]TestCase, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var cases []TestCase
+	scanner := bufio.NewScanner(file)
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+
+		var tc TestCase
+		if err := json.Unmarshal([]byte(line), &tc); err != nil {
+			return nil, fmt.Errorf("line %d: %w", lineNum, err)
+		}
+		cases = append(cases, tc)
+	}
+
+	return cases, scanner.Err()
+}
+
+// RunAll executes all test cases in both modes.
+func (r *Runner) RunAll(ctx context.Context, cases []TestCase) (*EvalReport, error) {
+	report := &EvalReport{
+		Timestamp: time.Now(),
+		Config:    r.config,
+	}
+
+	for i, tc := range cases {
+		if r.config.Verbose {
+			fmt.Fprintf(os.Stderr, "[%d/%d] Running: %s\n", i+1, len(cases), tc.ID)
+		}
+
+		// Run with MCP
+		withMCP, err := r.runTestCase(ctx, tc, ModeWithMCP)
+		if err != nil {
+			withMCP = &RunResult{
+				TestCaseID: tc.ID,
+				Mode:       ModeWithMCP,
+				Success:    false,
+				Error:      err.Error(),
+			}
+		}
+		report.RawResults = append(report.RawResults, *withMCP)
+
+		// Run without MCP
+		withoutMCP, err := r.runTestCase(ctx, tc, ModeWithoutMCP)
+		if err != nil {
+			withoutMCP = &RunResult{
+				TestCaseID: tc.ID,
+				Mode:       ModeWithoutMCP,
+				Success:    false,
+				Error:      err.Error(),
+			}
+		}
+		report.RawResults = append(report.RawResults, *withoutMCP)
+	}
+
+	return report, nil
+}
+
+// runTestCase executes a single test case in the specified mode.
+func (r *Runner) runTestCase(ctx context.Context, tc TestCase, mode ExecutionMode) (*RunResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.config.Timeout)
+	defer cancel()
+
+	args := r.buildClaudeArgs(tc, mode)
+
+	start := time.Now()
+	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd.Dir = r.config.RepoPath
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	result := &RunResult{
+		TestCaseID: tc.ID,
+		Mode:       mode,
+		Duration:   duration,
+	}
+
+	if err != nil {
+		result.Success = false
+		result.Error = fmt.Sprintf("%v: %s", err, stderr.String())
+		return result, nil
+	}
+
+	// Parse streaming JSON output - each line is a separate JSON event
+	// We look for the final "result" event which contains usage stats
+	lines := bytes.Split(stdout.Bytes(), []byte("\n"))
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		var event ClaudeStreamEvent
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue // Skip unparseable lines
+		}
+
+		// The final "result" event contains the summary
+		if event.Type == "result" {
+			result.Success = event.Subtype == "success"
+			result.Output = event.Result
+			result.SessionID = event.SessionID
+			result.NumTurns = event.NumTurns
+			result.CostUSD = event.TotalCost
+
+			if event.Usage != nil {
+				result.InputTokens = event.Usage.InputTokens
+				result.OutputTokens = event.Usage.OutputTokens
+				result.CacheReadTokens = event.Usage.CacheReadInputTokens
+				result.CacheCreateTokens = event.Usage.CacheCreationInputTokens
+				result.TokensUsed = event.Usage.InputTokens + event.Usage.OutputTokens
+			}
+		}
+	}
+
+	// If we didn't find a result event, try parsing as simple JSON
+	if result.Output == "" {
+		var resp ClaudeResponse
+		if err := json.Unmarshal(stdout.Bytes(), &resp); err == nil {
+			result.Success = true
+			result.Output = resp.Result
+			result.SessionID = resp.SessionID
+		}
+	}
+
+	return result, nil
+}
+
+// buildClaudeArgs constructs the command-line arguments for Claude.
+func (r *Runner) buildClaudeArgs(tc TestCase, mode ExecutionMode) []string {
+	args := []string{
+		"-p", tc.Prompt,
+		"--output-format", "stream-json",
+		"--verbose",
+	}
+
+	if mode == ModeWithMCP {
+		// Enable repo-search MCP tools
+		mcpConfig := `{"mcpServers":{"repo-search":{"command":"repo-search","args":["mcp"]}}}`
+		args = append(args,
+			"--mcp-config", mcpConfig,
+			"--allowedTools", "mcp__repo-search__search_keyword,mcp__repo-search__find_symbol,mcp__repo-search__list_defs_in_file,mcp__repo-search__search_semantic,mcp__repo-search__hybrid_search,mcp__repo-search__get_file,Read",
+		)
+	} else {
+		// Standard tools only
+		args = append(args,
+			"--allowedTools", "Bash(rg:*),Bash(grep:*),Bash(find:*),Read,Glob,Grep",
+		)
+	}
+
+	// Add max turns to prevent runaway execution
+	args = append(args, "--max-turns", "20")
+
+	return args
+}
+
+// SaveResults writes the raw results to a JSON file.
+func (r *Runner) SaveResults(report *EvalReport) error {
+	if err := os.MkdirAll(r.config.OutputDir, 0755); err != nil {
+		return fmt.Errorf("creating output dir: %w", err)
+	}
+
+	filename := fmt.Sprintf("%s-results.json", time.Now().Format("2006-01-02-150405"))
+	path := filepath.Join(r.config.OutputDir, filename)
+
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling results: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("writing results: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Results saved to: %s\n", path)
+	return nil
+}
+
+func contains(slice []string, item string) bool {
+	return slices.Contains(slice, item)
+}

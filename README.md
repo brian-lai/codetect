@@ -34,7 +34,7 @@ Install once, use in any project:
 
 ```bash
 # Clone and build
-git clone https://github.com/yourorg/repo-search.git
+git clone https://github.com/brian-lai/repo-search.git
 cd repo-search
 make install
 

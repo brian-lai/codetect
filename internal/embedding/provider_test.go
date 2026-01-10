@@ -17,6 +17,9 @@ func TestDefaultProviderConfig(t *testing.T) {
 	if cfg.LiteLLMURL != DefaultLiteLLMURL {
 		t.Errorf("expected LiteLLMURL=%s, got %s", DefaultLiteLLMURL, cfg.LiteLLMURL)
 	}
+	if cfg.LMStudioURL != DefaultLMStudioURL {
+		t.Errorf("expected LMStudioURL=%s, got %s", DefaultLMStudioURL, cfg.LMStudioURL)
+	}
 }
 
 func TestLoadConfigFromEnv(t *testing.T) {
@@ -25,6 +28,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	origOllamaURL := os.Getenv("REPO_SEARCH_OLLAMA_URL")
 	origLiteLLMURL := os.Getenv("REPO_SEARCH_LITELLM_URL")
 	origLiteLLMKey := os.Getenv("REPO_SEARCH_LITELLM_API_KEY")
+	origLMStudioURL := os.Getenv("REPO_SEARCH_LMSTUDIO_URL")
 	origModel := os.Getenv("REPO_SEARCH_EMBEDDING_MODEL")
 	origDimensions := os.Getenv("REPO_SEARCH_EMBEDDING_DIMENSIONS")
 
@@ -33,6 +37,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		os.Setenv("REPO_SEARCH_OLLAMA_URL", origOllamaURL)
 		os.Setenv("REPO_SEARCH_LITELLM_URL", origLiteLLMURL)
 		os.Setenv("REPO_SEARCH_LITELLM_API_KEY", origLiteLLMKey)
+		os.Setenv("REPO_SEARCH_LMSTUDIO_URL", origLMStudioURL)
 		os.Setenv("REPO_SEARCH_EMBEDDING_MODEL", origModel)
 		os.Setenv("REPO_SEARCH_EMBEDDING_DIMENSIONS", origDimensions)
 	}()
@@ -81,6 +86,20 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		}
 		if cfg.LiteLLMKey != "test-key" {
 			t.Errorf("expected LiteLLMKey=test-key, got %s", cfg.LiteLLMKey)
+		}
+	})
+
+	t.Run("reads lmstudio provider", func(t *testing.T) {
+		os.Setenv("REPO_SEARCH_EMBEDDING_PROVIDER", "lmstudio")
+		os.Setenv("REPO_SEARCH_LMSTUDIO_URL", "http://lmstudio:1234")
+
+		cfg := LoadConfigFromEnv()
+
+		if cfg.Provider != ProviderLMStudio {
+			t.Errorf("expected Provider=%s, got %s", ProviderLMStudio, cfg.Provider)
+		}
+		if cfg.LMStudioURL != "http://lmstudio:1234" {
+			t.Errorf("expected LMStudioURL=http://lmstudio:1234, got %s", cfg.LMStudioURL)
 		}
 	})
 
@@ -236,6 +255,52 @@ func TestNewEmbedder(t *testing.T) {
 			t.Errorf("expected default model %s, got %s", DefaultLiteLLMModel, client.Model())
 		}
 	})
+
+	t.Run("creates LMStudioClient for lmstudio", func(t *testing.T) {
+		cfg := ProviderConfig{
+			Provider:    ProviderLMStudio,
+			LMStudioURL: "http://test:1234",
+			Model:       "nomic-embed-code-GGUF",
+			Dimensions:  768,
+		}
+		embedder, err := NewEmbedder(cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		client, ok := embedder.(*LMStudioClient)
+		if !ok {
+			t.Errorf("expected *LMStudioClient, got %T", embedder)
+		}
+		if client.BaseURL() != "http://test:1234" {
+			t.Errorf("expected BaseURL=http://test:1234, got %s", client.BaseURL())
+		}
+		if client.Model() != "nomic-embed-code-GGUF" {
+			t.Errorf("expected Model=nomic-embed-code-GGUF, got %s", client.Model())
+		}
+		if client.Dimensions() != 768 {
+			t.Errorf("expected Dimensions=768, got %d", client.Dimensions())
+		}
+		if embedder.ProviderID() != "lmstudio:nomic-embed-code-GGUF" {
+			t.Errorf("expected ProviderID=lmstudio:nomic-embed-code-GGUF, got %s", embedder.ProviderID())
+		}
+	})
+
+	t.Run("uses default model for lmstudio", func(t *testing.T) {
+		cfg := ProviderConfig{
+			Provider:    ProviderLMStudio,
+			LMStudioURL: DefaultLMStudioURL,
+		}
+		embedder, err := NewEmbedder(cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		client := embedder.(*LMStudioClient)
+		if client.Model() != DefaultLMStudioModel {
+			t.Errorf("expected default model %s, got %s", DefaultLMStudioModel, client.Model())
+		}
+	})
 }
 
 func TestProviderString(t *testing.T) {
@@ -245,6 +310,7 @@ func TestProviderString(t *testing.T) {
 	}{
 		{ProviderOllama, "Ollama"},
 		{ProviderLiteLLM, "LiteLLM"},
+		{ProviderLMStudio, "LMStudio"},
 		{ProviderOff, "Disabled"},
 		{Provider("unknown"), "unknown"},
 	}
@@ -265,6 +331,9 @@ func TestProviderIsEnabled(t *testing.T) {
 	}
 	if !ProviderLiteLLM.IsEnabled() {
 		t.Error("ProviderLiteLLM should be enabled")
+	}
+	if !ProviderLMStudio.IsEnabled() {
+		t.Error("ProviderLMStudio should be enabled")
 	}
 	if ProviderOff.IsEnabled() {
 		t.Error("ProviderOff should not be enabled")

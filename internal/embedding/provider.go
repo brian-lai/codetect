@@ -11,29 +11,32 @@ import (
 type Provider string
 
 const (
-	ProviderOllama  Provider = "ollama"
-	ProviderLiteLLM Provider = "litellm"
-	ProviderOff     Provider = "off"
+	ProviderOllama   Provider = "ollama"
+	ProviderLiteLLM  Provider = "litellm"
+	ProviderLMStudio Provider = "lmstudio"
+	ProviderOff      Provider = "off"
 )
 
 // ProviderConfig configures the embedding provider
 type ProviderConfig struct {
-	Provider   Provider // "ollama", "litellm", "off"
-	OllamaURL  string   // default: http://localhost:11434
-	LiteLLMURL string   // default: http://localhost:4000
-	LiteLLMKey string   // API key for LiteLLM
-	Model      string   // model name (provider-specific default if empty)
-	Dimensions int      // embedding dimensions (0 = auto-detect)
+	Provider     Provider // "ollama", "litellm", "lmstudio", "off"
+	OllamaURL    string   // default: http://localhost:11434
+	LiteLLMURL   string   // default: http://localhost:4000
+	LiteLLMKey   string   // API key for LiteLLM
+	LMStudioURL  string   // default: http://localhost:1234
+	Model        string   // model name (provider-specific default if empty)
+	Dimensions   int      // embedding dimensions (0 = auto-detect)
 }
 
 // DefaultProviderConfig returns the default provider configuration
 func DefaultProviderConfig() ProviderConfig {
 	return ProviderConfig{
-		Provider:   ProviderOllama,
-		OllamaURL:  DefaultOllamaURL,
-		LiteLLMURL: DefaultLiteLLMURL,
-		Model:      "", // will use provider default
-		Dimensions: 0,  // will use provider default
+		Provider:    ProviderOllama,
+		OllamaURL:   DefaultOllamaURL,
+		LiteLLMURL:  DefaultLiteLLMURL,
+		LMStudioURL: DefaultLMStudioURL,
+		Model:       "", // will use provider default
+		Dimensions:  0,  // will use provider default
 	}
 }
 
@@ -48,6 +51,8 @@ func LoadConfigFromEnv() ProviderConfig {
 			cfg.Provider = ProviderOllama
 		case "litellm":
 			cfg.Provider = ProviderLiteLLM
+		case "lmstudio":
+			cfg.Provider = ProviderLMStudio
 		case "off", "disabled", "none":
 			cfg.Provider = ProviderOff
 		default:
@@ -67,6 +72,11 @@ func LoadConfigFromEnv() ProviderConfig {
 	}
 	if key := os.Getenv("REPO_SEARCH_LITELLM_API_KEY"); key != "" {
 		cfg.LiteLLMKey = key
+	}
+
+	// LMStudio configuration
+	if url := os.Getenv("REPO_SEARCH_LMSTUDIO_URL"); url != "" {
+		cfg.LMStudioURL = url
 	}
 
 	// Model override
@@ -114,6 +124,18 @@ func NewEmbedder(cfg ProviderConfig) (Embedder, error) {
 		}
 		return NewLiteLLMClient(opts...), nil
 
+	case ProviderLMStudio:
+		opts := []LMStudioOption{
+			WithLMStudioBaseURL(cfg.LMStudioURL),
+		}
+		if cfg.Model != "" {
+			opts = append(opts, WithLMStudioModel(cfg.Model))
+		}
+		if cfg.Dimensions > 0 {
+			opts = append(opts, WithLMStudioDimensions(cfg.Dimensions))
+		}
+		return NewLMStudioClient(opts...), nil
+
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
 	}
@@ -131,6 +153,8 @@ func (p Provider) String() string {
 		return "Ollama"
 	case ProviderLiteLLM:
 		return "LiteLLM"
+	case ProviderLMStudio:
+		return "LMStudio"
 	case ProviderOff:
 		return "Disabled"
 	default:

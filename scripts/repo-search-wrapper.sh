@@ -56,10 +56,14 @@ info() {
 }
 
 #
-# Load global config if exists
+# Load config (per-project first, then global)
 #
 load_config() {
-    if [[ -f "$CONFIG_FILE" ]]; then
+    # Check for per-project config first
+    if [[ -f ".env.repo-search" ]]; then
+        source ".env.repo-search"
+    # Fall back to global config
+    elif [[ -f "$CONFIG_FILE" ]]; then
         source "$CONFIG_FILE"
     fi
 }
@@ -109,6 +113,9 @@ cmd_init() {
         return 1
     fi
 
+    echo -e "${CYAN}Initializing repo-search in $(basename $(pwd))${NC}"
+    echo ""
+
     # Check if template exists
     local template="$SHARE_DIR/templates/mcp.json"
     if [[ ! -f "$template" ]]; then
@@ -129,17 +136,116 @@ EOF
 
     success "Created .mcp.json"
 
+    # Embedding provider configuration
+    echo ""
+    echo -e "${CYAN}Embedding Provider Setup${NC}"
+    echo "Configure semantic search for this project."
+    echo ""
+    echo "Select an embedding provider:"
+    echo -e "  ${GREEN}1)${NC} Ollama (local, free, recommended)"
+    echo -e "  ${GREEN}2)${NC} LiteLLM (OpenAI, Azure, Bedrock, etc.)"
+    echo -e "  ${GREEN}3)${NC} LMStudio (local OpenAI-compatible API)"
+    echo -e "  ${GREEN}4)${NC} None (disable semantic search)"
+    echo ""
+
+    read -p "$(echo -e ${BLUE}?${NC}) Your choice [1]: " PROVIDER_CHOICE
+    PROVIDER_CHOICE=${PROVIDER_CHOICE:-1}
+
+    local EMBEDDING_PROVIDER=""
+    local OLLAMA_URL=""
+    local LITELLM_URL=""
+    local LITELLM_API_KEY=""
+    local LMSTUDIO_URL=""
+    local EMBEDDING_MODEL=""
+
+    case $PROVIDER_CHOICE in
+        1)
+            EMBEDDING_PROVIDER="ollama"
+            read -p "$(echo -e ${BLUE}?${NC}) Ollama URL [http://localhost:11434]: " OLLAMA_URL
+            OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
+            read -p "$(echo -e ${BLUE}?${NC}) Embedding model [nomic-embed-text]: " EMBEDDING_MODEL
+            EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+            ;;
+        2)
+            EMBEDDING_PROVIDER="litellm"
+            read -p "$(echo -e ${BLUE}?${NC}) LiteLLM URL [http://localhost:4000]: " LITELLM_URL
+            LITELLM_URL=${LITELLM_URL:-http://localhost:4000}
+            read -p "$(echo -e ${BLUE}?${NC}) API Key (leave empty if not required): " LITELLM_API_KEY
+            read -p "$(echo -e ${BLUE}?${NC}) Embedding model [text-embedding-3-small]: " EMBEDDING_MODEL
+            EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+            ;;
+        3)
+            EMBEDDING_PROVIDER="lmstudio"
+            read -p "$(echo -e ${BLUE}?${NC}) LMStudio URL [http://localhost:1234]: " LMSTUDIO_URL
+            LMSTUDIO_URL=${LMSTUDIO_URL:-http://localhost:1234}
+            read -p "$(echo -e ${BLUE}?${NC}) Embedding model [nomic-embed-code-GGUF]: " EMBEDDING_MODEL
+            EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-code-GGUF}
+            ;;
+        4)
+            EMBEDDING_PROVIDER="off"
+            ;;
+        *)
+            warn "Invalid choice, using default (ollama)"
+            EMBEDDING_PROVIDER="ollama"
+            OLLAMA_URL="http://localhost:11434"
+            EMBEDDING_MODEL="nomic-embed-text"
+            ;;
+    esac
+
+    # Create .env.repo-search
+    cat > .env.repo-search << EOF
+# repo-search configuration for $(basename $(pwd))
+# Auto-loaded by repo-search commands
+
+export REPO_SEARCH_EMBEDDING_PROVIDER="$EMBEDDING_PROVIDER"
+EOF
+
+    if [[ $EMBEDDING_PROVIDER == "ollama" ]]; then
+        cat >> .env.repo-search << EOF
+export REPO_SEARCH_OLLAMA_URL="$OLLAMA_URL"
+export REPO_SEARCH_EMBEDDING_MODEL="$EMBEDDING_MODEL"
+EOF
+    elif [[ $EMBEDDING_PROVIDER == "litellm" ]]; then
+        cat >> .env.repo-search << EOF
+export REPO_SEARCH_LITELLM_URL="$LITELLM_URL"
+export REPO_SEARCH_LITELLM_API_KEY="$LITELLM_API_KEY"
+export REPO_SEARCH_EMBEDDING_MODEL="$EMBEDDING_MODEL"
+EOF
+    elif [[ $EMBEDDING_PROVIDER == "lmstudio" ]]; then
+        cat >> .env.repo-search << EOF
+export REPO_SEARCH_LMSTUDIO_URL="$LMSTUDIO_URL"
+export REPO_SEARCH_EMBEDDING_MODEL="$EMBEDDING_MODEL"
+EOF
+    fi
+
+    success "Created .env.repo-search"
+
     # Register in central registry
     registry_add "$(pwd)" 2>/dev/null || true
 
-    info "Run 'repo-search index' to index this codebase"
+    echo ""
+    info "Next steps:"
+    info "  repo-search index     # Index symbols"
+    if [[ $EMBEDDING_PROVIDER != "off" ]]; then
+        info "  repo-search embed     # Generate embeddings"
+    fi
 
     # Add to .gitignore if exists
     if [[ -f ".gitignore" ]]; then
+        local added=false
         if ! grep -q "^\.repo_search/$" .gitignore 2>/dev/null; then
             echo "" >> .gitignore
             echo "# repo-search index" >> .gitignore
             echo ".repo_search/" >> .gitignore
+            added=true
+        fi
+        if ! grep -q "^\.env\.repo-search$" .gitignore 2>/dev/null; then
+            if [[ "$added" != "true" ]]; then
+                echo "" >> .gitignore
+            fi
+            echo ".env.repo-search" >> .gitignore
+            success "Added .repo_search/ and .env.repo-search to .gitignore"
+        elif [[ "$added" == "true" ]]; then
             success "Added .repo_search/ to .gitignore"
         fi
     fi
@@ -212,6 +318,17 @@ cmd_doctor() {
                 warn "LiteLLM not running at $litellm_url"
             fi
             ;;
+        lmstudio)
+            echo -e "  Provider: ${GREEN}LMStudio${NC}"
+            local lmstudio_url="${REPO_SEARCH_LMSTUDIO_URL:-http://localhost:1234}"
+            local model="${REPO_SEARCH_EMBEDDING_MODEL:-nomic-embed-code-GGUF}"
+            echo -e "  Model: $model"
+            if curl -s "$lmstudio_url/v1/models" &> /dev/null; then
+                success "LMStudio is running at $lmstudio_url"
+            else
+                warn "LMStudio not running at $lmstudio_url"
+            fi
+            ;;
         off)
             echo -e "  Provider: ${YELLOW}Disabled${NC}"
             info "Semantic search is disabled"
@@ -224,11 +341,13 @@ cmd_doctor() {
 
     # Check config
     echo "Configuration:"
-    if [[ -f "$CONFIG_FILE" ]]; then
-        success "Config file: $CONFIG_FILE"
+    if [[ -f ".env.repo-search" ]]; then
+        success "Per-project config: .env.repo-search"
+    elif [[ -f "$CONFIG_FILE" ]]; then
+        success "Global config: $CONFIG_FILE"
     else
-        info "No global config (using defaults)"
-        info "Create with: mkdir -p $CONFIG_DIR && touch $CONFIG_FILE"
+        info "No config found (using defaults)"
+        info "Run 'repo-search init' to create per-project config"
     fi
     echo ""
 

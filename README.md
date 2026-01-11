@@ -51,8 +51,27 @@ repo-search index     # Index symbols
 repo-search embed     # Generate embeddings
 repo-search doctor    # Check dependencies
 repo-search stats     # Show index statistics
+repo-search migrate   # Discover existing indexes and register them
 repo-search update    # Update to latest version
 repo-search help      # Show all commands
+```
+
+### Daemon Commands
+
+```bash
+repo-search daemon start    # Start background indexing daemon
+repo-search daemon stop     # Stop daemon
+repo-search daemon status   # Show daemon status
+repo-search daemon logs     # View daemon logs
+```
+
+### Registry Commands
+
+```bash
+repo-search registry list     # List registered projects
+repo-search registry add      # Add current project to registry
+repo-search registry remove   # Remove a project from registry
+repo-search registry stats    # Show aggregate statistics
 ```
 
 ### Evaluation Commands
@@ -172,8 +191,9 @@ See [MCP Compatibility](docs/mcp-compatibility.md) for details and roadmap for n
 - [x] Semantic search via Ollama
 - [x] Hybrid search
 - [x] Global installation
-- [ ] Background indexing daemon
-- [ ] Project registry
+- [x] Background indexing daemon
+- [x] Project registry
+- [x] Evaluation framework
 - [ ] HTTP API for non-MCP tools
 - [ ] CLI query mode
 

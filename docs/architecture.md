@@ -18,7 +18,8 @@ repo-search/
 ├── cmd/
 │   ├── repo-search/           # CLI entry point & MCP stdio server
 │   ├── repo-search-index/     # Symbol indexer & embedding generator
-│   └── repo-search-daemon/    # Background indexing daemon (WIP)
+│   ├── repo-search-daemon/    # Background indexing daemon
+│   └── repo-search-eval/      # Evaluation framework for testing
 ├── internal/
 │   ├── mcp/                   # MCP protocol implementation
 │   │   ├── server.go          # JSON-RPC server over stdio
@@ -47,11 +48,12 @@ repo-search/
 │   │   ├── tools.go           # Tool registration
 │   │   ├── symbols.go         # find_symbol, list_defs_in_file
 │   │   └── semantic.go        # search_semantic, hybrid_search
-│   ├── daemon/                # Background daemon (WIP)
+│   ├── daemon/                # Background daemon
 │   │   ├── daemon.go          # Daemon process management
 │   │   └── ipc.go             # Inter-process communication
-│   └── registry/              # Project registry (WIP)
+│   └── registry/              # Project registry
 │       └── registry.go        # Track indexed projects
+├── evals/                     # Evaluation test cases and results
 ├── scripts/
 │   └── repo-search-wrapper.sh # CLI wrapper for global install
 ├── templates/
@@ -248,11 +250,9 @@ repo-search is designed to work with partial dependencies:
 
 The MCP server always starts; tools report availability in their responses.
 
-## Future Architecture (Planned)
+## Background Daemon (`internal/daemon/`)
 
-### Background Daemon
-
-A persistent daemon for automatic re-indexing:
+The daemon provides automatic re-indexing when files change:
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -261,16 +261,58 @@ A persistent daemon for automatic re-indexing:
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
-### Project Registry
+Features:
+- File system watching via fsnotify
+- Debounced re-indexing to avoid excessive updates
+- IPC for daemon control (start/stop/status)
+- Respects `.gitignore` patterns
+- PID file and Unix socket for process management
+
+Commands:
+- `repo-search-daemon start` - Start the daemon
+- `repo-search-daemon stop` - Stop the daemon
+- `repo-search-daemon status` - Show daemon status
+
+## Project Registry (`internal/registry/`)
 
 Central tracking of all indexed projects:
 
 ```
 ~/.repo_search/
-└── registry.db      # Global project registry
+└── registry.json    # Global project registry
     ├── projects     # Registered project paths
-    └── stats        # Aggregate statistics
+    ├── settings     # Auto-watch configuration
+    └── stats        # Index statistics per project
 ```
+
+Features:
+- JSON-based storage for portability
+- Per-project index statistics (symbol count, embedding count, DB size)
+- Watch enabled/disabled flags
+- Last indexed timestamp tracking
+- Global settings for auto-watch and debounce
+
+## Evaluation Framework (`cmd/repo-search-eval/`, `evals/`)
+
+Testing framework for comparing MCP vs non-MCP performance:
+
+```
+Test Cases → Runner → [MCP Search, Direct Search] → Validator → Report
+```
+
+Features:
+- JSONL-based test case format
+- Categories: search, navigate, understand
+- Per-repo test case storage in `.repo-search/evals/cases/`
+- Automated validation of results
+- Performance comparison reports
+
+Commands:
+- `repo-search-eval run` - Run evaluation tests
+- `repo-search-eval report` - Display saved reports
+- `repo-search-eval list` - List available test cases
+
+## Future Architecture (Planned)
 
 ### HTTP API Mode
 

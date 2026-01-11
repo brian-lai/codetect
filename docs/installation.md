@@ -140,6 +140,8 @@ repo-search doctor
 
 ## CLI Commands Reference
 
+### Main Commands
+
 | Command | Description |
 |---------|-------------|
 | `repo-search init` | Initialize repo-search in current directory |
@@ -147,8 +149,27 @@ repo-search doctor
 | `repo-search embed` | Generate embeddings for semantic search |
 | `repo-search doctor` | Check installation and dependencies |
 | `repo-search stats` | Show index statistics |
+| `repo-search migrate` | Discover existing indexes and register them |
 | `repo-search update` | Update to latest version from GitHub |
 | `repo-search help` | Show all commands |
+
+### Daemon Commands
+
+| Command | Description |
+|---------|-------------|
+| `repo-search daemon start` | Start background indexing daemon |
+| `repo-search daemon stop` | Stop daemon |
+| `repo-search daemon status` | Show daemon status |
+| `repo-search daemon logs` | View daemon logs |
+
+### Registry Commands
+
+| Command | Description |
+|---------|-------------|
+| `repo-search registry list` | List registered projects |
+| `repo-search registry add` | Add current project to registry |
+| `repo-search registry remove` | Remove a project from registry |
+| `repo-search registry stats` | Show aggregate statistics |
 
 ## Configuration
 
@@ -197,11 +218,20 @@ After `make install`, files are placed at:
 ├── bin/
 │   ├── repo-search          # Main CLI (wrapper script)
 │   ├── repo-search-mcp      # MCP server binary
-│   └── repo-search-index    # Indexer binary
+│   ├── repo-search-index    # Indexer binary
+│   └── repo-search-daemon   # Background daemon binary
 └── share/
     └── repo-search/
         └── templates/
             └── mcp.json     # Template for new projects
+```
+
+Configuration and registry are stored at:
+
+```
+~/.config/repo-search/
+├── config.env              # Global configuration
+└── registry.json           # Project registry
 ```
 
 ## Per-Project Files

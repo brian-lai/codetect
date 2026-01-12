@@ -171,7 +171,66 @@ Features:
 Query → Embed query → Cosine similarity vs all chunks → Top-K results
 ```
 
-Currently brute-force search (sufficient for <100K chunks). Future: consider HNSW or IVF indexing for larger codebases.
+Currently brute-force search (sufficient for <100K chunks). Future options for larger codebases:
+- sqlite-vec extension with native KNN queries
+- HNSW or IVF indexing libraries
+
+### Database Adapter Layer (`internal/db/`)
+
+The database layer uses an adapter pattern for hot-swappable SQLite implementations:
+
+```
+internal/db/
+├── adapter.go      # DB, Tx, Stmt, Rows, Row interfaces
+├── modernc.go      # modernc.org/sqlite implementation (pure Go)
+├── sql_wrapper.go  # WrapSQL() for *sql.DB compatibility
+└── open.go         # Driver factory (Open, MustOpen)
+```
+
+#### Supported Drivers
+
+| Driver | Status | Notes |
+|--------|--------|-------|
+| `modernc` | ✅ Default | Pure Go, no CGO, no extensions |
+| `ncruces` | 🔜 Planned | WASM-based, supports sqlite-vec |
+| `mattn` | 🔜 Planned | CGO, full extension support |
+
+#### Usage
+
+```go
+// New code - use adapter interface
+cfg := db.DefaultConfig("path/to/db.sqlite")
+database, err := db.Open(cfg)
+store, err := embedding.NewEmbeddingStore(database)
+
+// Legacy code - wrap *sql.DB
+store, err := embedding.NewEmbeddingStoreFromSQL(sqlDB)
+
+// From symbols.Index
+dbAdapter := idx.DBAdapter()  // Returns db.DB interface
+```
+
+#### Future: Native Vector Search with sqlite-vec
+
+When ncruces driver is implemented, native KNN queries will be available:
+
+```sql
+-- Create vec0 virtual table
+CREATE VIRTUAL TABLE embeddings_vec USING vec0(
+  embedding float[768] distance_metric=cosine
+);
+
+-- Native KNN query (orders of magnitude faster than brute-force)
+SELECT rowid, distance
+FROM embeddings_vec
+WHERE embedding MATCH ?query
+AND k = 10;
+```
+
+This requires:
+1. Implementing `DriverNcruces` in `internal/db/`
+2. Adding `ExtendedDB` interface methods for vector operations
+3. Updating `EmbeddingStore` to use native KNN when available
 
 ### Hybrid Search (`internal/search/hybrid/`)
 

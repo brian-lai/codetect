@@ -14,18 +14,28 @@ Executing: sqlite-vec Integration for Semantic Search Latency Optimization
 - [x] Update EmbeddingStore to use adapter interface
 - [x] Update symbols package to use adapter interface
 - [x] Add unit tests for adapter
-- [ ] Document future ncruces/sqlite-vec adapter option
+- [x] Document future ncruces/sqlite-vec adapter option
 
 ## Progress Notes
 
 **2026-01-12**: Pivoted approach after research. sqlite-vec requires CGO or ncruces WASM driver,
 but codebase uses pure-Go modernc.org/sqlite. Created DB adapter layer to enable future driver
-swapping without code changes. Implemented:
+swapping without code changes.
+
+**Completed:**
 - `internal/db/adapter.go` - Interface definitions (DB, Tx, Stmt, Rows, Row, Result)
 - `internal/db/modernc.go` - Modernc driver wrapper implementing interfaces
 - `internal/db/open.go` - Driver factory with stubs for ncruces/mattn
+- `internal/db/sql_wrapper.go` - WrapSQL() for *sql.DB compatibility
+- `internal/db/adapter_test.go` - Comprehensive unit tests
+- Updated `EmbeddingStore` to accept db.DB interface
+- Added `Index.DBAdapter()` for db.DB access from symbols package
+- Updated `docs/architecture.md` with adapter layer documentation
 
-Next: Update existing code to use adapter interfaces.
+**Next steps for sqlite-vec (future work):**
+1. Implement ncruces driver in `internal/db/ncruces.go`
+2. Add `ExtendedDB` interface methods for native KNN
+3. Update EmbeddingStore to use native KNN when available
 
 ---
 ```json

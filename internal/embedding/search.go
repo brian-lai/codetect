@@ -31,9 +31,10 @@ type SemanticSearcher struct {
 	db       *sql.DB
 }
 
-// NewSemanticSearcher creates a new semantic searcher
-func NewSemanticSearcher(db *sql.DB, embedder Embedder) (*SemanticSearcher, error) {
-	store, err := NewEmbeddingStore(db)
+// NewSemanticSearcher creates a new semantic searcher from a raw *sql.DB.
+// For new code, prefer NewSemanticSearcherWithDB which accepts the db.DB interface.
+func NewSemanticSearcher(sqlDB *sql.DB, embedder Embedder) (*SemanticSearcher, error) {
+	store, err := NewEmbeddingStoreFromSQL(sqlDB)
 	if err != nil {
 		return nil, fmt.Errorf("creating embedding store: %w", err)
 	}
@@ -41,7 +42,7 @@ func NewSemanticSearcher(db *sql.DB, embedder Embedder) (*SemanticSearcher, erro
 	return &SemanticSearcher{
 		store:    store,
 		embedder: embedder,
-		db:       db,
+		db:       sqlDB,
 	}, nil
 }
 

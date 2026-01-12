@@ -425,7 +425,7 @@ func runStats(args []string) {
 	fmt.Printf("Files: %d\n", fileCount)
 
 	// Try to get embedding stats
-	store, err := embedding.NewEmbeddingStore(idx.DB())
+	store, err := embedding.NewEmbeddingStoreFromSQL(idx.DB())
 	if err == nil {
 		embCount, embFileCount, err := store.Stats()
 		if err == nil && embCount > 0 {

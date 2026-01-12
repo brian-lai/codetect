@@ -2,9 +2,27 @@ package db
 
 import "fmt"
 
-// Open opens a database connection using the driver specified in config.
-// Currently only DriverModernc is implemented.
+// Open opens a database connection using the configuration.
+// Supports SQLite (default), PostgreSQL, and ClickHouse.
 func Open(cfg Config) (DB, error) {
+	// Route based on database type
+	switch cfg.Type {
+	case DatabasePostgres:
+		return openPostgres(cfg)
+
+	case DatabaseClickHouse:
+		return openClickHouse(cfg)
+
+	case DatabaseSQLite, "": // Default to SQLite
+		return openSQLite(cfg)
+
+	default:
+		return nil, fmt.Errorf("unknown database type: %s", cfg.Type)
+	}
+}
+
+// openSQLite opens a SQLite database using the specified driver.
+func openSQLite(cfg Config) (DB, error) {
 	switch cfg.Driver {
 	case DriverModernc, "": // Default to modernc
 		return OpenModernc(cfg)
@@ -23,8 +41,38 @@ func Open(cfg Config) (DB, error) {
 		return nil, fmt.Errorf("mattn driver not yet implemented (requires CGO)")
 
 	default:
-		return nil, fmt.Errorf("unknown database driver: %s", cfg.Driver)
+		return nil, fmt.Errorf("unknown SQLite driver: %s", cfg.Driver)
 	}
+}
+
+// openPostgres opens a PostgreSQL database connection.
+// Requires DSN in config.
+func openPostgres(cfg Config) (DB, error) {
+	if cfg.DSN == "" {
+		return nil, fmt.Errorf("postgres requires DSN in config")
+	}
+
+	// TODO: Implement PostgreSQL driver (lib/pq or pgx)
+	// Example:
+	//   import _ "github.com/lib/pq"
+	//   db, err := sql.Open("postgres", cfg.DSN)
+	//   return WrapSQL(db), nil
+	return nil, fmt.Errorf("postgres driver not yet implemented (requires lib/pq or pgx)")
+}
+
+// openClickHouse opens a ClickHouse database connection.
+// Requires DSN in config.
+func openClickHouse(cfg Config) (DB, error) {
+	if cfg.DSN == "" {
+		return nil, fmt.Errorf("clickhouse requires DSN in config")
+	}
+
+	// TODO: Implement ClickHouse driver
+	// Example:
+	//   import _ "github.com/ClickHouse/clickhouse-go/v2"
+	//   db, err := sql.Open("clickhouse", cfg.DSN)
+	//   return WrapSQL(db), nil
+	return nil, fmt.Errorf("clickhouse driver not yet implemented (requires clickhouse-go)")
 }
 
 // MustOpen opens a database connection and panics on error.

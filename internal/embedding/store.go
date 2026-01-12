@@ -23,12 +23,90 @@ type EmbeddingRecord struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// EmbeddingStore manages embedding storage in SQLite
+// EmbeddingStore manages embedding storage in the database.
+// Supports multiple database types via the dialect abstraction.
 type EmbeddingStore struct {
-	db db.DB
+	db      db.DB
+	dialect db.Dialect
+	schema  *db.SchemaBuilder
 }
 
-const embeddingSchema = `
+// embeddingColumns defines the columns for the embeddings table.
+var embeddingColumns = []db.ColumnDef{
+	{Name: "id", Type: db.ColTypeAutoIncrement},
+	{Name: "path", Type: db.ColTypeText, Nullable: false},
+	{Name: "start_line", Type: db.ColTypeInteger, Nullable: false},
+	{Name: "end_line", Type: db.ColTypeInteger, Nullable: false},
+	{Name: "content_hash", Type: db.ColTypeText, Nullable: false},
+	{Name: "embedding", Type: db.ColTypeText, Nullable: false},
+	{Name: "model", Type: db.ColTypeText, Nullable: false},
+	{Name: "created_at", Type: db.ColTypeInteger, Nullable: false},
+}
+
+// NewEmbeddingStore creates a new embedding store using a db.DB adapter.
+// Defaults to SQLite dialect for backward compatibility.
+func NewEmbeddingStore(database db.DB) (*EmbeddingStore, error) {
+	return NewEmbeddingStoreWithDialect(database, db.GetDialect(db.DatabaseSQLite))
+}
+
+// NewEmbeddingStoreWithDialect creates an embedding store with a specific SQL dialect.
+func NewEmbeddingStoreWithDialect(database db.DB, dialect db.Dialect) (*EmbeddingStore, error) {
+	store := &EmbeddingStore{
+		db:      database,
+		dialect: dialect,
+		schema:  db.NewSchemaBuilder(database, dialect),
+	}
+
+	// Initialize schema
+	if err := store.initSchema(); err != nil {
+		return nil, fmt.Errorf("initializing embedding schema: %w", err)
+	}
+
+	return store, nil
+}
+
+// NewEmbeddingStoreFromSQL creates an embedding store from a raw *sql.DB.
+// This is for backward compatibility with existing code.
+// Prefer NewEmbeddingStore with db.DB for new code.
+func NewEmbeddingStoreFromSQL(sqlDB *sql.DB) (*EmbeddingStore, error) {
+	return NewEmbeddingStore(db.WrapSQL(sqlDB))
+}
+
+// NewEmbeddingStoreFromConfig creates an embedding store using a db.Config.
+func NewEmbeddingStoreFromConfig(database db.DB, cfg db.Config) (*EmbeddingStore, error) {
+	return NewEmbeddingStoreWithDialect(database, cfg.Dialect())
+}
+
+// initSchema creates the embeddings table if it doesn't exist.
+func (s *EmbeddingStore) initSchema() error {
+	// Use dialect-aware schema for non-SQLite databases
+	// For SQLite, we still use the raw SQL for now to maintain compatibility
+	if s.dialect.Name() != "sqlite" {
+		// Create table using dialect
+		sql := s.dialect.CreateTableSQL("embeddings", embeddingColumns)
+		if _, err := s.db.Exec(sql); err != nil {
+			return fmt.Errorf("creating embeddings table: %w", err)
+		}
+
+		// Add unique constraint via index (not all dialects support inline UNIQUE)
+		// Note: This is simplified; full implementation would need dialect-aware constraints
+
+		// Create indexes
+		idxPath := s.dialect.CreateIndexSQL("embeddings", "idx_embeddings_path", []string{"path"}, false)
+		if _, err := s.db.Exec(idxPath); err != nil {
+			return fmt.Errorf("creating path index: %w", err)
+		}
+
+		idxHash := s.dialect.CreateIndexSQL("embeddings", "idx_embeddings_hash", []string{"content_hash"}, false)
+		if _, err := s.db.Exec(idxHash); err != nil {
+			return fmt.Errorf("creating hash index: %w", err)
+		}
+
+		return nil
+	}
+
+	// SQLite-specific schema (for backward compatibility)
+	const sqliteSchema = `
 CREATE TABLE IF NOT EXISTS embeddings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL,
@@ -44,22 +122,11 @@ CREATE TABLE IF NOT EXISTS embeddings (
 CREATE INDEX IF NOT EXISTS idx_embeddings_path ON embeddings(path);
 CREATE INDEX IF NOT EXISTS idx_embeddings_hash ON embeddings(content_hash);
 `
-
-// NewEmbeddingStore creates a new embedding store using a db.DB adapter.
-func NewEmbeddingStore(database db.DB) (*EmbeddingStore, error) {
-	// Create embedding table if not exists
-	if _, err := database.Exec(embeddingSchema); err != nil {
-		return nil, fmt.Errorf("creating embedding schema: %w", err)
+	if _, err := s.db.Exec(sqliteSchema); err != nil {
+		return fmt.Errorf("creating embedding schema: %w", err)
 	}
 
-	return &EmbeddingStore{db: database}, nil
-}
-
-// NewEmbeddingStoreFromSQL creates an embedding store from a raw *sql.DB.
-// This is for backward compatibility with existing code.
-// Prefer NewEmbeddingStore with db.DB for new code.
-func NewEmbeddingStoreFromSQL(sqlDB *sql.DB) (*EmbeddingStore, error) {
-	return NewEmbeddingStore(db.WrapSQL(sqlDB))
+	return nil
 }
 
 // Save stores an embedding for a chunk
@@ -70,10 +137,15 @@ func (s *EmbeddingStore) Save(chunk Chunk, embedding []float32, model string) er
 		return fmt.Errorf("marshaling embedding: %w", err)
 	}
 
-	_, err = s.db.Exec(`
-		INSERT OR REPLACE INTO embeddings
-		(path, start_line, end_line, content_hash, embedding, model, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+	// Use dialect-aware upsert
+	columns := []string{"path", "start_line", "end_line", "content_hash", "embedding", "model", "created_at"}
+	conflictColumns := []string{"path", "start_line", "end_line", "model"}
+	updateColumns := []string{"content_hash", "embedding", "created_at"}
+
+	sql := s.dialect.UpsertSQL("embeddings", columns, conflictColumns, updateColumns)
+	sql = s.schema.SubstitutePlaceholders(sql)
+
+	_, err = s.db.Exec(sql,
 		chunk.Path, chunk.StartLine, chunk.EndLine,
 		contentHash, string(embJSON), model, time.Now().Unix())
 
@@ -90,12 +162,17 @@ func (s *EmbeddingStore) SaveBatch(chunks []Chunk, embeddings [][]float32, model
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
-	stmt, err := tx.Prepare(`
-		INSERT OR REPLACE INTO embeddings
-		(path, start_line, end_line, content_hash, embedding, model, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	// Use dialect-aware upsert
+	columns := []string{"path", "start_line", "end_line", "content_hash", "embedding", "model", "created_at"}
+	conflictColumns := []string{"path", "start_line", "end_line", "model"}
+	updateColumns := []string{"content_hash", "embedding", "created_at"}
+
+	sql := s.dialect.UpsertSQL("embeddings", columns, conflictColumns, updateColumns)
+	sql = s.schema.SubstitutePlaceholders(sql)
+
+	stmt, err := tx.Prepare(sql)
 	if err != nil {
 		return err
 	}
@@ -122,11 +199,12 @@ func (s *EmbeddingStore) SaveBatch(chunks []Chunk, embeddings [][]float32, model
 
 // GetByPath retrieves all embeddings for a file path
 func (s *EmbeddingStore) GetByPath(path string) ([]EmbeddingRecord, error) {
-	rows, err := s.db.Query(`
+	query := s.schema.SubstitutePlaceholders(`
 		SELECT id, path, start_line, end_line, content_hash, embedding, model, created_at
 		FROM embeddings
 		WHERE path = ?
-		ORDER BY start_line`, path)
+		ORDER BY start_line`)
+	rows, err := s.db.Query(query, path)
 	if err != nil {
 		return nil, err
 	}
@@ -158,11 +236,13 @@ func (s *EmbeddingStore) GetAllVectors() ([]EmbeddingRecord, error) {
 func (s *EmbeddingStore) HasEmbedding(chunk Chunk, model string) (bool, error) {
 	contentHash := hashContent(chunk.Content)
 
-	var count int
-	err := s.db.QueryRow(`
+	query := s.schema.SubstitutePlaceholders(`
 		SELECT COUNT(*) FROM embeddings
 		WHERE path = ? AND start_line = ? AND end_line = ?
-		AND content_hash = ? AND model = ?`,
+		AND content_hash = ? AND model = ?`)
+
+	var count int
+	err := s.db.QueryRow(query,
 		chunk.Path, chunk.StartLine, chunk.EndLine, contentHash, model).Scan(&count)
 
 	if err != nil {
@@ -173,7 +253,8 @@ func (s *EmbeddingStore) HasEmbedding(chunk Chunk, model string) (bool, error) {
 
 // DeleteByPath removes all embeddings for a file
 func (s *EmbeddingStore) DeleteByPath(path string) error {
-	_, err := s.db.Exec("DELETE FROM embeddings WHERE path = ?", path)
+	query := s.schema.SubstitutePlaceholders("DELETE FROM embeddings WHERE path = ?")
+	_, err := s.db.Exec(query, path)
 	return err
 }
 

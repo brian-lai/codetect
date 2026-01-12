@@ -164,25 +164,78 @@ const (
 
 // Config holds database configuration options.
 type Config struct {
-	// Driver specifies which SQLite implementation to use.
+	// Type specifies the database engine (sqlite, postgres, clickhouse).
+	// If empty, defaults to DatabaseSQLite.
+	Type DatabaseType
+
+	// Driver specifies which SQLite implementation to use (only for SQLite).
+	// Ignored for other database types.
 	Driver Driver
 
-	// Path is the database file path. Use ":memory:" for in-memory database.
+	// Path is the database file path for SQLite. Use ":memory:" for in-memory.
+	// Ignored if DSN is set.
 	Path string
 
-	// EnableWAL enables Write-Ahead Logging for better concurrency.
+	// DSN is the data source name (connection string) for the database.
+	// For SQLite, this is optional (Path is preferred).
+	// For PostgreSQL: "postgres://user:password@host:port/dbname?sslmode=disable"
+	// For ClickHouse: "clickhouse://user:password@host:port/dbname"
+	DSN string
+
+	// EnableWAL enables Write-Ahead Logging for SQLite.
+	// Ignored for other database types.
 	EnableWAL bool
 
 	// VectorDimensions specifies the embedding vector size.
 	// If > 0 and driver supports it, vector tables will be created.
 	VectorDimensions int
+
+	// MaxOpenConns sets the maximum number of open connections to the database.
+	// 0 means unlimited. Recommended for connection pooling with Postgres/ClickHouse.
+	MaxOpenConns int
+
+	// MaxIdleConns sets the maximum number of idle connections in the pool.
+	// 0 means no idle connections are retained.
+	MaxIdleConns int
+
+	// ConnMaxLifetime is the maximum amount of time a connection may be reused.
+	// 0 means connections are not closed due to age.
+	ConnMaxLifetime int // in seconds
 }
 
-// DefaultConfig returns a Config with sensible defaults.
+// DefaultConfig returns a Config with sensible defaults for SQLite.
 func DefaultConfig(path string) Config {
 	return Config{
+		Type:      DatabaseSQLite,
 		Driver:    DriverModernc,
 		Path:      path,
 		EnableWAL: true,
 	}
+}
+
+// PostgresConfig returns a Config for PostgreSQL with sensible defaults.
+func PostgresConfig(dsn string) Config {
+	return Config{
+		Type:            DatabasePostgres,
+		DSN:             dsn,
+		MaxOpenConns:    25,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 300, // 5 minutes
+	}
+}
+
+// ClickHouseConfig returns a Config for ClickHouse with sensible defaults.
+func ClickHouseConfig(dsn string) Config {
+	return Config{
+		Type:            DatabaseClickHouse,
+		DSN:             dsn,
+		MaxOpenConns:    10,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: 600, // 10 minutes
+	}
+}
+
+// Dialect returns the appropriate SQL dialect for this configuration.
+func (c Config) Dialect() Dialect {
+	return GetDialect(c.Type)
 }

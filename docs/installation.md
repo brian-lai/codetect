@@ -17,7 +17,7 @@ This guide covers all installation methods for repo-search.
 
 ## Quick Start (Recommended)
 
-The interactive installer handles everything:
+The interactive installer provides a guided setup experience:
 
 ```bash
 git clone https://github.com/brian-lai/repo-search.git
@@ -26,11 +26,77 @@ cd repo-search
 ```
 
 The installer will:
-1. Check dependencies (Go, ripgrep, ctags)
-2. Let you choose an embedding provider (Ollama, LiteLLM, or none)
-3. Configure provider settings
-4. Build and optionally install globally
-5. Optionally index the current codebase
+1. **Check dependencies** - Verify Go and ripgrep are installed
+2. **Optional features setup**:
+   - **Symbol indexing** - Ask if you want ctags and offer to install it automatically
+   - **Semantic search** - Ask if you want semantic search and guide Ollama setup
+3. **Build and install** - Compile binaries and optionally install globally to `~/.local/bin`
+4. **Configure PATH** - Automatically add `~/.local/bin` to your shell profile if needed
+5. **Initial indexing** - Optionally index the repo-search codebase itself
+
+### What the Installer Does
+
+**Automatic Dependency Installation:**
+- Detects your platform (macOS, Linux) and package manager (brew, apt, dnf, pacman)
+- If you enable symbol indexing but don't have ctags, it will install it for you
+- Supports: Homebrew (macOS), apt (Ubuntu/Debian), dnf (Fedora), pacman (Arch)
+
+**Smart Ollama Detection:**
+- Checks if Ollama is installed when you enable semantic search
+- Shows a prominent warning if Ollama is missing with installation instructions
+- If Ollama is installed, checks if it's running and if the embedding model is available
+- Offers to download the `nomic-embed-text` model (~274MB) during installation
+
+**Global Installation:**
+- Installs binaries to `~/.local/bin` for easy access from anywhere
+- Creates global config at `~/.config/repo-search/config.env`
+- Automatically updates your shell profile ($PATH) if needed
+
+### Installation Flow
+
+The installer runs in 5 steps:
+
+**Step 1: Checking Required Dependencies**
+- Verifies Go 1.21+ is installed
+- Verifies ripgrep is installed
+- Exits with helpful error messages if either is missing
+
+**Step 2: Optional Features Setup**
+- **Symbol Indexing**:
+  - Checks if universal-ctags is installed
+  - If not, explains what symbol indexing does
+  - Asks if you want to enable it
+  - If yes, automatically installs ctags using your package manager
+- **Semantic Search**:
+  - Explains semantic search capabilities
+  - Asks if you want to enable it
+  - If yes, shows provider options (Ollama or LiteLLM)
+  - For Ollama: shows prominent red warning box if not installed
+  - Checks if Ollama is running and if models are available
+  - Offers to download the embedding model
+
+**Step 3: Build and Install**
+- Builds all binaries (repo-search-mcp, repo-search-index, repo-search-daemon)
+- Asks if you want to install globally
+- If yes:
+  - Installs to `~/.local/bin`
+  - Checks if `~/.local/bin` is in PATH
+  - Offers to add to PATH automatically by updating shell profile
+  - Creates global config at `~/.config/repo-search/config.env`
+
+**Step 4: Configuration**
+- Generates configuration file with your selected options
+- For Ollama: saves URL and model name
+- For LiteLLM: saves URL, API key, and model name
+
+**Step 5: Initial Setup (Optional)**
+- If ctags is available, offers to index the repo-search codebase
+- If semantic search is enabled, offers to generate embeddings
+- Shows final summary with:
+  - Configuration file location
+  - Features enabled/disabled
+  - Quick start commands
+  - Usage instructions for Claude Code
 
 ## Manual Installation
 
@@ -64,20 +130,24 @@ repo-search doctor
 
 ## Installing Dependencies
 
+**Note:** The `./install.sh` script can automatically install ctags for you on supported platforms (macOS, Ubuntu/Debian, Fedora, Arch Linux). You only need to manually install dependencies if you skip the installer.
+
 ### ripgrep (Required)
+
+ripgrep must be installed manually before running the installer:
 
 ```bash
 # macOS
 brew install ripgrep
 
 # Ubuntu/Debian
-apt install ripgrep
+sudo apt install ripgrep
 
 # Fedora
-dnf install ripgrep
+sudo dnf install ripgrep
 
 # Arch Linux
-pacman -S ripgrep
+sudo pacman -S ripgrep
 
 # Windows (with Chocolatey)
 choco install ripgrep
@@ -85,28 +155,37 @@ choco install ripgrep
 
 ### universal-ctags (Optional, for symbol indexing)
 
+The installer will offer to install this automatically. Manual installation:
+
 ```bash
 # macOS
 brew install universal-ctags
 
 # Ubuntu/Debian
-apt install universal-ctags
+sudo apt install universal-ctags
 
 # Fedora
-dnf install ctags
+sudo dnf install ctags
 
 # Arch Linux
-pacman -S ctags
+sudo pacman -S ctags
 ```
 
 ### Ollama (Optional, for semantic search)
 
+The installer will detect if Ollama is missing and show prominent warnings. Manual installation:
+
 ```bash
 # Install from https://ollama.ai
+# Download the installer for your platform and run it
 
-# Pull the embedding model
+# After installation, pull the embedding model
 ollama pull nomic-embed-text
 ```
+
+**Important:** The installer will display a prominent red warning box if you enable semantic search but Ollama is not installed. You have two options:
+1. Cancel installation, install Ollama, then re-run `./install.sh`
+2. Continue without semantic search (you can enable it later)
 
 ### LiteLLM (Alternative embedding provider)
 

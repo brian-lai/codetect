@@ -14,11 +14,18 @@ A local MCP server providing fast codebase search, file retrieval, symbol naviga
 ## Quick Start
 
 ```bash
-# Clone and install
+# Clone and run interactive installer
 git clone https://github.com/brian-lai/repo-search.git
 cd repo-search
 ./install.sh
 ```
+
+The installer will:
+- ✓ Check for required dependencies (Go, ripgrep)
+- ✓ Offer to install ctags automatically for symbol indexing
+- ✓ Guide you through Ollama setup for semantic search (with prominent warnings if missing)
+- ✓ Build and install globally to `~/.local/bin`
+- ✓ Configure your shell PATH automatically
 
 Then in any project:
 

@@ -108,10 +108,29 @@ echo -e "${NC}"
 echo -e "${CYAN}Platform:${NC} $PLATFORM    ${CYAN}Package Manager:${NC} $PKG_MGR"
 echo ""
 
+# Check if this is a re-install
+REINSTALL=false
+if command -v repo-search &> /dev/null; then
+    EXISTING_VERSION=$(repo-search --version 2>/dev/null || echo "unknown")
+    warn "repo-search is already installed ($EXISTING_VERSION)"
+    echo ""
+    info "This will reinstall/update repo-search."
+    info "Your existing configuration will be preserved."
+    echo ""
+    read -p "$(prompt "Continue with installation? [Y/n]")" CONTINUE_INSTALL
+    CONTINUE_INSTALL=${CONTINUE_INSTALL:-Y}
+    if [[ ! $CONTINUE_INSTALL =~ ^[Yy] ]]; then
+        echo ""
+        info "Installation cancelled"
+        exit 0
+    fi
+    REINSTALL=true
+fi
+
 #
 # Step 1: Check required dependencies
 #
-print_header "Step 1/5: Checking Required Dependencies"
+print_header "Step 1/6: Checking Required Dependencies"
 
 # Go
 if command -v go &> /dev/null; then
@@ -155,7 +174,7 @@ fi
 #
 # Step 2: Optional Features Setup
 #
-print_header "Step 2/5: Optional Features Setup"
+print_header "Step 2/6: Optional Features Setup"
 
 # Symbol Indexing
 print_section "Symbol Indexing (enables find_symbol, list_defs_in_file)"
@@ -244,7 +263,7 @@ fi
 #
 # Step 3: Semantic Search Setup
 #
-print_header "Step 3/5: Semantic Search Setup"
+print_header "Step 3/6: Semantic Search Setup"
 
 print_section "Semantic Search (enables search_semantic, hybrid_search)"
 
@@ -395,9 +414,253 @@ else
 fi
 
 #
-# Step 4: Build and Install
+# Step 4: Database Setup
 #
-print_header "Step 4/5: Building repo-search"
+print_header "Step 4/6: Database Setup"
+
+print_section "Vector Database Backend"
+
+echo "Choose a database backend for storing embeddings:"
+echo ""
+echo -e "  ${GREEN}${BOLD}1)${NC} SQLite (local, simple, recommended for most users)"
+info "Good for: Up to ~10k embeddings, single-user, simple setup"
+info "Storage: Local .repo_search/symbols.db file"
+echo ""
+echo -e "  ${GREEN}${BOLD}2)${NC} PostgreSQL + pgvector (scalable, recommended for teams)"
+info "Good for: Large codebases, team deployments, millions of embeddings"
+info "Storage: PostgreSQL database with native vector search"
+echo ""
+
+read -p "$(prompt "Your choice [1]")" DB_CHOICE
+DB_CHOICE=${DB_CHOICE:-1}
+
+DB_TYPE="sqlite"
+POSTGRES_DSN=""
+POSTGRES_INSTALLED=false
+
+case $DB_CHOICE in
+    1)
+        DB_TYPE="sqlite"
+        success "Using SQLite (default)"
+        ;;
+
+    2)
+        DB_TYPE="postgres"
+        echo ""
+        print_section "PostgreSQL + pgvector Setup"
+
+        # Check if PostgreSQL is installed
+        if command -v psql &> /dev/null; then
+            PG_VERSION=$(psql --version | awk '{print $3}')
+            success "PostgreSQL $PG_VERSION is installed"
+            POSTGRES_INSTALLED=true
+        else
+            warn "PostgreSQL is not installed"
+            echo ""
+            info "PostgreSQL with pgvector extension is required for vector database."
+            echo ""
+
+            case $PKG_MGR in
+                brew)
+                    info "Install with: ${BOLD}brew install postgresql@16${NC}"
+                    read -p "$(prompt "Install PostgreSQL now? [Y/n]")" INSTALL_PG
+                    INSTALL_PG=${INSTALL_PG:-Y}
+
+                    if [[ $INSTALL_PG =~ ^[Yy] ]]; then
+                        echo ""
+                        info "Installing PostgreSQL via Homebrew..."
+                        if brew install postgresql@16; then
+                            success "PostgreSQL installed successfully"
+                            info "Starting PostgreSQL service..."
+                            brew services start postgresql@16
+                            POSTGRES_INSTALLED=true
+                        else
+                            error "Failed to install PostgreSQL"
+                        fi
+                    fi
+                    ;;
+                apt)
+                    info "Install with:"
+                    info "  ${BOLD}sudo apt-get install -y postgresql postgresql-contrib${NC}"
+                    read -p "$(prompt "Install PostgreSQL now? [Y/n]")" INSTALL_PG
+                    INSTALL_PG=${INSTALL_PG:-Y}
+
+                    if [[ $INSTALL_PG =~ ^[Yy] ]]; then
+                        echo ""
+                        info "Installing PostgreSQL..."
+                        if sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib; then
+                            success "PostgreSQL installed successfully"
+                            info "Starting PostgreSQL service..."
+                            sudo systemctl start postgresql
+                            sudo systemctl enable postgresql
+                            POSTGRES_INSTALLED=true
+                        else
+                            error "Failed to install PostgreSQL"
+                        fi
+                    fi
+                    ;;
+                dnf)
+                    info "Install with: ${BOLD}sudo dnf install -y postgresql-server postgresql-contrib${NC}"
+                    read -p "$(prompt "Install PostgreSQL now? [Y/n]")" INSTALL_PG
+                    INSTALL_PG=${INSTALL_PG:-Y}
+
+                    if [[ $INSTALL_PG =~ ^[Yy] ]]; then
+                        echo ""
+                        info "Installing PostgreSQL..."
+                        if sudo dnf install -y postgresql-server postgresql-contrib; then
+                            success "PostgreSQL installed successfully"
+                            info "Initializing PostgreSQL..."
+                            sudo postgresql-setup --initdb
+                            sudo systemctl start postgresql
+                            sudo systemctl enable postgresql
+                            POSTGRES_INSTALLED=true
+                        else
+                            error "Failed to install PostgreSQL"
+                        fi
+                    fi
+                    ;;
+                *)
+                    warn "Automatic installation not supported on this platform"
+                    info "Install PostgreSQL manually from:"
+                    info "  • ${BOLD}https://www.postgresql.org/download/${NC}"
+                    ;;
+            esac
+        fi
+
+        if [[ $POSTGRES_INSTALLED == true ]]; then
+            # Check for pgvector extension
+            echo ""
+            info "Checking for pgvector extension..."
+
+            # Try to check if pgvector is available (this will fail gracefully)
+            HAS_PGVECTOR=false
+            if psql -U postgres -c "SELECT * FROM pg_available_extensions WHERE name='vector'" 2>/dev/null | grep -q vector; then
+                success "pgvector extension is available"
+                HAS_PGVECTOR=true
+            else
+                warn "pgvector extension not found"
+                echo ""
+                info "pgvector adds native vector similarity search to PostgreSQL."
+                info "It's required for efficient semantic search at scale."
+                echo ""
+
+                case $PKG_MGR in
+                    brew)
+                        info "Install with: ${BOLD}brew install pgvector${NC}"
+                        read -p "$(prompt "Install pgvector now? [Y/n]")" INSTALL_PGVECTOR
+                        INSTALL_PGVECTOR=${INSTALL_PGVECTOR:-Y}
+
+                        if [[ $INSTALL_PGVECTOR =~ ^[Yy] ]]; then
+                            echo ""
+                            info "Installing pgvector..."
+                            if brew install pgvector; then
+                                success "pgvector installed successfully"
+                                HAS_PGVECTOR=true
+                            else
+                                error "Failed to install pgvector"
+                                warn "You'll need to install pgvector manually"
+                            fi
+                        fi
+                        ;;
+                    apt)
+                        info "Install with:"
+                        info "  ${BOLD}sudo apt-get install -y postgresql-16-pgvector${NC}"
+                        read -p "$(prompt "Install pgvector now? [Y/n]")" INSTALL_PGVECTOR
+                        INSTALL_PGVECTOR=${INSTALL_PGVECTOR:-Y}
+
+                        if [[ $INSTALL_PGVECTOR =~ ^[Yy] ]]; then
+                            echo ""
+                            info "Installing pgvector..."
+                            if sudo apt-get install -y postgresql-16-pgvector; then
+                                success "pgvector installed successfully"
+                                HAS_PGVECTOR=true
+                            else
+                                error "Failed to install pgvector"
+                                warn "You may need to add the PostgreSQL apt repository first"
+                                info "See: ${BOLD}https://github.com/pgvector/pgvector${NC}"
+                            fi
+                        fi
+                        ;;
+                    *)
+                        warn "Automatic installation not supported"
+                        info "Install manually from: ${BOLD}https://github.com/pgvector/pgvector${NC}"
+                        ;;
+                esac
+            fi
+
+            # Get database connection details
+            echo ""
+            info "PostgreSQL connection configuration:"
+            echo ""
+            read -p "$(prompt "PostgreSQL host [localhost]")" PG_HOST
+            PG_HOST=${PG_HOST:-localhost}
+
+            read -p "$(prompt "PostgreSQL port [5432]")" PG_PORT
+            PG_PORT=${PG_PORT:-5432}
+
+            read -p "$(prompt "PostgreSQL user [postgres]")" PG_USER
+            PG_USER=${PG_USER:-postgres}
+
+            read -sp "$(prompt "PostgreSQL password (leave empty if not required)")" PG_PASSWORD
+            echo ""
+
+            read -p "$(prompt "Database name [repo_search]")" PG_DBNAME
+            PG_DBNAME=${PG_DBNAME:-repo_search}
+
+            # Build DSN
+            if [[ -z "$PG_PASSWORD" ]]; then
+                POSTGRES_DSN="postgres://${PG_USER}@${PG_HOST}:${PG_PORT}/${PG_DBNAME}?sslmode=disable"
+            else
+                POSTGRES_DSN="postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DBNAME}?sslmode=disable"
+            fi
+
+            # Test connection
+            echo ""
+            info "Testing connection..."
+            if psql "$POSTGRES_DSN" -c "SELECT 1" &>/dev/null; then
+                success "Successfully connected to PostgreSQL"
+
+                # Enable pgvector extension if available
+                if [[ $HAS_PGVECTOR == true ]]; then
+                    info "Enabling pgvector extension..."
+                    if psql "$POSTGRES_DSN" -c "CREATE EXTENSION IF NOT EXISTS vector" &>/dev/null; then
+                        success "pgvector extension enabled"
+                    else
+                        warn "Could not enable pgvector extension"
+                        info "You may need to enable it manually with: CREATE EXTENSION vector;"
+                    fi
+                fi
+            else
+                warn "Could not connect to PostgreSQL"
+                info "Make sure:"
+                info "  1. PostgreSQL is running"
+                info "  2. Database '$PG_DBNAME' exists (or user has CREATE DATABASE permission)"
+                info "  3. Connection credentials are correct"
+                echo ""
+                read -p "$(prompt "Continue anyway? [Y/n]")" CONTINUE_ANYWAY
+                CONTINUE_ANYWAY=${CONTINUE_ANYWAY:-Y}
+                if [[ ! $CONTINUE_ANYWAY =~ ^[Yy] ]]; then
+                    error "Installation cancelled"
+                    exit 1
+                fi
+            fi
+        else
+            warn "PostgreSQL is not installed"
+            info "Falling back to SQLite"
+            DB_TYPE="sqlite"
+        fi
+        ;;
+
+    *)
+        error "Invalid choice"
+        exit 1
+        ;;
+esac
+
+#
+# Step 5: Build and Install
+#
+print_header "Step 5/6: Building repo-search"
 
 step 1 3 "Building binaries..."
 if make build > /dev/null 2>&1; then
@@ -468,6 +731,20 @@ cat > "$CONFIG_FILE" << EOF
 # repo-search configuration
 # Auto-generated by installer on $(date)
 
+# Database backend: sqlite or postgres
+export REPO_SEARCH_DB_TYPE="$DB_TYPE"
+EOF
+
+if [[ $DB_TYPE == "postgres" && -n "$POSTGRES_DSN" ]]; then
+    cat >> "$CONFIG_FILE" << EOF
+
+# PostgreSQL configuration
+export REPO_SEARCH_DB_DSN="$POSTGRES_DSN"
+EOF
+fi
+
+cat >> "$CONFIG_FILE" << EOF
+
 # Embedding provider: ollama, litellm, or off
 export REPO_SEARCH_EMBEDDING_PROVIDER="$EMBEDDING_PROVIDER"
 EOF
@@ -492,9 +769,9 @@ fi
 success "Configuration saved to $CONFIG_FILE"
 
 #
-# Step 5: Initial Setup
+# Step 6: Initial Setup
 #
-print_header "Step 5/5: Initial Setup (Optional)"
+print_header "Step 6/6: Initial Setup (Optional)"
 
 if [[ $INSTALLED_GLOBALLY == true ]]; then
     REPO_SEARCH_CMD="repo-search"
@@ -567,6 +844,7 @@ fi
 
 print_box "$MAGENTA" \
     "${BOLD}Features Enabled${NC}" \
+    "  Database:        ${GREEN}✓${NC}  ($DB_TYPE)" \
     "  Keyword Search:  ${GREEN}✓${NC}  (ripgrep)" \
     "  Symbol Indexing: $(if [[ $CTAGS_AVAILABLE == true ]]; then echo "${GREEN}✓${NC}  (universal-ctags)"; else echo "${YELLOW}✗${NC}  (not installed)"; fi)" \
     "  Semantic Search: $(if [[ $EMBEDDING_PROVIDER != "off" ]]; then echo "${GREEN}✓${NC}  ($EMBEDDING_PROVIDER)"; else echo "${YELLOW}✗${NC}  (disabled)"; fi)"
@@ -586,6 +864,12 @@ print_box "$YELLOW" \
     "  2. $REPO_SEARCH_CMD init" \
     "  3. $REPO_SEARCH_CMD index" \
     "  4. claude"
+
+echo -e "${CYAN}Database Backend:${NC} $DB_TYPE"
+if [[ $DB_TYPE == "postgres" ]]; then
+    echo -e "${CYAN}PostgreSQL:${NC} $PG_HOST:$PG_PORT/$PG_DBNAME"
+fi
+echo ""
 
 if [[ $EMBEDDING_PROVIDER == "ollama" ]]; then
     echo -e "${CYAN}Embedding Provider:${NC} Ollama ($EMBEDDING_MODEL)"

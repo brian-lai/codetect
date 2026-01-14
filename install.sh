@@ -592,14 +592,23 @@ case $DB_CHOICE in
             echo ""
             info "PostgreSQL connection configuration:"
             echo ""
+
+            # Platform-specific defaults
+            if [[ $PLATFORM == "Mac" ]]; then
+                DEFAULT_PG_USER="$USER"
+                info "On macOS, Homebrew PostgreSQL uses your username by default"
+            else
+                DEFAULT_PG_USER="postgres"
+            fi
+
             read -p "$(prompt "PostgreSQL host [localhost]")" PG_HOST
             PG_HOST=${PG_HOST:-localhost}
 
             read -p "$(prompt "PostgreSQL port [5432]")" PG_PORT
             PG_PORT=${PG_PORT:-5432}
 
-            read -p "$(prompt "PostgreSQL user [postgres]")" PG_USER
-            PG_USER=${PG_USER:-postgres}
+            read -p "$(prompt "PostgreSQL user [$DEFAULT_PG_USER]")" PG_USER
+            PG_USER=${PG_USER:-$DEFAULT_PG_USER}
 
             read -sp "$(prompt "PostgreSQL password (leave empty if not required)")" PG_PASSWORD
             echo ""
@@ -607,18 +616,38 @@ case $DB_CHOICE in
             read -p "$(prompt "Database name [repo_search]")" PG_DBNAME
             PG_DBNAME=${PG_DBNAME:-repo_search}
 
-            # Build DSN
+            # Test connection to postgres database (always exists)
+            echo ""
+            info "Testing PostgreSQL connection..."
+
             if [[ -z "$PG_PASSWORD" ]]; then
-                POSTGRES_DSN="postgres://${PG_USER}@${PG_HOST}:${PG_PORT}/${PG_DBNAME}?sslmode=disable"
+                TEST_DSN="postgres://${PG_USER}@${PG_HOST}:${PG_PORT}/postgres?sslmode=disable"
             else
-                POSTGRES_DSN="postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DBNAME}?sslmode=disable"
+                TEST_DSN="postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/postgres?sslmode=disable"
             fi
 
-            # Test connection
-            echo ""
-            info "Testing connection..."
-            if psql "$POSTGRES_DSN" -c "SELECT 1" &>/dev/null; then
+            if psql "$TEST_DSN" -c "SELECT 1" &>/dev/null; then
                 success "Successfully connected to PostgreSQL"
+
+                # Create database if it doesn't exist
+                info "Creating database '$PG_DBNAME' if it doesn't exist..."
+                if psql "$TEST_DSN" -c "SELECT 1 FROM pg_database WHERE datname='$PG_DBNAME'" | grep -q 1; then
+                    success "Database '$PG_DBNAME' already exists"
+                else
+                    if psql "$TEST_DSN" -c "CREATE DATABASE $PG_DBNAME" &>/dev/null; then
+                        success "Database '$PG_DBNAME' created"
+                    else
+                        error "Failed to create database '$PG_DBNAME'"
+                        warn "You may need to create it manually with: createdb $PG_DBNAME"
+                    fi
+                fi
+
+                # Build DSN for target database
+                if [[ -z "$PG_PASSWORD" ]]; then
+                    POSTGRES_DSN="postgres://${PG_USER}@${PG_HOST}:${PG_PORT}/${PG_DBNAME}?sslmode=disable"
+                else
+                    POSTGRES_DSN="postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DBNAME}?sslmode=disable"
+                fi
 
                 # Enable pgvector extension if available
                 if [[ $HAS_PGVECTOR == true ]]; then
@@ -633,9 +662,13 @@ case $DB_CHOICE in
             else
                 warn "Could not connect to PostgreSQL"
                 info "Make sure:"
-                info "  1. PostgreSQL is running"
-                info "  2. Database '$PG_DBNAME' exists (or user has CREATE DATABASE permission)"
+                info "  1. PostgreSQL is running (${BOLD}brew services start postgresql@16${NC} or ${BOLD}pg_ctl -D /opt/homebrew/var/postgresql@16 start${NC})"
+                info "  2. User '$PG_USER' exists and has access"
                 info "  3. Connection credentials are correct"
+                echo ""
+                info "Debug tips:"
+                info "  • Check if PostgreSQL is running: ${BOLD}brew services list${NC}"
+                info "  • Try connecting manually: ${BOLD}psql postgres${NC}"
                 echo ""
                 read -p "$(prompt "Continue anyway? [Y/n]")" CONTINUE_ANYWAY
                 CONTINUE_ANYWAY=${CONTINUE_ANYWAY:-Y}

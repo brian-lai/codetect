@@ -14,6 +14,7 @@ This guide covers all installation methods for repo-search.
 - **[universal-ctags](https://github.com/universal-ctags/ctags)** - for symbol indexing
 - **[Ollama](https://ollama.ai)** - for semantic search (default embedding provider)
 - **[LiteLLM](https://github.com/BerriAI/litellm)** - alternative embedding provider
+- **[PostgreSQL 12+](https://www.postgresql.org)** + **[pgvector](https://github.com/pgvector/pgvector)** - for scalable vector search (alternative to SQLite)
 
 ## Quick Start (Recommended)
 
@@ -30,9 +31,10 @@ The installer will:
 2. **Optional features setup**:
    - **Symbol indexing** - Ask if you want ctags and offer to install it automatically
    - **Semantic search** - Ask if you want semantic search and guide Ollama setup
-3. **Build and install** - Compile binaries and optionally install globally to `~/.local/bin`
-4. **Configure PATH** - Automatically add `~/.local/bin` to your shell profile if needed
-5. **Initial indexing** - Optionally index the repo-search codebase itself
+3. **Database setup** - Choose between SQLite (simple) or PostgreSQL+pgvector (scalable)
+4. **Build and install** - Compile binaries and optionally install globally to `~/.local/bin`
+5. **Configure PATH** - Automatically add `~/.local/bin` to your shell profile if needed
+6. **Initial indexing** - Optionally index the repo-search codebase itself
 
 ### What the Installer Does
 
@@ -54,7 +56,7 @@ The installer will:
 
 ### Installation Flow
 
-The installer runs in 5 steps:
+The installer runs in 6 steps:
 
 **Step 1: Checking Required Dependencies**
 - Verifies Go 1.21+ is installed
@@ -75,7 +77,21 @@ The installer runs in 5 steps:
   - Checks if Ollama is running and if models are available
   - Offers to download the embedding model
 
-**Step 3: Build and Install**
+**Step 3: Database Setup**
+- **Database Choice**:
+  - Shows two options:
+    - **SQLite** (default): Simple, local, good for up to ~10k embeddings
+    - **PostgreSQL + pgvector**: Scalable, good for large codebases and teams
+- **PostgreSQL Setup** (if selected):
+  - Checks if PostgreSQL is installed
+  - If not, offers to install automatically (brew, apt, dnf supported)
+  - Checks for pgvector extension
+  - If not found, offers to install pgvector
+  - Collects connection details (host, port, user, password, database)
+  - Tests connection and enables pgvector extension
+  - Falls back to SQLite if PostgreSQL setup fails
+
+**Step 4: Build and Install**
 - Builds all binaries (repo-search-mcp, repo-search-index, repo-search-daemon)
 - Asks if you want to install globally
 - If yes:
@@ -84,15 +100,18 @@ The installer runs in 5 steps:
   - Offers to add to PATH automatically by updating shell profile
   - Creates global config at `~/.config/repo-search/config.env`
 
-**Step 4: Configuration**
+**Step 5: Configuration**
 - Generates configuration file with your selected options
+- For SQLite: uses default local storage
+- For PostgreSQL: saves DSN connection string
 - For Ollama: saves URL and model name
 - For LiteLLM: saves URL, API key, and model name
 
-**Step 5: Initial Setup (Optional)**
+**Step 6: Initial Setup (Optional)**
 - If ctags is available, offers to index the repo-search codebase
 - If semantic search is enabled, offers to generate embeddings
 - Shows final summary with:
+  - Database backend selection
   - Configuration file location
   - Features enabled/disabled
   - Quick start commands
@@ -197,6 +216,53 @@ pip install litellm
 litellm --model text-embedding-3-small
 ```
 
+### PostgreSQL + pgvector (Optional, for scalable vector search)
+
+The installer will offer to install these automatically. Manual installation:
+
+**PostgreSQL:**
+
+```bash
+# macOS
+brew install postgresql@16
+brew services start postgresql@16
+
+# Ubuntu/Debian
+sudo apt-get install -y postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Fedora
+sudo dnf install -y postgresql-server postgresql-contrib
+sudo postgresql-setup --initdb
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+**pgvector extension:**
+
+```bash
+# macOS
+brew install pgvector
+
+# Ubuntu/Debian (requires PostgreSQL apt repository)
+sudo apt-get install -y postgresql-16-pgvector
+
+# From source (all platforms)
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+make
+sudo make install
+```
+
+**Enable the extension in your database:**
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**Note:** The installer handles extension setup automatically when you choose PostgreSQL.
+
 ## Per-Project Setup
 
 After installing repo-search globally, set it up in each project:
@@ -256,6 +322,9 @@ repo-search doctor
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `REPO_SEARCH_DB_TYPE` | Database backend: `sqlite` or `postgres` | `sqlite` |
+| `REPO_SEARCH_DB_DSN` | PostgreSQL connection string (required if type=postgres) | (none) |
+| `REPO_SEARCH_DB_PATH` | SQLite database path (used if type=sqlite) | `.repo_search/symbols.db` |
 | `REPO_SEARCH_EMBEDDING_PROVIDER` | Provider: `ollama`, `litellm`, or `off` | `ollama` |
 | `REPO_SEARCH_OLLAMA_URL` | Ollama server URL | `http://localhost:11434` |
 | `REPO_SEARCH_LITELLM_URL` | LiteLLM server URL | `http://localhost:4000` |
@@ -264,6 +333,18 @@ repo-search doctor
 | `REPO_SEARCH_EMBEDDING_DIMENSIONS` | Override embedding dimensions | (model default) |
 
 ### Examples
+
+**Using SQLite (default):**
+```bash
+repo-search embed  # Uses SQLite at .repo_search/symbols.db
+```
+
+**Using PostgreSQL:**
+```bash
+export REPO_SEARCH_DB_TYPE=postgres
+export REPO_SEARCH_DB_DSN="postgres://user:password@localhost/repo_search?sslmode=disable"
+repo-search embed
+```
 
 **Using Ollama (default):**
 ```bash
@@ -280,6 +361,15 @@ REPO_SEARCH_EMBEDDING_MODEL=mxbai-embed-large repo-search embed
 export REPO_SEARCH_EMBEDDING_PROVIDER=litellm
 export REPO_SEARCH_LITELLM_API_KEY=sk-...
 export REPO_SEARCH_EMBEDDING_MODEL=text-embedding-3-small
+repo-search embed
+```
+
+**Using PostgreSQL + LiteLLM:**
+```bash
+export REPO_SEARCH_DB_TYPE=postgres
+export REPO_SEARCH_DB_DSN="postgres://user:password@localhost/repo_search?sslmode=disable"
+export REPO_SEARCH_EMBEDDING_PROVIDER=litellm
+export REPO_SEARCH_LITELLM_API_KEY=sk-...
 repo-search embed
 ```
 

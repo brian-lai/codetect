@@ -198,12 +198,13 @@ func runEmbed(args []string) {
 	}
 	defer idx.Close()
 
-	// Create semantic searcher
-	searcher, err := embedding.NewSemanticSearcher(idx.DB(), embedder)
+	// Create embedding store and semantic searcher
+	store, err := embedding.NewEmbeddingStoreFromSQL(idx.DB())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: creating semantic searcher: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: creating embedding store: %v\n", err)
 		os.Exit(1)
 	}
+	searcher := embedding.NewSemanticSearcher(store, embedder)
 
 	// Clear embeddings if force flag set
 	if *force {
@@ -425,7 +426,7 @@ func runStats(args []string) {
 	fmt.Printf("Files: %d\n", fileCount)
 
 	// Try to get embedding stats
-	store, err := embedding.NewEmbeddingStore(idx.DB())
+	store, err := embedding.NewEmbeddingStoreFromSQL(idx.DB())
 	if err == nil {
 		embCount, embFileCount, err := store.Stats()
 		if err == nil && embCount > 0 {

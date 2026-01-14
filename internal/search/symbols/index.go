@@ -7,39 +7,75 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"repo-search/internal/db"
 )
 
-// Index is the SQLite-backed symbol index
+// Index is the database-backed symbol index.
+// Currently uses SQLite but the adapter layer allows future migration to other databases.
 type Index struct {
-	db     *sql.DB
-	dbPath string
-	root   string
+	sqlDB   *sql.DB     // Raw SQL connection (for legacy compatibility)
+	adapter db.DB       // Adapter interface for new code
+	dialect db.Dialect  // SQL dialect for database-specific syntax
+	dbPath  string
+	root    string
 }
 
-// NewIndex creates or opens a symbol index at the given path
+// NewIndex creates or opens a symbol index at the given path.
+// Uses SQLite by default.
 func NewIndex(dbPath string) (*Index, error) {
-	db, err := OpenDB(dbPath)
+	sqlDB, err := OpenDB(dbPath)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Index{
-		db:     db,
-		dbPath: dbPath,
+		sqlDB:   sqlDB,
+		adapter: db.WrapSQL(sqlDB),
+		dialect: db.GetDialect(db.DatabaseSQLite),
+		dbPath:  dbPath,
+	}, nil
+}
+
+// NewIndexWithConfig creates a symbol index using the provided configuration.
+// This allows using different database types in the future.
+func NewIndexWithConfig(cfg db.Config) (*Index, error) {
+	database, err := db.Open(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Index{
+		adapter: database,
+		dialect: cfg.Dialect(),
+		dbPath:  cfg.Path,
 	}, nil
 }
 
 // Close closes the index database
 func (idx *Index) Close() error {
-	if idx.db != nil {
-		return idx.db.Close()
+	if idx.adapter != nil {
+		return idx.adapter.Close()
 	}
 	return nil
 }
 
-// DB returns the underlying database connection
+// DB returns the underlying database connection.
+// Deprecated: Use DBAdapter() for new code to get the db.DB interface.
+// Returns nil if the index was created with NewIndexWithConfig (non-SQLite).
 func (idx *Index) DB() *sql.DB {
-	return idx.db
+	return idx.sqlDB
+}
+
+// DBAdapter returns the database adapter interface.
+// Use this for interoperability with packages that use the adapter interface.
+func (idx *Index) DBAdapter() db.DB {
+	return idx.adapter
+}
+
+// Dialect returns the SQL dialect used by this index.
+func (idx *Index) Dialect() db.Dialect {
+	return idx.dialect
 }
 
 // FindSymbol searches for symbols by name (supports LIKE patterns)
@@ -78,7 +114,7 @@ func (idx *Index) FindSymbol(name string, kind string, limit int) ([]Symbol, err
 		args = []any{pattern, name, name + "%", limit}
 	}
 
-	rows, err := idx.db.Query(query, args...)
+	rows, err := idx.sqlDB.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying symbols: %w", err)
 	}
@@ -107,7 +143,7 @@ func (idx *Index) ListDefsInFile(path string) ([]Symbol, error) {
 			  WHERE path = ?
 			  ORDER BY line`
 
-	rows, err := idx.db.Query(query, path)
+	rows, err := idx.sqlDB.Query(query, path)
 	if err != nil {
 		return nil, fmt.Errorf("querying symbols: %w", err)
 	}
@@ -154,7 +190,7 @@ func (idx *Index) Update(root string) error {
 	}
 
 	// Begin transaction for bulk insert
-	tx, err := idx.db.Begin()
+	tx, err := idx.sqlDB.Begin()
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
@@ -214,10 +250,10 @@ func (idx *Index) Update(root string) error {
 // FullReindex clears all data and reindexes from scratch
 func (idx *Index) FullReindex(root string) error {
 	// Clear all existing data
-	if err := ClearAllSymbols(idx.db); err != nil {
+	if err := ClearAllSymbols(idx.sqlDB); err != nil {
 		return fmt.Errorf("clearing symbols: %w", err)
 	}
-	if _, err := idx.db.Exec("DELETE FROM files"); err != nil {
+	if _, err := idx.sqlDB.Exec("DELETE FROM files"); err != nil {
 		return fmt.Errorf("clearing files: %w", err)
 	}
 
@@ -233,7 +269,7 @@ type fileInfo struct {
 func (idx *Index) getFilesToIndex(root string) (map[string]fileInfo, error) {
 	// Get currently indexed files
 	indexed := make(map[string]fileInfo)
-	rows, err := idx.db.Query("SELECT path, mtime, size FROM files")
+	rows, err := idx.sqlDB.Query("SELECT path, mtime, size FROM files")
 	if err != nil {
 		return nil, err
 	}
@@ -355,10 +391,10 @@ func nullString(s string) sql.NullString {
 
 // Stats returns statistics about the index
 func (idx *Index) Stats() (symbolCount int, fileCount int, err error) {
-	if err := idx.db.QueryRow("SELECT COUNT(*) FROM symbols").Scan(&symbolCount); err != nil {
+	if err := idx.sqlDB.QueryRow("SELECT COUNT(*) FROM symbols").Scan(&symbolCount); err != nil {
 		return 0, 0, err
 	}
-	if err := idx.db.QueryRow("SELECT COUNT(*) FROM files").Scan(&fileCount); err != nil {
+	if err := idx.sqlDB.QueryRow("SELECT COUNT(*) FROM files").Scan(&fileCount); err != nil {
 		return 0, 0, err
 	}
 	return symbolCount, fileCount, nil

@@ -2,7 +2,6 @@ package embedding
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -28,21 +27,14 @@ type SemanticSearchResult struct {
 type SemanticSearcher struct {
 	store    *EmbeddingStore
 	embedder Embedder
-	db       *sql.DB
 }
 
-// NewSemanticSearcher creates a new semantic searcher
-func NewSemanticSearcher(db *sql.DB, embedder Embedder) (*SemanticSearcher, error) {
-	store, err := NewEmbeddingStore(db)
-	if err != nil {
-		return nil, fmt.Errorf("creating embedding store: %w", err)
-	}
-
+// NewSemanticSearcher creates a new semantic searcher from an EmbeddingStore.
+func NewSemanticSearcher(store *EmbeddingStore, embedder Embedder) *SemanticSearcher {
 	return &SemanticSearcher{
 		store:    store,
 		embedder: embedder,
-		db:       db,
-	}, nil
+	}
 }
 
 // Available checks if semantic search is available
@@ -114,7 +106,7 @@ func (s *SemanticSearcher) SearchWithContext(ctx context.Context, query string, 
 		}
 
 		record := records[item.Index]
-		snippet := getSnippet(s.db, record.Path, record.StartLine, record.EndLine)
+		snippet := getSnippet(record.Path, record.StartLine, record.EndLine)
 
 		results = append(results, SemanticResult{
 			Path:      record.Path,
@@ -149,8 +141,8 @@ func (s *SemanticSearcher) ProviderID() string {
 	return s.embedder.ProviderID()
 }
 
-// getSnippet retrieves a code snippet from file (truncated for display)
-func getSnippet(_ *sql.DB, path string, startLine, endLine int) string {
+// getSnippet retrieves a code snippet placeholder (truncated for display)
+func getSnippet(path string, startLine, endLine int) string {
 	// Placeholder - in real usage with SearchWithSnippets, a custom snippetFn is provided
 	return fmt.Sprintf("[%s:%d-%d] (%d lines)",
 		path, startLine, endLine, endLine-startLine+1)

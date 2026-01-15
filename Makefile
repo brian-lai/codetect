@@ -2,6 +2,7 @@ BINARY=dist/repo-search
 INDEXER=dist/repo-search-index
 DAEMON=dist/repo-search-daemon
 EVAL=dist/repo-search-eval
+MIGRATE=dist/migrate-to-postgres
 
 # Installation prefix (default: ~/.local)
 PREFIX ?= $(HOME)/.local
@@ -17,6 +18,7 @@ build:
 	go build -o $(INDEXER) ./cmd/repo-search-index
 	go build -o $(DAEMON) ./cmd/repo-search-daemon
 	go build -o $(EVAL) ./cmd/repo-search-eval
+	go build -o $(MIGRATE) ./cmd/migrate-to-postgres
 
 # Run MCP server (used by .mcp.json)
 mcp: build
@@ -103,8 +105,9 @@ install: build
 	@cp $(INDEXER) $(BIN_DIR)/repo-search-index
 	@cp $(DAEMON) $(BIN_DIR)/repo-search-daemon
 	@cp $(EVAL) $(BIN_DIR)/repo-search-eval
+	@cp $(MIGRATE) $(BIN_DIR)/migrate-to-postgres
 	@cp scripts/repo-search-wrapper.sh $(BIN_DIR)/repo-search
-	@chmod +x $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon $(BIN_DIR)/repo-search-eval
+	@chmod +x $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon $(BIN_DIR)/repo-search-eval $(BIN_DIR)/migrate-to-postgres
 	@cp templates/mcp.json $(SHARE_DIR)/templates/
 	@echo ""
 	@echo "✓ Installed to $(PREFIX)"
@@ -126,7 +129,7 @@ install: build
 # Uninstall
 uninstall:
 	@echo "Uninstalling from $(PREFIX)..."
-	@rm -f $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon $(BIN_DIR)/repo-search-eval
+	@rm -f $(BIN_DIR)/repo-search $(BIN_DIR)/repo-search-mcp $(BIN_DIR)/repo-search-index $(BIN_DIR)/repo-search-daemon $(BIN_DIR)/repo-search-eval $(BIN_DIR)/migrate-to-postgres
 	@rm -rf $(SHARE_DIR)
 	@echo "✓ Uninstalled"
 

@@ -131,7 +131,15 @@ func (s *EmbeddingStore) initSchema() error {
 		// Add unique constraint via index (not all dialects support inline UNIQUE)
 		// Note: This is simplified; full implementation would need dialect-aware constraints
 
-		// Create indexes
+		// Create unique constraint for upsert ON CONFLICT clause
+		// Must match the conflictColumns in Save/SaveBatch: (path, start_line, end_line, model)
+		idxUnique := s.dialect.CreateIndexSQL("embeddings", "idx_embeddings_unique",
+			[]string{"path", "start_line", "end_line", "model"}, true)
+		if _, err := s.db.Exec(idxUnique); err != nil {
+			return fmt.Errorf("creating unique index: %w", err)
+		}
+
+		// Create indexes for common queries
 		idxPath := s.dialect.CreateIndexSQL("embeddings", "idx_embeddings_path", []string{"path"}, false)
 		if _, err := s.db.Exec(idxPath); err != nil {
 			return fmt.Errorf("creating path index: %w", err)

@@ -296,5 +296,8 @@ func ValidateMigration(source *EmbeddingStore, target *EmbeddingStore, sampleSiz
 }
 
 func min(a, b int) int {
-	return min(a, b)
+	if a < b {
+		return a
+	}
+	return b
 }

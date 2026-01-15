@@ -177,8 +177,10 @@ func (d *PostgresDialect) CreateIndexSQL(table, indexName string, columns []stri
 }
 
 func (d *PostgresDialect) InitStatements() []string {
-	// PostgreSQL configuration is typically connection-level or server-level
-	return []string{}
+	// Enable pgvector extension for vector similarity search
+	return []string{
+		"CREATE EXTENSION IF NOT EXISTS vector",
+	}
 }
 
 func (d *PostgresDialect) SupportsReturning() bool {

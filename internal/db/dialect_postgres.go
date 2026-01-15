@@ -127,7 +127,16 @@ func (d *PostgresDialect) columnDefSQL(col ColumnDef) string {
 		return strings.Join(parts, " ")
 	}
 
-	parts = append(parts, d.mapColumnType(col.Type))
+	// Handle vector type with dimensions
+	if col.Type == ColTypeVector {
+		if col.VectorDimension > 0 {
+			parts = append(parts, fmt.Sprintf("vector(%d)", col.VectorDimension))
+		} else {
+			parts = append(parts, "vector") // Dynamic dimensions
+		}
+	} else {
+		parts = append(parts, d.mapColumnType(col.Type))
+	}
 
 	if col.PrimaryKey {
 		parts = append(parts, "PRIMARY KEY")
@@ -177,8 +186,10 @@ func (d *PostgresDialect) CreateIndexSQL(table, indexName string, columns []stri
 }
 
 func (d *PostgresDialect) InitStatements() []string {
-	// PostgreSQL configuration is typically connection-level or server-level
-	return []string{}
+	// Enable pgvector extension for vector similarity search
+	return []string{
+		"CREATE EXTENSION IF NOT EXISTS vector",
+	}
 }
 
 func (d *PostgresDialect) SupportsReturning() bool {

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"log"
 	"os"
 
+	"codetect/internal/logging"
 	"codetect/internal/mcp"
 	"codetect/internal/tools"
 )
@@ -14,18 +14,17 @@ const (
 )
 
 func main() {
-	// Log to stderr so stdout is clean for MCP JSON-RPC
-	log.SetOutput(os.Stderr)
-	log.SetPrefix("[codetect] ")
+	logger := logging.Default("codetect")
 
 	server := mcp.NewServer(serverName, serverVersion)
 
 	// Register all tools
 	tools.RegisterAll(server)
 
-	log.Println("starting MCP server")
+	logger.Info("starting MCP server", "name", serverName, "version", serverVersion)
 
 	if err := server.Run(); err != nil {
-		log.Fatalf("server error: %v", err)
+		logger.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }

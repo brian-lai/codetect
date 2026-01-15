@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,12 +14,17 @@ import (
 	"codetect/internal/config"
 	"codetect/internal/db"
 	"codetect/internal/embedding"
+	"codetect/internal/logging"
 	"codetect/internal/search/symbols"
 )
+
+var logger *slog.Logger
 
 const version = "0.3.0"
 
 func main() {
+	logger = logging.Default("codetect-index")
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -41,7 +47,7 @@ func main() {
 		printUsage()
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
+		logger.Error("unknown command", "command", os.Args[1])
 		printUsage()
 		os.Exit(1)
 	}
@@ -60,15 +66,14 @@ func runIndex(args []string) {
 	// Convert to absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid path: %v\n", err)
+		logger.Error("invalid path", "error", err)
 		os.Exit(1)
 	}
 
 	// Check if ctags is available
 	if !symbols.CtagsAvailable() {
-		fmt.Fprintln(os.Stderr, "[codetect-index] warning: universal-ctags not found")
-		fmt.Fprintln(os.Stderr, "[codetect-index] symbol indexing will be skipped")
-		fmt.Fprintln(os.Stderr, "[codetect-index] install with: brew install universal-ctags (macOS)")
+		logger.Warn("universal-ctags not found, symbol indexing will be skipped",
+			"install", "brew install universal-ctags (macOS)")
 		os.Exit(0)
 	}
 
@@ -79,7 +84,7 @@ func runIndex(args []string) {
 	if dbConfig.Type == db.DatabaseSQLite {
 		indexDir := filepath.Join(absPath, ".codetect")
 		if err := os.MkdirAll(indexDir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "error: creating index directory: %v\n", err)
+			logger.Error("creating index directory failed", "error", err)
 			os.Exit(1)
 		}
 		// Override path for SQLite to be relative to indexed directory
@@ -89,30 +94,29 @@ func runIndex(args []string) {
 	// Convert to db.Config
 	cfg := dbConfig.ToDBConfig()
 
-	fmt.Fprintf(os.Stderr, "[codetect-index] indexing %s\n", absPath)
-	fmt.Fprintf(os.Stderr, "[codetect-index] database: %s\n", dbConfig.String())
+	logger.Info("indexing", "path", absPath, "database", dbConfig.String())
 
 	start := time.Now()
 
 	// Open or create index using config-aware constructor with repoRoot for multi-repo isolation
 	idx, err := symbols.NewIndexWithConfig(cfg, absPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: opening index: %v\n", err)
+		logger.Error("opening index failed", "error", err)
 		os.Exit(1)
 	}
 	defer idx.Close()
 
 	// Run indexing
 	if *force {
-		fmt.Fprintln(os.Stderr, "[codetect-index] running full reindex...")
+		logger.Info("running full reindex")
 		if err := idx.FullReindex(absPath); err != nil {
-			fmt.Fprintf(os.Stderr, "error: indexing failed: %v\n", err)
+			logger.Error("indexing failed", "error", err)
 			os.Exit(1)
 		}
 	} else {
-		fmt.Fprintln(os.Stderr, "[codetect-index] running incremental index...")
+		logger.Info("running incremental index")
 		if err := idx.Update(absPath); err != nil {
-			fmt.Fprintf(os.Stderr, "error: indexing failed: %v\n", err)
+			logger.Error("indexing failed", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -120,11 +124,13 @@ func runIndex(args []string) {
 	// Print stats
 	symbolCount, fileCount, err := idx.Stats()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not get stats: %v\n", err)
+		logger.Warn("could not get stats", "error", err)
 	} else {
 		elapsed := time.Since(start)
-		fmt.Fprintf(os.Stderr, "[codetect-index] indexed %d symbols from %d files in %v\n",
-			symbolCount, fileCount, elapsed.Round(time.Millisecond))
+		logger.Info("indexing complete",
+			"symbols", symbolCount,
+			"files", fileCount,
+			"duration", elapsed.Round(time.Millisecond))
 	}
 }
 
@@ -142,7 +148,7 @@ func runEmbed(args []string) {
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid path: %v\n", err)
+		logger.Error("invalid path", "error", err)
 		os.Exit(1)
 	}
 
@@ -157,7 +163,7 @@ func runEmbed(args []string) {
 		case "off":
 			cfg.Provider = embedding.ProviderOff
 		default:
-			fmt.Fprintf(os.Stderr, "error: unknown provider: %s\n", *provider)
+			logger.Error("unknown provider", "provider", *provider)
 			os.Exit(1)
 		}
 	}
@@ -167,30 +173,29 @@ func runEmbed(args []string) {
 
 	// Check if embedding is disabled
 	if cfg.Provider == embedding.ProviderOff {
-		fmt.Fprintln(os.Stderr, "[codetect-index] embedding disabled (provider=off)")
+		logger.Info("embedding disabled", "provider", "off")
 		return
 	}
 
 	// Create embedder
 	embedder, err := embedding.NewEmbedder(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: creating embedder: %v\n", err)
+		logger.Error("creating embedder failed", "error", err)
 		os.Exit(1)
 	}
 
 	// Check availability
 	if !embedder.Available() {
-		fmt.Fprintf(os.Stderr, "[codetect-index] error: %s not available\n", cfg.Provider)
+		logger.Error("provider not available", "provider", cfg.Provider)
 		if cfg.Provider == embedding.ProviderOllama {
-			fmt.Fprintln(os.Stderr, "[codetect-index] install Ollama from https://ollama.ai")
-			fmt.Fprintln(os.Stderr, "[codetect-index] then run: ollama pull nomic-embed-text")
+			logger.Info("install Ollama from https://ollama.ai, then run: ollama pull nomic-embed-text")
 		} else if cfg.Provider == embedding.ProviderLiteLLM {
-			fmt.Fprintln(os.Stderr, "[codetect-index] check CODETECT_LITELLM_URL and CODETECT_LITELLM_API_KEY")
+			logger.Info("check CODETECT_LITELLM_URL and CODETECT_LITELLM_API_KEY")
 		}
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "[codetect-index] using provider: %s\n", embedder.ProviderID())
+	logger.Info("using embedding provider", "provider", embedder.ProviderID())
 
 	// Load database configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
@@ -200,8 +205,7 @@ func runEmbed(args []string) {
 		indexDir := filepath.Join(absPath, ".codetect")
 		dbPath := filepath.Join(indexDir, "symbols.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			fmt.Fprintln(os.Stderr, "[codetect-index] error: no symbol index found")
-			fmt.Fprintln(os.Stderr, "[codetect-index] run 'codetect-index index' first")
+			logger.Error("no symbol index found, run 'codetect-index index' first")
 			os.Exit(1)
 		}
 		dbConfig.Path = dbPath
@@ -210,12 +214,12 @@ func runEmbed(args []string) {
 	// Convert to db.Config
 	dbCfg := dbConfig.ToDBConfig()
 
-	fmt.Fprintf(os.Stderr, "[codetect-index] database: %s\n", dbConfig.String())
+	logger.Debug("database config", "database", dbConfig.String())
 
 	// Open index using config-aware constructor with repoRoot for multi-repo isolation
 	idx, err := symbols.NewIndexWithConfig(dbCfg, absPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: opening index: %v\n", err)
+		logger.Error("opening index failed", "error", err)
 		os.Exit(1)
 	}
 	defer idx.Close()
@@ -228,22 +232,22 @@ func runEmbed(args []string) {
 		absPath,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: creating embedding store: %v\n", err)
+		logger.Error("creating embedding store failed", "error", err)
 		os.Exit(1)
 	}
 	searcher := embedding.NewSemanticSearcher(store, embedder)
 
 	// Clear embeddings if force flag set
 	if *force {
-		fmt.Fprintln(os.Stderr, "[codetect-index] clearing existing embeddings...")
+		logger.Info("clearing existing embeddings")
 		if err := searcher.Store().DeleteAll(); err != nil {
-			fmt.Fprintf(os.Stderr, "error: clearing embeddings: %v\n", err)
+			logger.Error("clearing embeddings failed", "error", err)
 			os.Exit(1)
 		}
 	}
 
 	// Get indexed files and chunk them
-	fmt.Fprintln(os.Stderr, "[codetect-index] collecting code chunks...")
+	logger.Info("collecting code chunks")
 	var allChunks []embedding.Chunk
 	chunkerConfig := embedding.DefaultChunkerConfig()
 
@@ -299,14 +303,14 @@ func runEmbed(args []string) {
 	})
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: walking directory: %v\n", err)
+		logger.Error("walking directory failed", "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "[codetect-index] found %d chunks to embed\n", len(allChunks))
+	logger.Info("found chunks to embed", "chunks", len(allChunks))
 
 	if len(allChunks) == 0 {
-		fmt.Fprintln(os.Stderr, "[codetect-index] no chunks to embed")
+		logger.Info("no chunks to embed")
 		return
 	}
 
@@ -314,23 +318,28 @@ func runEmbed(args []string) {
 	start := time.Now()
 	ctx := context.Background()
 
+	// Progress output uses fmt.Fprintf for \r carriage return support
 	progressFn := func(current, total int) {
-		fmt.Fprintf(os.Stderr, "\r[codetect-index] embedding chunk %d/%d...", current, total)
+		fmt.Fprintf(os.Stderr, "\rembedding chunk %d/%d...", current, total)
 	}
 
 	if err := searcher.IndexChunks(ctx, allChunks, progressFn); err != nil {
-		fmt.Fprintf(os.Stderr, "\nerror: embedding failed: %v\n", err)
+		fmt.Fprintln(os.Stderr) // newline after progress
+		logger.Error("embedding failed", "error", err)
 		os.Exit(1)
 	}
 
 	// Print stats
 	count, fileCount, err := searcher.Store().Stats()
+	fmt.Fprintln(os.Stderr) // newline after progress
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nwarning: could not get stats: %v\n", err)
+		logger.Warn("could not get stats", "error", err)
 	} else {
 		elapsed := time.Since(start)
-		fmt.Fprintf(os.Stderr, "\n[codetect-index] embedded %d chunks from %d files in %v\n",
-			count, fileCount, elapsed.Round(time.Millisecond))
+		logger.Info("embedding complete",
+			"chunks", count,
+			"files", fileCount,
+			"duration", elapsed.Round(time.Millisecond))
 	}
 }
 
@@ -425,7 +434,7 @@ func runStats(args []string) {
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid path: %v\n", err)
+		logger.Error("invalid path", "error", err)
 		os.Exit(1)
 	}
 
@@ -436,7 +445,7 @@ func runStats(args []string) {
 	if dbConfig.Type == db.DatabaseSQLite {
 		dbPath := filepath.Join(absPath, ".codetect", "symbols.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			fmt.Fprintln(os.Stderr, "error: no index found (run 'index' first)")
+			logger.Error("no index found, run 'index' first")
 			os.Exit(1)
 		}
 		dbConfig.Path = dbPath
@@ -448,14 +457,14 @@ func runStats(args []string) {
 	// Open index using config-aware constructor with repoRoot for multi-repo isolation
 	idx, err := symbols.NewIndexWithConfig(dbCfg, absPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: opening index: %v\n", err)
+		logger.Error("opening index failed", "error", err)
 		os.Exit(1)
 	}
 	defer idx.Close()
 
 	symbolCount, fileCount, err := idx.Stats()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: getting stats: %v\n", err)
+		logger.Error("getting stats failed", "error", err)
 		os.Exit(1)
 	}
 
@@ -508,6 +517,10 @@ Embedding Environment Variables:
   CODETECT_LITELLM_URL          LiteLLM URL [default: http://localhost:4000]
   CODETECT_LITELLM_API_KEY      LiteLLM API key
   CODETECT_EMBEDDING_MODEL      Model override
+
+Logging Environment Variables:
+  CODETECT_LOG_LEVEL            Log level (debug, info, warn, error) [default: info]
+  CODETECT_LOG_FORMAT           Output format (text, json) [default: text]
 
 Database:
   Default: SQLite stored in .codetect/symbols.db relative to indexed path.

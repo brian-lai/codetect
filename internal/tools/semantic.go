@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"repo-search/internal/config"
+	"repo-search/internal/db"
 	"repo-search/internal/embedding"
 	"repo-search/internal/mcp"
 	"repo-search/internal/search/files"
@@ -169,28 +171,32 @@ func registerHybridSearch(server *mcp.Server) {
 	server.RegisterTool(tool, handler)
 }
 
-// openSemanticSearcher creates a semantic searcher using the index database
+// openSemanticSearcher creates a semantic searcher using the configured database.
+// It supports both SQLite and PostgreSQL based on environment configuration.
+// Falls back to SQLite if PostgreSQL is unavailable.
 func openSemanticSearcher() (*embedding.SemanticSearcher, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("getting working directory: %w", err)
-	}
+	// Load database configuration from environment
+	dbConfig := config.LoadDatabaseConfigFromEnv()
 
-	dbPath := filepath.Join(cwd, ".repo_search", "symbols.db")
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("no index found - run 'make index' first")
-	}
-
-	// Open the database
-	idx, err := openIndex()
+	// Try to open with configured database type
+	store, err := openEmbeddingStore(dbConfig)
 	if err != nil {
-		return nil, err
-	}
+		// If PostgreSQL fails, try falling back to SQLite
+		if dbConfig.Type == db.DatabasePostgres {
+			fmt.Fprintf(os.Stderr, "Warning: PostgreSQL unavailable (%v), falling back to SQLite\n", err)
 
-	// Create embedding store from index database
-	store, err := embedding.NewEmbeddingStoreFromSQL(idx.DB())
-	if err != nil {
-		return nil, fmt.Errorf("creating embedding store: %w", err)
+			// Fallback to SQLite
+			dbConfig.Type = db.DatabaseSQLite
+			cwd, _ := os.Getwd()
+			dbConfig.Path = filepath.Join(cwd, ".repo_search", "symbols.db")
+
+			store, err = openEmbeddingStore(dbConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to open database (tried PostgreSQL and SQLite): %w", err)
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	// Create embedder from environment configuration
@@ -201,6 +207,64 @@ func openSemanticSearcher() (*embedding.SemanticSearcher, error) {
 
 	// Create semantic searcher
 	return embedding.NewSemanticSearcher(store, embedder), nil
+}
+
+// openEmbeddingStore opens an embedding store with the given configuration.
+func openEmbeddingStore(dbConfig config.DatabaseConfig) (*embedding.EmbeddingStore, error) {
+	switch dbConfig.Type {
+	case db.DatabasePostgres:
+		// Open PostgreSQL database
+		if dbConfig.DSN == "" {
+			return nil, fmt.Errorf("PostgreSQL DSN not configured - set REPO_SEARCH_DB_DSN")
+		}
+
+		cfg := dbConfig.ToDBConfig()
+		database, err := db.Open(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("opening PostgreSQL: %w", err)
+		}
+
+		// Create embedding store with PostgreSQL dialect
+		dialect := db.GetDialect(db.DatabasePostgres)
+		store, err := embedding.NewEmbeddingStoreWithOptions(database, dialect, dbConfig.VectorDimensions)
+		if err != nil {
+			database.Close()
+			return nil, fmt.Errorf("creating PostgreSQL embedding store: %w", err)
+		}
+
+		return store, nil
+
+	default: // SQLite
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("getting working directory: %w", err)
+		}
+
+		// Determine database path
+		dbPath := dbConfig.Path
+		if dbPath == "" {
+			dbPath = filepath.Join(cwd, ".repo_search", "symbols.db")
+		}
+
+		// For SQLite, check if database exists
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("no index found at %s - run 'make index' first", dbPath)
+		}
+
+		// Open the database using the existing index function
+		idx, err := openIndex()
+		if err != nil {
+			return nil, fmt.Errorf("opening SQLite index: %w", err)
+		}
+
+		// Create embedding store from index database
+		store, err := embedding.NewEmbeddingStoreFromSQL(idx.DB())
+		if err != nil {
+			return nil, fmt.Errorf("creating SQLite embedding store: %w", err)
+		}
+
+		return store, nil
+	}
 }
 
 // getSnippetFn returns a function that reads code snippets from files

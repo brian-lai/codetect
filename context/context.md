@@ -1,42 +1,45 @@
 # Current Work Summary
 
-Executing: PostgreSQL + pgvector Support - Phase 4: EmbeddingStore Integration
+Executing: PostgreSQL + pgvector Support - Phase 5: SemanticSearcher Configuration
 
-**Branch:** `para/postgres-pgvector-phase-4`
+**Branch:** `para/postgres-pgvector-phase-5`
 **Master Plan:** context/plans/2026-01-14-postgres-pgvector-support.md
-**Phase:** 4 of 7
+**Phase:** 5 of 7
 
 ## To-Do List
 
-### Phase 4: EmbeddingStore Integration
-- [x] Add vector type encoding/decoding in EmbeddingStore
-- [x] Update upsert logic to handle vector columns
-- [x] Add PostgreSQL-specific batch insertion optimizations
-- [x] Implement embedding migration tool (SQLite → PostgreSQL)
+### Phase 5: SemanticSearcher Configuration
+- [x] Add database configuration to MCP server initialization
+- [x] Update `openSemanticSearcher()` to choose VectorDB based on config
+- [x] Add environment variables for PostgreSQL connection
+- [x] Implement automatic database detection from DSN
+- [x] Add fallback logic (PostgreSQL → SQLite if unavailable)
 
 ## Progress Notes
 
-### 2026-01-14 - Phase 4 Started
+### 2026-01-14 - Phase 5 Started
 
 **Previous Phases:**
 - ✅ Phase 1: PostgreSQL Driver Support (merged)
 - ✅ Phase 2: pgvector Extension Setup (merged)
 - ✅ Phase 3: pgvector VectorDB Implementation (PR #18)
+- ✅ Phase 4: EmbeddingStore Integration (PR #19)
 
-**Phase 4 Goal:** Update embedding storage to use native vector types and optimize for PostgreSQL
+**Phase 5 Goal:** Make database backend configurable for the MCP server and semantic search
 
 **Technical Approach:**
-- For PostgreSQL: Store vectors natively (no JSON encoding needed)
-- Update Save/SaveBatch to detect dialect and use appropriate format
-- Use COPY protocol or prepared statements for bulk loads
-- Create migration tool to convert SQLite embeddings → PostgreSQL
-- Maintain backward compatibility with SQLite
+- Add database type/DSN configuration to MCP server
+- Create VectorDB factory that selects implementation based on config
+- Support environment variables: REPO_SEARCH_DB_TYPE, REPO_SEARCH_DB_DSN, etc.
+- Auto-detect database type from DSN if not specified
+- Gracefully fall back to SQLite if PostgreSQL unavailable
+- Ensure seamless operation with both backends
 
-**Key Implementation Notes:**
-- pgvector accepts JSON array format for insertion: `'[1,2,3]'::vector`
-- No encoding/decoding needed - database handles conversion
-- Batch insertion should use transactions for consistency
-- Migration tool needs to handle large datasets incrementally
+**Key Implementation Areas:**
+- `cmd/repo-search/main.go` - Add database config
+- `internal/tools/semantic.go` - Update openSemanticSearcher()
+- `internal/embedding/search.go` - Support multiple VectorDB backends
+- Environment variable handling
 
 ---
 ```json
@@ -45,8 +48,8 @@ Executing: PostgreSQL + pgvector Support - Phase 4: EmbeddingStore Integration
     "context/plans/2026-01-14-postgres-pgvector-support.md"
   ],
   "completed_summaries": [],
-  "execution_branch": "para/postgres-pgvector-phase-4",
-  "execution_started": "2026-01-14T20:15:00Z",
+  "execution_branch": "para/postgres-pgvector-phase-5",
+  "execution_started": "2026-01-14T20:45:00Z",
   "phased_execution": {
     "master_plan": "context/plans/2026-01-14-postgres-pgvector-support.md",
     "phases": [
@@ -71,11 +74,17 @@ Executing: PostgreSQL + pgvector Support - Phase 4: EmbeddingStore Integration
       {
         "phase": 4,
         "name": "EmbeddingStore Integration",
+        "status": "completed",
+        "completed_at": "2026-01-14T20:30:00Z"
+      },
+      {
+        "phase": 5,
+        "name": "SemanticSearcher Configuration",
         "status": "in_progress"
       }
     ],
-    "current_phase": 4
+    "current_phase": 5
   },
-  "last_updated": "2026-01-14T20:15:00Z"
+  "last_updated": "2026-01-14T20:45:00Z"
 }
 ```

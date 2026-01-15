@@ -1,109 +1,61 @@
 # Current Work Summary
 
-Executing: Multi-Repository Isolation - Phase 1: Schema Changes
+Completed: Structured Logging Implementation
 
-**Branch:** `para/multi-repo-isolation-phase-1`
-**Master Plan:** context/plans/2026-01-14-multi-repo-isolation.md
-**Phase Plan:** context/plans/2026-01-14-multi-repo-isolation-phase-1.md
+**Plan:** context/plans/2026-01-15-structured-logging.md
+**Status:** Complete
+**Branch:** para/structured-logging
 
-## To-Do List
+## Implementation Summary
 
-### Symbol Index Schema (`internal/search/symbols/schema.go`)
+Replaced ad-hoc `fmt.Fprintf` and `log.*` calls with Go's `log/slog` structured logging.
 
-- [x] Add `repo_root` column to symbols table in `initSchemaWithAdapter()`
-- [x] Update symbols unique index to include `repo_root`
-- [x] Add `repo_root` column to files table
-- [x] Add composite unique index for files `(repo_root, path)`
-- [x] Add `idx_symbols_repo_path` index for efficient queries
-- [x] Update SQLite hardcoded schema with `repo_root`
-- [x] Increment schema version to 2
+### Changes Made
 
-### Symbol Index Queries (`internal/search/symbols/index.go`)
+1. **Created `internal/logging/logging.go`** - New logging package with:
+   - `Config` struct with Level, Format, Output, Source fields
+   - `DefaultConfig()` and `LoadConfigFromEnv()` for configuration
+   - `New()` and `Default()` constructors
+   - `Nop()` for testing
+   - Environment variables: `CODETECT_LOG_LEVEL`, `CODETECT_LOG_FORMAT`
 
-- [x] Update `FindSymbol()` to filter by `repo_root`
-- [x] Update `ListDefsInFile()` to filter by `repo_root`
-- [x] Update `Update()` to include `repo_root` in inserts/deletes
-- [x] Update `FullReindex()` to scope deletions by `repo_root`
-- [x] Update `getFilesToIndex()` to filter by `repo_root`
-- [x] Update `Stats()` to scope by `repo_root`
+2. **Updated CLI Entry Points:**
+   - `cmd/codetect/main.go` - MCP server
+   - `cmd/codetect-index/main.go` - Indexer (heaviest user)
+   - `cmd/codetect-daemon/main.go` - Background daemon
+   - `cmd/codetect-eval/main.go` - Eval runner
+   - `cmd/migrate-to-postgres/main.go` - Migration tool
 
-### Embedding Store Schema (`internal/embedding/store.go`)
+3. **Updated Internal Packages:**
+   - `internal/mcp/server.go` - MCP server logging
+   - `internal/daemon/daemon.go` - Daemon with file logging support
 
-- [x] Add `repo_root` column to `embeddingColumnsForDialect()`
-- [x] Update embeddings unique index to include `repo_root`
-- [x] Update SQLite hardcoded embeddings schema
-- [x] Add `repoRoot` field to `EmbeddingStore` struct
+### Features
 
-### Embedding Store Queries (`internal/embedding/store.go`)
+- **Log Levels:** DEBUG, INFO, WARN, ERROR (default: INFO)
+- **Output Formats:** text (default), json
+- **Environment Variables:**
+  - `CODETECT_LOG_LEVEL` - Set minimum log level
+  - `CODETECT_LOG_FORMAT` - Set output format (text/json)
+- **All logging to stderr** - stdout stays clean for MCP protocol
+- **Structured fields** - key=value pairs for machine-readable logs
 
-- [x] Update `Save()` to include `repo_root`
-- [x] Update `SaveBatch()` to include `repo_root`
-- [x] Update `GetByPath()` to filter by `repo_root`
-- [x] Update `GetAll()` to filter by `repo_root`
-- [x] Update `HasEmbedding()` to filter by `repo_root`
-- [x] Update `DeleteByPath()` to filter by `repo_root`
-- [x] Update `DeleteAll()` to scope by `repo_root`
-- [x] Update `Count()` to scope by `repo_root`
-- [x] Update `Stats()` to scope by `repo_root`
+## Previous Work
 
-### Verification
-
-- [x] Run unit tests: `go test ./internal/search/symbols/... ./internal/embedding/...`
-- [ ] Test fresh PostgreSQL schema creation
-- [ ] Test fresh SQLite schema creation
-
-## Progress Notes
-
-**2026-01-15**: Completed all three phases of multi-repo isolation:
-
-**Phase 1 & 2 (Schema & Queries):**
-- Added `repo_root TEXT NOT NULL` column to symbols, files, and embeddings tables
-- Updated all unique indexes to include `repo_root`
-- Added composite indexes for repo-scoped queries
-- Updated all database queries to filter by `repo_root`
-
-**Phase 3 (Command Integration):**
-- Updated `NewIndexWithConfig()` to accept `repoRoot` parameter
-- Updated all embedding store constructors to accept `repoRoot`
-- CLI commands pass `absPath` as `repoRoot`
-- MCP tools pass `cwd` as `repoRoot`
-- All unit tests passing
+Completed: Multi-Repository Isolation (PR #25)
+- **Branch:** `para/multi-repo-isolation-phase-1`
+- **Master Plan:** context/plans/2026-01-14-multi-repo-isolation.md
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-01-14-multi-repo-isolation.md",
-    "context/plans/2026-01-14-multi-repo-isolation-phase-1.md"
+    "context/plans/2026-01-15-structured-logging.md"
   ],
   "completed_summaries": [],
-  "execution_branch": "para/multi-repo-isolation-phase-1",
-  "execution_started": "2026-01-15T00:15:00Z",
-  "phased_execution": {
-    "master_plan": "context/plans/2026-01-14-multi-repo-isolation.md",
-    "phases": [
-      {
-        "phase": 1,
-        "plan": "context/plans/2026-01-14-multi-repo-isolation-phase-1.md",
-        "status": "in_progress",
-        "branch": "para/multi-repo-isolation-phase-1"
-      },
-      {
-        "phase": 2,
-        "plan": "context/plans/2026-01-14-multi-repo-isolation-phase-2.md",
-        "status": "pending",
-        "branch": "para/multi-repo-isolation-phase-2"
-      },
-      {
-        "phase": 3,
-        "plan": "context/plans/2026-01-14-multi-repo-isolation-phase-3.md",
-        "status": "pending",
-        "branch": "para/multi-repo-isolation-phase-3"
-      }
-    ],
-    "current_phase": 1
-  },
-  "last_updated": "2026-01-15T00:15:00Z"
+  "execution_branch": "para/structured-logging",
+  "execution_started": "2026-01-15T01:00:00Z",
+  "last_updated": "2026-01-15T01:30:00Z"
 }
 ```

@@ -5,6 +5,13 @@ dist/
 *.so
 *.dylib
 
+# Built binaries
+/codetect
+/codetect-index
+/codetect-daemon
+/codetect-eval
+/migrate-to-postgres
+
 # Test binary
 *.test
 

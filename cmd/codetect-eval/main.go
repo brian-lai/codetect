@@ -5,17 +5,23 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"codetect/evals"
+	"codetect/internal/logging"
 )
+
+var logger *slog.Logger
 
 const version = "0.1.0"
 
 func main() {
+	logger = logging.Default("codetect-eval")
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -35,7 +41,7 @@ func main() {
 	case "help", "-h", "--help":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
+		logger.Error("unknown command", "command", os.Args[1])
 		printUsage()
 		os.Exit(1)
 	}
@@ -64,7 +70,7 @@ func runEval(args []string) {
 	// Convert to absolute paths
 	absRepoPath, err := filepath.Abs(config.RepoPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid repo path: %v\n", err)
+		logger.Error("invalid repo path", "error", err)
 		os.Exit(1)
 	}
 
@@ -76,7 +82,7 @@ func runEval(args []string) {
 
 	absCasesDir, err := filepath.Abs(*casesDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid cases dir: %v\n", err)
+		logger.Error("invalid cases dir", "error", err)
 		os.Exit(1)
 	}
 
@@ -86,13 +92,13 @@ func runEval(args []string) {
 	// Ensure .codetect is in .gitignore when running against a target repo
 	if isExternalRepo {
 		if err := runner.EnsureGitignore(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not update .gitignore: %v\n", err)
+			logger.Warn("could not update .gitignore", "error", err)
 		}
 	}
 
 	cases, err := runner.LoadTestCases(absCasesDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading test cases: %v\n", err)
+		logger.Error("error loading test cases", "error", err)
 		os.Exit(1)
 	}
 
@@ -155,7 +161,7 @@ Focus on queries that have clear, verifiable answers.`)
 	ctx := context.Background()
 	report, err := runner.RunAll(ctx, cases)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error running evaluation: %v\n", err)
+		logger.Error("error running evaluation", "error", err)
 		os.Exit(1)
 	}
 
@@ -169,7 +175,7 @@ Focus on queries that have clear, verifiable answers.`)
 
 	// Save results
 	if err := runner.SaveResults(report); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not save results: %v\n", err)
+		logger.Warn("could not save results", "error", err)
 	}
 
 	// Print report
@@ -185,7 +191,7 @@ func showReport(args []string) {
 		// Find most recent results file
 		files, err := filepath.Glob("evals/results/*-results.json")
 		if err != nil || len(files) == 0 {
-			fmt.Fprintln(os.Stderr, "error: no results file found. Use -results flag or run 'eval run' first.")
+			logger.Error("no results file found, use -results flag or run 'eval run' first")
 			os.Exit(1)
 		}
 		*resultsPath = files[len(files)-1] // Most recent
@@ -194,7 +200,7 @@ func showReport(args []string) {
 	reporter := evals.NewReporter()
 	report, err := reporter.LoadReport(*resultsPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading report: %v\n", err)
+		logger.Error("error loading report", "error", err)
 		os.Exit(1)
 	}
 
@@ -217,21 +223,21 @@ func listCases(args []string) {
 	// Convert to absolute path
 	absRepoPath, err := filepath.Abs(config.RepoPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid repo path: %v\n", err)
+		logger.Error("invalid repo path", "error", err)
 		os.Exit(1)
 	}
 	config.RepoPath = absRepoPath
 
 	absCasesDir, err := filepath.Abs(*casesDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid cases dir: %v\n", err)
+		logger.Error("invalid cases dir", "error", err)
 		os.Exit(1)
 	}
 
 	runner := evals.NewRunner(config)
 	cases, err := runner.LoadTestCases(absCasesDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading test cases: %v\n", err)
+		logger.Error("error loading test cases", "error", err)
 		os.Exit(1)
 	}
 
@@ -254,7 +260,7 @@ func showLogs(args []string) {
 
 	absRepoPath, err := filepath.Abs(*repoPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid repo path: %v\n", err)
+		logger.Error("invalid repo path", "error", err)
 		os.Exit(1)
 	}
 	config.RepoPath = absRepoPath
@@ -262,12 +268,12 @@ func showLogs(args []string) {
 	runner := evals.NewRunner(config)
 	logs, err := runner.ListLogs()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error listing logs: %v\n", err)
+		logger.Error("error listing logs", "error", err)
 		os.Exit(1)
 	}
 
 	if len(logs) == 0 {
-		fmt.Fprintln(os.Stderr, "No logs found. Run 'codetect-eval run' first to generate logs.")
+		logger.Info("no logs found, run 'codetect-eval run' first to generate logs")
 		os.Exit(1)
 	}
 
@@ -284,7 +290,7 @@ func showLogs(args []string) {
 	}
 
 	if len(filtered) == 0 {
-		fmt.Fprintln(os.Stderr, "No logs match the specified filters.")
+		logger.Info("no logs match the specified filters")
 		os.Exit(1)
 	}
 
@@ -314,7 +320,7 @@ func showLogs(args []string) {
 
 		content, err := runner.ReadLog(log.Path)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error reading log %s: %v\n", log.Path, err)
+			logger.Error("error reading log", "path", log.Path, "error", err)
 			continue
 		}
 

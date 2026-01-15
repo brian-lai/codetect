@@ -6,13 +6,19 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"codetect/internal/daemon"
+	"codetect/internal/logging"
 	"codetect/internal/registry"
 )
 
+var logger *slog.Logger
+
 func main() {
+	logger = logging.Default("codetect-daemon")
+
 	// Subcommands
 	if len(os.Args) < 2 {
 		printUsage()
@@ -29,7 +35,7 @@ func main() {
 	case "help", "--help", "-h":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+		logger.Error("unknown command", "command", os.Args[1])
 		printUsage()
 		os.Exit(1)
 	}
@@ -45,6 +51,10 @@ func printUsage() {
 	fmt.Println("  stop      Stop the daemon")
 	fmt.Println("  status    Show daemon status")
 	fmt.Println("  help      Show this help")
+	fmt.Println()
+	fmt.Println("Environment Variables:")
+	fmt.Println("  CODETECT_LOG_LEVEL   Log level (debug, info, warn, error) [default: info]")
+	fmt.Println("  CODETECT_LOG_FORMAT  Output format (text, json) [default: text]")
 }
 
 func cmdStart(args []string) {
@@ -55,14 +65,14 @@ func cmdStart(args []string) {
 	// Check if already running
 	client := daemon.NewIPCClient(daemon.DefaultSocketPath())
 	if client.IsRunning() {
-		fmt.Println("Daemon is already running")
+		logger.Error("daemon is already running")
 		os.Exit(1)
 	}
 
 	// Load registry
 	reg, err := registry.NewRegistry()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load registry: %v\n", err)
+		logger.Error("failed to load registry", "error", err)
 		os.Exit(1)
 	}
 
@@ -72,23 +82,23 @@ func cmdStart(args []string) {
 	// Create and run daemon
 	d, err := daemon.New(reg, cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create daemon: %v\n", err)
+		logger.Error("failed to create daemon", "error", err)
 		os.Exit(1)
 	}
 
 	if *foreground {
-		fmt.Printf("Starting daemon in foreground (PID: %d)\n", os.Getpid())
+		logger.Info("starting daemon in foreground", "pid", os.Getpid())
 		if err := d.Run(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Daemon error: %v\n", err)
+			logger.Error("daemon error", "error", err)
 			os.Exit(1)
 		}
 	} else {
 		// For now, just run in foreground
 		// TODO: proper daemonization using fork or service manager
-		fmt.Printf("Daemon started (PID: %d)\n", os.Getpid())
-		fmt.Println("Note: Run with --foreground or use '&' to background")
+		logger.Info("daemon started", "pid", os.Getpid())
+		logger.Info("note: Run with --foreground or use '&' to background")
 		if err := d.Run(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Daemon error: %v\n", err)
+			logger.Error("daemon error", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -97,16 +107,16 @@ func cmdStart(args []string) {
 func cmdStop() {
 	client := daemon.NewIPCClient(daemon.DefaultSocketPath())
 	if !client.IsRunning() {
-		fmt.Println("Daemon is not running")
+		logger.Error("daemon is not running")
 		os.Exit(1)
 	}
 
 	if err := client.Stop(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to stop daemon: %v\n", err)
+		logger.Error("failed to stop daemon", "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("Daemon stopped")
+	logger.Info("daemon stopped")
 }
 
 func cmdStatus() {
@@ -114,11 +124,11 @@ func cmdStatus() {
 
 	status, err := client.Status()
 	if err != nil {
-		fmt.Println("Daemon is not running")
+		logger.Info("daemon is not running")
 		os.Exit(1)
 	}
 
-	// Print status as JSON
+	// Print status as JSON to stdout (data output)
 	data, _ := json.MarshalIndent(status, "", "  ")
 	fmt.Println(string(data))
 }

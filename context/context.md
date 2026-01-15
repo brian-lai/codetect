@@ -32,7 +32,7 @@ Executing: Fix PostgreSQL Indexing Bug
 
 ### Phase 4: Update Symbol Tools
 
-- [ ] Update `openIndex()` in `internal/tools/symbols.go` to use database config
+- [x] Update `openIndex()` in `internal/tools/symbols.go` to use database config
 
 ### Phase 5: Testing & Verification
 

@@ -54,11 +54,19 @@ Executing: Multi-Repository Isolation - Phase 1: Schema Changes
 
 ## Progress Notes
 
-**2026-01-15**: Completed Phase 1 schema changes and Phase 2 query updates:
+**2026-01-15**: Completed all three phases of multi-repo isolation:
+
+**Phase 1 & 2 (Schema & Queries):**
 - Added `repo_root TEXT NOT NULL` column to symbols, files, and embeddings tables
 - Updated all unique indexes to include `repo_root`
 - Added composite indexes for repo-scoped queries
 - Updated all database queries to filter by `repo_root`
+
+**Phase 3 (Command Integration):**
+- Updated `NewIndexWithConfig()` to accept `repoRoot` parameter
+- Updated all embedding store constructors to accept `repoRoot`
+- CLI commands pass `absPath` as `repoRoot`
+- MCP tools pass `cwd` as `repoRoot`
 - All unit tests passing
 
 ---

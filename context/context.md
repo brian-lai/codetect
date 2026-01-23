@@ -9,8 +9,8 @@ Executing: Installer Config Preservation and Re-embedding Support
 
 - [x] Refactor config generation to backup and load existing config
 - [x] Add dimension mismatch detection after model selection
-- [ ] Implement repository detection from registry and file system
-- [ ] Add batch re-embedding workflow with progress tracking
+- [x] Implement repository detection from registry and file system
+- [x] Add batch re-embedding workflow with progress tracking
 - [ ] Add config diff display and improved messaging
 - [ ] Test reinstallation scenarios (same model, upgrade, downgrade)
 - [ ] Create PR with config preservation fixes

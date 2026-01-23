@@ -1314,6 +1314,151 @@ if [[ $EMBEDDING_PROVIDER != "off" ]]; then
 fi
 
 #
+# Handle Embedding Migration (if dimension mismatch detected)
+#
+if [[ "${DIMENSION_MISMATCH:-false}" == "true" ]]; then
+    print_header "Embedding Migration Required"
+
+    # Detect indexed repositories
+    REGISTRY_FILE="$HOME/.config/codetect/registry.json"
+    INDEXED_REPOS=()
+
+    if [[ -f "$REGISTRY_FILE" ]]; then
+        # Try to parse with jq, fallback to grep
+        if command -v jq &> /dev/null; then
+            while IFS= read -r repo; do
+                [[ -n "$repo" ]] && INDEXED_REPOS+=("$repo")
+            done < <(jq -r '.repositories[]?.path // empty' "$REGISTRY_FILE" 2>/dev/null)
+        else
+            # Fallback: crude grep for paths
+            while IFS= read -r repo; do
+                [[ -n "$repo" ]] && INDEXED_REPOS+=("$repo")
+            done < <(grep -oP '"path":\s*"\K[^"]+' "$REGISTRY_FILE" 2>/dev/null)
+        fi
+    fi
+
+    # Also check for .codetect directories (repositories with local embeddings)
+    if [[ $DB_TYPE == "sqlite" ]]; then
+        while IFS= read -r codetect_dir; do
+            [[ -n "$codetect_dir" ]] && INDEXED_REPOS+=("$(dirname "$codetect_dir")")
+        done < <(find ~ -type d -name ".codetect" -path "*/.codetect" 2>/dev/null | head -20)
+    fi
+
+    # Remove duplicates and sort
+    if [[ ${#INDEXED_REPOS[@]} -gt 0 ]]; then
+        INDEXED_REPOS=($(printf '%s\n' "${INDEXED_REPOS[@]}" | sort -u))
+    fi
+
+    if [[ ${#INDEXED_REPOS[@]} -gt 0 ]]; then
+        echo ""
+        warn "Found ${#INDEXED_REPOS[@]} indexed repositories that need re-embedding:"
+        for repo in "${INDEXED_REPOS[@]}"; do
+            echo "  • $repo"
+        done
+        echo ""
+        info "Re-embedding is required because the model dimensions changed."
+        info "Old: $OLD_EMBEDDING_MODEL ($OLD_VECTOR_DIMENSIONS dims)"
+        info "New: $EMBEDDING_MODEL ($VECTOR_DIMENSIONS dims)"
+        echo ""
+
+        read -p "$(prompt "Re-embed all repositories now? [Y/n]")" REEMBED_NOW
+        REEMBED_NOW=${REEMBED_NOW:-Y}
+
+        if [[ $REEMBED_NOW =~ ^[Yy] ]]; then
+            echo ""
+            info "Re-embedding repositories (this may take several minutes)..."
+            echo ""
+
+            # Source new config to use new model
+            source "$CONFIG_FILE"
+
+            SUCCESS_COUNT=0
+            FAIL_COUNT=0
+            FAILED_REPOS=()
+
+            for repo in "${INDEXED_REPOS[@]}"; do
+                if [[ ! -d "$repo" ]]; then
+                    warn "✗ $repo (directory not found)"
+                    ((FAIL_COUNT++))
+                    FAILED_REPOS+=("$repo")
+                    continue
+                fi
+
+                info "Re-embedding: $repo"
+
+                if (cd "$repo" && $CODETECT_CMD embed --force &> /tmp/codetect-reembed-$$.log); then
+                    success "✓ $repo"
+                    ((SUCCESS_COUNT++))
+                else
+                    error "✗ $repo (see /tmp/codetect-reembed-$$.log)"
+                    ((FAIL_COUNT++))
+                    FAILED_REPOS+=("$repo")
+                fi
+            done
+
+            echo ""
+            if [[ $FAIL_COUNT -eq 0 ]]; then
+                success "All $SUCCESS_COUNT repositories re-embedded successfully!"
+            else
+                warn "$SUCCESS_COUNT succeeded, $FAIL_COUNT failed"
+
+                if [[ ${#FAILED_REPOS[@]} -gt 0 ]]; then
+                    echo ""
+                    warn "Failed repositories must be re-embedded manually:"
+                    for repo in "${FAILED_REPOS[@]}"; do
+                        echo "  • cd $repo && $CODETECT_CMD embed --force"
+                    done
+                fi
+            fi
+        else
+            # Generate migration script
+            MIGRATION_SCRIPT="$HOME/codetect-reembed.sh"
+            cat > "$MIGRATION_SCRIPT" << EOF
+#!/bin/bash
+# Auto-generated migration script for re-embedding repositories
+# Generated: $(date)
+
+set -e
+
+echo "Re-embedding all repositories with new model..."
+echo "Model: $EMBEDDING_MODEL ($VECTOR_DIMENSIONS dimensions)"
+echo ""
+
+# Source new configuration
+source "$CONFIG_FILE"
+
+# Re-embed each repository
+EOF
+
+            for repo in "${INDEXED_REPOS[@]}"; do
+                cat >> "$MIGRATION_SCRIPT" << EOF
+
+echo "Re-embedding: $repo"
+cd "$repo" && $CODETECT_CMD embed --force
+EOF
+            done
+
+            cat >> "$MIGRATION_SCRIPT" << EOF
+
+echo ""
+echo "✓ All repositories re-embedded successfully!"
+EOF
+
+            chmod +x "$MIGRATION_SCRIPT"
+
+            echo ""
+            warn "Re-embedding skipped"
+            success "Migration script saved to: $MIGRATION_SCRIPT"
+            info "Run it when you're ready: bash $MIGRATION_SCRIPT"
+        fi
+    else
+        info "No indexed repositories found - you're all set!"
+    fi
+
+    echo ""
+fi
+
+#
 # Final Summary
 #
 clear

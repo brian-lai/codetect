@@ -60,16 +60,27 @@ Executing: Installer Embedding Model Selection
 - ✓ Case statement logic complete (5 options + error handling)
 - ✓ Menu display formatted properly with colors and descriptions
 
+**PR Created:** #27 - https://github.com/brian-lai/codetect/pull/27
+
+**Follow-up Task Identified:**
+During review, discovered installer doesn't handle reinstallation scenarios safely:
+- Config is overwritten (not preserved/merged)
+- No dimension mismatch detection when changing models
+- No guidance for re-embedding after model change
+- Created comprehensive plan: `context/plans/2026-01-22-installer-config-preservation-and-reembedding.md`
+- This should be addressed as a follow-up after PR #27 is merged
+
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-01-22-installer-embedding-model-selection.md"
+    "context/plans/2026-01-22-installer-embedding-model-selection.md",
+    "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md"
   ],
   "completed_summaries": [],
   "execution_branch": "para/installer-embedding-model-selection",
   "execution_started": "2026-01-22T14:15:00Z",
-  "last_updated": "2026-01-22T14:15:00Z"
+  "last_updated": "2026-01-22T15:30:00Z"
 }
 ```

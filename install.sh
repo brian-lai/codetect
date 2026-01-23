@@ -419,6 +419,39 @@ if [[ $ENABLE_SEMANTIC =~ ^[Yy] ]]; then
                 success "Selected: $EMBEDDING_MODEL (dimensions: $VECTOR_DIMENSIONS)"
                 echo ""
 
+                # Check for dimension mismatch with existing config
+                DIMENSION_MISMATCH=false
+                if [[ "${EXISTING_CONFIG:-false}" == "true" ]]; then
+                    if [[ "$OLD_VECTOR_DIMENSIONS" != "$VECTOR_DIMENSIONS" ]]; then
+                        DIMENSION_MISMATCH=true
+
+                        print_box "$YELLOW" \
+                            "⚠️  DIMENSION CHANGE DETECTED" \
+                            "" \
+                            "Previous model: $OLD_EMBEDDING_MODEL ($OLD_VECTOR_DIMENSIONS dims)" \
+                            "New model: $EMBEDDING_MODEL ($VECTOR_DIMENSIONS dims)" \
+                            "" \
+                            "This change requires re-embedding all indexed repositories." \
+                            "The installer will help you with this after installation."
+
+                        echo ""
+                        read -p "$(prompt "Continue with model change? [Y/n]")" CONTINUE_CHANGE
+                        CONTINUE_CHANGE=${CONTINUE_CHANGE:-Y}
+
+                        if [[ ! $CONTINUE_CHANGE =~ ^[Yy] ]]; then
+                            info "Keeping existing model: $OLD_EMBEDDING_MODEL"
+                            EMBEDDING_MODEL="$OLD_EMBEDDING_MODEL"
+                            VECTOR_DIMENSIONS="$OLD_VECTOR_DIMENSIONS"
+                            DIMENSION_MISMATCH=false
+                            success "Using existing configuration"
+                        fi
+                        echo ""
+                    else
+                        info "No dimension change - existing embeddings will continue to work"
+                        echo ""
+                    fi
+                fi
+
                 # Check if Ollama is running
                 if curl -s http://localhost:11434/api/tags &> /dev/null; then
                     success "Ollama is running"

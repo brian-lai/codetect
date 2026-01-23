@@ -246,15 +246,14 @@ func runEmbed(args []string) {
 		}
 	}
 
-	// Get indexed files and chunk them
-	logger.Info("collecting code chunks")
-	var allChunks []embedding.Chunk
-	chunkerConfig := embedding.DefaultChunkerConfig()
-
 	// Load gitignore patterns
 	gi := loadGitignore(absPath)
 
-	// Walk indexed files and create chunks
+	// First pass: collect file info for preview
+	logger.Info("scanning files to embed")
+	var filesToEmbed []string
+	var totalSize int64
+
 	err = filepath.Walk(absPath, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -280,17 +279,50 @@ func runEmbed(args []string) {
 			return nil
 		}
 
-		// Only process code files
-		if !isCodeFile(filePath) {
-			return nil
+		// Only count code files
+		if isCodeFile(filePath) {
+			filesToEmbed = append(filesToEmbed, filePath)
+			totalSize += info.Size()
 		}
+
+		return nil
+	})
+
+	if err != nil {
+		logger.Error("scanning directory failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Display preview
+	if len(filesToEmbed) == 0 {
+		logger.Info("no code files to embed")
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "\n📊 Embedding Preview:\n")
+	fmt.Fprintf(os.Stderr, "   Files to embed: %d\n", len(filesToEmbed))
+	fmt.Fprintf(os.Stderr, "   Total size: %s\n", formatBytes(totalSize))
+	fmt.Fprintf(os.Stderr, "   Provider: %s\n", cfg.Provider)
+	if cfg.Model != "" {
+		fmt.Fprintf(os.Stderr, "   Model: %s\n", cfg.Model)
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+
+	// Second pass: chunk files
+	logger.Info("collecting code chunks")
+	var allChunks []embedding.Chunk
+	chunkerConfig := embedding.DefaultChunkerConfig()
+
+	// Walk indexed files and create chunks
+	for _, filePath := range filesToEmbed {
+		relPath, _ := filepath.Rel(absPath, filePath)
 
 		// Get symbols for this file (for smart chunking)
 		syms, _ := idx.ListDefsInFile(relPath)
 
 		chunks, err := embedding.ChunkFile(filePath, syms, chunkerConfig)
 		if err != nil {
-			return nil // Skip files we can't chunk
+			continue // Skip files we can't chunk
 		}
 
 		// Fix paths to be relative
@@ -299,12 +331,6 @@ func runEmbed(args []string) {
 		}
 
 		allChunks = append(allChunks, chunks...)
-		return nil
-	})
-
-	if err != nil {
-		logger.Error("walking directory failed", "error", err)
-		os.Exit(1)
 	}
 
 	logger.Info("found chunks to embed", "chunks", len(allChunks))
@@ -341,6 +367,20 @@ func runEmbed(args []string) {
 			"files", fileCount,
 			"duration", elapsed.Round(time.Millisecond))
 	}
+}
+
+// formatBytes converts bytes to human-readable format
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 // isCodeFile returns true for files that should be embedded

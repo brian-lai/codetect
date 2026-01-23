@@ -53,9 +53,11 @@ func runEval(args []string) {
 	casesDir := fs.String("cases", "evals/cases", "Directory containing test case JSONL files")
 	outputDir := fs.String("output", "evals/results", "Output directory for results")
 	categories := fs.String("category", "", "Filter by category (comma-separated: search,navigate,understand)")
-	parallel := fs.Int("parallel", 10, "Number of parallel test case executions (default: 10)")
+	parallel := fs.Int("parallel", 10, "Number of parallel test case executions")
+	fs.IntVar(parallel, "j", 10, "Short for --parallel (like make -j)")
 	timeout := fs.Duration("timeout", 5*time.Minute, "Timeout per test case")
 	verbose := fs.Bool("verbose", false, "Verbose output")
+	fs.BoolVar(verbose, "v", false, "Short for --verbose")
 	fs.Parse(args)
 
 	config := evals.DefaultConfig()

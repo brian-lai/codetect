@@ -56,6 +56,7 @@ func main() {
 func runIndex(args []string) {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	force := fs.Bool("force", false, "Force full reindex")
+	fs.BoolVar(force, "f", false, "Short for --force")
 	fs.Parse(args)
 
 	path := "."
@@ -137,9 +138,11 @@ func runIndex(args []string) {
 func runEmbed(args []string) {
 	fs := flag.NewFlagSet("embed", flag.ExitOnError)
 	force := fs.Bool("force", false, "Re-embed all chunks (ignore cache)")
+	fs.BoolVar(force, "f", false, "Short for --force")
 	provider := fs.String("provider", "", "Embedding provider (ollama, litellm, off)")
 	model := fs.String("model", "", "Embedding model (provider-specific default if empty)")
-	parallel := fs.Int("parallel", 10, "Number of parallel embedding workers (default: 10)")
+	parallel := fs.Int("parallel", 10, "Number of parallel embedding workers")
+	fs.IntVar(parallel, "j", 10, "Short for --parallel (like make -j)")
 	fs.Parse(args)
 
 	path := "."

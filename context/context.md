@@ -1,86 +1,61 @@
 # Current Work Summary
 
-Executing: Installer Embedding Model Selection
+**Status:** Ready for new work
 
-**Branch:** `para/installer-embedding-model-selection`
+## Recently Completed
+
+### ✅ Installer Embedding Model Selection (PR #27 - MERGED)
+
+**Completed:** 2026-01-22
+**Branch:** `para/installer-embedding-model-selection` (merged to main)
 **Plan:** context/plans/2026-01-22-installer-embedding-model-selection.md
 
-## To-Do List
+**What was delivered:**
+- Interactive model selection menu with 5 options (bge-m3, snowflake-arctic-embed, jina-embeddings-v3, nomic-embed-text, custom)
+- Automatic VECTOR_DIMENSIONS configuration (1024 for new models, 768 for nomic)
+- Performance metrics displayed during selection (+47%, +57%, +50% improvements)
+- Comprehensive embedding model comparison documentation
+- Updated all installation docs with model recommendations
 
-- [x] Create git branch for installer updates
-- [x] Update context.md with execution tracking
-- [x] Add model selection menu to install.sh
-- [x] Update model availability check logic
-- [x] Add VECTOR_DIMENSIONS to config generation
-- [x] Test installer with each model option
-- [ ] Create PR with documentation updates
+**Impact:**
+- Users now get 47-57% better search quality by selecting recommended models during install
+- Clear guidance on model trade-offs (performance vs memory vs size)
+- No manual environment variable configuration needed
 
-## Progress Notes
+## Next Task
 
-### 2026-01-22 - Implementation Complete
+### 📋 Installer Config Preservation and Re-embedding Support
 
-**Goal:** Update installer to support recommended embedding models (bge-m3, snowflake-arctic-embed, jina-embeddings-v3)
+**Plan:** context/plans/2026-01-22-installer-config-preservation-and-reembedding.md
+**Status:** Ready to execute
 
-**Context:**
-- Documentation completed: `docs/embedding-model-comparison.md`
-- Research shows +47-57% performance improvement vs current default
-- Installer currently hard-codes `nomic-embed-text` only
+**Objective:**
+Fix installer to handle reinstallation scenarios safely:
+- Preserve existing configuration (don't overwrite custom settings)
+- Detect dimension mismatches when changing models
+- Guide users through re-embedding process
+- Provide clear warnings and automated migration support
 
-**Technical Approach:**
-- Add interactive model selection menu (5 options: 3 recommended + legacy + custom)
-- Set REPO_SEARCH_VECTOR_DIMENSIONS correctly (1024 for new models, 768 for nomic)
-- Pull selected model automatically via Ollama
-- Maintain backward compatibility with nomic-embed-text option
-
-**Changes Made:**
-1. Added model selection menu at install.sh:349-374
-   - 5 options: bge-m3 (recommended), snowflake-arctic-embed, jina-embeddings-v3, nomic-embed-text (legacy), custom
-   - Display performance metrics (+47%, +57%, +50%)
-   - Show specs: dimensions, memory, context length
-
-2. Updated model check/pull logic at install.sh:422-448
-   - Check for selected model (not just nomic)
-   - Use OLLAMA_MODEL_NAME variable for correct pull command
-   - Handle jina/ prefix correctly
-   - Show model size and dimensions on success
-
-3. Added VECTOR_DIMENSIONS to config generation at install.sh:993
-   - Set to 1024 for bge-m3, snowflake, jina
-   - Set to 768 for nomic-embed-text
-   - Custom value for option 5
-
-4. Updated Ollama not-found message at install.sh:331
-   - Changed from nomic-specific to generic bge-m3 recommendation
-
-**Validation:**
-- ✓ Bash syntax check passed
-- ✓ VECTOR_DIMENSIONS set correctly for all model options (1024/768)
-- ✓ Ollama model names correct (including jina/ prefix)
-- ✓ Config generation includes VECTOR_DIMENSIONS
-- ✓ Case statement logic complete (5 options + error handling)
-- ✓ Menu display formatted properly with colors and descriptions
-
-**PR Created:** #27 - https://github.com/brian-lai/codetect/pull/27
-
-**Follow-up Task Identified:**
-During review, discovered installer doesn't handle reinstallation scenarios safely:
-- Config is overwritten (not preserved/merged)
-- No dimension mismatch detection when changing models
-- No guidance for re-embedding after model change
-- Created comprehensive plan: `context/plans/2026-01-22-installer-config-preservation-and-reembedding.md`
-- This should be addressed as a follow-up after PR #27 is merged
+**Why this matters:**
+During PR #27 review, discovered that reinstalling overwrites all config (line 132's claim of "preservation" is false) and doesn't warn about dimension mismatches that break existing embeddings.
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-01-22-installer-embedding-model-selection.md",
     "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md"
   ],
   "completed_summaries": [],
-  "execution_branch": "para/installer-embedding-model-selection",
-  "execution_started": "2026-01-22T14:15:00Z",
-  "last_updated": "2026-01-22T15:30:00Z"
+  "execution_branch": null,
+  "last_updated": "2026-01-22T16:00:00Z",
+  "recent_completions": [
+    {
+      "task": "installer-embedding-model-selection",
+      "completed_at": "2026-01-22T15:45:00Z",
+      "pr": 27,
+      "status": "merged"
+    }
+  ]
 }
 ```

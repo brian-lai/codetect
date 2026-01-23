@@ -419,6 +419,39 @@ if [[ $ENABLE_SEMANTIC =~ ^[Yy] ]]; then
                 success "Selected: $EMBEDDING_MODEL (dimensions: $VECTOR_DIMENSIONS)"
                 echo ""
 
+                # Check for dimension mismatch with existing config
+                DIMENSION_MISMATCH=false
+                if [[ "${EXISTING_CONFIG:-false}" == "true" ]]; then
+                    if [[ "$OLD_VECTOR_DIMENSIONS" != "$VECTOR_DIMENSIONS" ]]; then
+                        DIMENSION_MISMATCH=true
+
+                        print_box "$YELLOW" \
+                            "⚠️  DIMENSION CHANGE DETECTED" \
+                            "" \
+                            "Previous model: $OLD_EMBEDDING_MODEL ($OLD_VECTOR_DIMENSIONS dims)" \
+                            "New model: $EMBEDDING_MODEL ($VECTOR_DIMENSIONS dims)" \
+                            "" \
+                            "This change requires re-embedding all indexed repositories." \
+                            "The installer will help you with this after installation."
+
+                        echo ""
+                        read -p "$(prompt "Continue with model change? [Y/n]")" CONTINUE_CHANGE
+                        CONTINUE_CHANGE=${CONTINUE_CHANGE:-Y}
+
+                        if [[ ! $CONTINUE_CHANGE =~ ^[Yy] ]]; then
+                            info "Keeping existing model: $OLD_EMBEDDING_MODEL"
+                            EMBEDDING_MODEL="$OLD_EMBEDDING_MODEL"
+                            VECTOR_DIMENSIONS="$OLD_VECTOR_DIMENSIONS"
+                            DIMENSION_MISMATCH=false
+                            success "Using existing configuration"
+                        fi
+                        echo ""
+                    else
+                        info "No dimension change - existing embeddings will continue to work"
+                        echo ""
+                    fi
+                fi
+
                 # Check if Ollama is running
                 if curl -s http://localhost:11434/api/tags &> /dev/null; then
                     success "Ollama is running"
@@ -1106,6 +1139,11 @@ if [[ -f "$CONFIG_FILE" ]]; then
         LITELLM_URL="${CODETECT_LITELLM_URL:-$LITELLM_URL}"
         LITELLM_API_KEY="${CODETECT_LITELLM_API_KEY:-$LITELLM_API_KEY}"
 
+        # Store old model and dimensions for mismatch detection
+        OLD_EMBEDDING_MODEL="${CODETECT_EMBEDDING_MODEL:-}"
+        OLD_VECTOR_DIMENSIONS="${CODETECT_VECTOR_DIMENSIONS:-768}"
+        EXISTING_CONFIG=true
+
         # Detect database backend change
         if [[ -n "$PREVIOUS_DB_TYPE" && "$PREVIOUS_DB_TYPE" != "$DB_TYPE" ]]; then
             echo ""
@@ -1139,7 +1177,44 @@ if [[ -f "$CONFIG_FILE" ]]; then
         mv "$CONFIG_FILE" "$BACKUP_FILE"
         info "Backed up corrupted config to $BACKUP_FILE"
         info "Creating fresh configuration..."
+        EXISTING_CONFIG=false
     fi
+else
+    # No existing config
+    EXISTING_CONFIG=false
+fi
+
+# Show configuration summary before writing
+if [[ "${EXISTING_CONFIG:-false}" == "true" ]]; then
+    echo ""
+    print_section "Configuration Summary"
+    echo "Updating existing configuration..."
+    echo ""
+
+    # Show what changed
+    CHANGES_DETECTED=false
+
+    if [[ "${OLD_EMBEDDING_MODEL:-}" != "${EMBEDDING_MODEL:-}" ]]; then
+        info "Model:      $OLD_EMBEDDING_MODEL → $EMBEDDING_MODEL"
+        CHANGES_DETECTED=true
+    fi
+
+    if [[ "${OLD_VECTOR_DIMENSIONS:-}" != "${VECTOR_DIMENSIONS:-}" ]]; then
+        info "Dimensions: $OLD_VECTOR_DIMENSIONS → $VECTOR_DIMENSIONS"
+        CHANGES_DETECTED=true
+    fi
+
+    if [[ "${PREVIOUS_DB_TYPE:-}" != "${DB_TYPE:-}" ]]; then
+        info "Database:   $PREVIOUS_DB_TYPE → $DB_TYPE"
+        CHANGES_DETECTED=true
+    fi
+
+    if [[ "$CHANGES_DETECTED" == "false" ]]; then
+        info "No configuration changes detected"
+        info "Preserving all existing settings"
+    fi
+
+    echo ""
 fi
 
 cat > "$CONFIG_FILE" << EOF
@@ -1269,6 +1344,151 @@ if [[ $EMBEDDING_PROVIDER != "off" ]]; then
         fi
         success "Embedding generation complete"
     fi
+fi
+
+#
+# Handle Embedding Migration (if dimension mismatch detected)
+#
+if [[ "${DIMENSION_MISMATCH:-false}" == "true" ]]; then
+    print_header "Embedding Migration Required"
+
+    # Detect indexed repositories
+    REGISTRY_FILE="$HOME/.config/codetect/registry.json"
+    INDEXED_REPOS=()
+
+    if [[ -f "$REGISTRY_FILE" ]]; then
+        # Try to parse with jq, fallback to grep
+        if command -v jq &> /dev/null; then
+            while IFS= read -r repo; do
+                [[ -n "$repo" ]] && INDEXED_REPOS+=("$repo")
+            done < <(jq -r '.projects[]?.path // empty' "$REGISTRY_FILE" 2>/dev/null)
+        else
+            # Fallback: crude grep for paths
+            while IFS= read -r repo; do
+                [[ -n "$repo" ]] && INDEXED_REPOS+=("$repo")
+            done < <(grep -oP '"path":\s*"\K[^"]+' "$REGISTRY_FILE" 2>/dev/null)
+        fi
+    fi
+
+    # Also check for .codetect directories (repositories with local embeddings)
+    if [[ $DB_TYPE == "sqlite" ]]; then
+        while IFS= read -r codetect_dir; do
+            [[ -n "$codetect_dir" ]] && INDEXED_REPOS+=("$(dirname "$codetect_dir")")
+        done < <(find ~ -type d -name ".codetect" -path "*/.codetect" 2>/dev/null | head -20)
+    fi
+
+    # Remove duplicates and sort
+    if [[ ${#INDEXED_REPOS[@]} -gt 0 ]]; then
+        INDEXED_REPOS=($(printf '%s\n' "${INDEXED_REPOS[@]}" | sort -u))
+    fi
+
+    if [[ ${#INDEXED_REPOS[@]} -gt 0 ]]; then
+        echo ""
+        warn "Found ${#INDEXED_REPOS[@]} indexed repositories that need re-embedding:"
+        for repo in "${INDEXED_REPOS[@]}"; do
+            echo "  • $repo"
+        done
+        echo ""
+        info "Re-embedding is required because the model dimensions changed."
+        info "Old: $OLD_EMBEDDING_MODEL ($OLD_VECTOR_DIMENSIONS dims)"
+        info "New: $EMBEDDING_MODEL ($VECTOR_DIMENSIONS dims)"
+        echo ""
+
+        read -p "$(prompt "Re-embed all repositories now? [Y/n]")" REEMBED_NOW
+        REEMBED_NOW=${REEMBED_NOW:-Y}
+
+        if [[ $REEMBED_NOW =~ ^[Yy] ]]; then
+            echo ""
+            info "Re-embedding repositories (this may take several minutes)..."
+            echo ""
+
+            # Source new config to use new model
+            source "$CONFIG_FILE"
+
+            SUCCESS_COUNT=0
+            FAIL_COUNT=0
+            FAILED_REPOS=()
+
+            for repo in "${INDEXED_REPOS[@]}"; do
+                if [[ ! -d "$repo" ]]; then
+                    warn "✗ $repo (directory not found)"
+                    ((FAIL_COUNT++))
+                    FAILED_REPOS+=("$repo")
+                    continue
+                fi
+
+                info "Re-embedding: $repo"
+
+                if (cd "$repo" && $CODETECT_CMD embed --force &> /tmp/codetect-reembed-$$.log); then
+                    success "✓ $repo"
+                    ((SUCCESS_COUNT++))
+                else
+                    error "✗ $repo (see /tmp/codetect-reembed-$$.log)"
+                    ((FAIL_COUNT++))
+                    FAILED_REPOS+=("$repo")
+                fi
+            done
+
+            echo ""
+            if [[ $FAIL_COUNT -eq 0 ]]; then
+                success "All $SUCCESS_COUNT repositories re-embedded successfully!"
+            else
+                warn "$SUCCESS_COUNT succeeded, $FAIL_COUNT failed"
+
+                if [[ ${#FAILED_REPOS[@]} -gt 0 ]]; then
+                    echo ""
+                    warn "Failed repositories must be re-embedded manually:"
+                    for repo in "${FAILED_REPOS[@]}"; do
+                        echo "  • cd $repo && $CODETECT_CMD embed --force"
+                    done
+                fi
+            fi
+        else
+            # Generate migration script
+            MIGRATION_SCRIPT="$HOME/codetect-reembed.sh"
+            cat > "$MIGRATION_SCRIPT" << EOF
+#!/bin/bash
+# Auto-generated migration script for re-embedding repositories
+# Generated: $(date)
+
+set -e
+
+echo "Re-embedding all repositories with new model..."
+echo "Model: $EMBEDDING_MODEL ($VECTOR_DIMENSIONS dimensions)"
+echo ""
+
+# Source new configuration
+source "$CONFIG_FILE"
+
+# Re-embed each repository
+EOF
+
+            for repo in "${INDEXED_REPOS[@]}"; do
+                cat >> "$MIGRATION_SCRIPT" << EOF
+
+echo "Re-embedding: $repo"
+cd "$repo" && $CODETECT_CMD embed --force
+EOF
+            done
+
+            cat >> "$MIGRATION_SCRIPT" << EOF
+
+echo ""
+echo "✓ All repositories re-embedded successfully!"
+EOF
+
+            chmod +x "$MIGRATION_SCRIPT"
+
+            echo ""
+            warn "Re-embedding skipped"
+            success "Migration script saved to: $MIGRATION_SCRIPT"
+            info "Run it when you're ready: bash $MIGRATION_SCRIPT"
+        fi
+    else
+        info "No indexed repositories found - you're all set!"
+    fi
+
+    echo ""
 fi
 
 #

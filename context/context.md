@@ -1,86 +1,85 @@
 # Current Work Summary
 
-Executing: Installer Embedding Model Selection
+Executing: Installer Config Preservation and Re-embedding Support
 
-**Branch:** `para/installer-embedding-model-selection`
-**Plan:** context/plans/2026-01-22-installer-embedding-model-selection.md
+**Branch:** `para/installer-config-preservation-and-reembedding`
+**Plan:** context/plans/2026-01-22-installer-config-preservation-and-reembedding.md
 
 ## To-Do List
 
-- [x] Create git branch for installer updates
-- [x] Update context.md with execution tracking
-- [x] Add model selection menu to install.sh
-- [x] Update model availability check logic
-- [x] Add VECTOR_DIMENSIONS to config generation
-- [x] Test installer with each model option
-- [ ] Create PR with documentation updates
+- [x] Refactor config generation to backup and load existing config
+- [x] Add dimension mismatch detection after model selection
+- [x] Implement repository detection from registry and file system
+- [x] Add batch re-embedding workflow with progress tracking
+- [x] Add config diff display and improved messaging
+- [x] Test reinstallation scenarios (same model, upgrade, downgrade)
+- [x] Create PR with config preservation fixes
+
+**Status:** ✅ All tasks completed! PR #28 created: https://github.com/brian-lai/codetect/pull/28
 
 ## Progress Notes
 
-### 2026-01-22 - Implementation Complete
+### 2026-01-23 - Execution Completed ✅
 
-**Goal:** Update installer to support recommended embedding models (bge-m3, snowflake-arctic-embed, jina-embeddings-v3)
+**Implemented all 5 priorities:**
+1. ✅ Config preservation with backup and old value tracking (install.sh:1110-1145)
+2. ✅ Dimension mismatch detection with warning box (install.sh:422-453)
+3. ✅ Repository detection from registry + file system (install.sh:1356-1380)
+4. ✅ Batch re-embedding workflow with progress tracking (install.sh:1381-1452)
+5. ✅ Config summary display showing changes (install.sh:1187-1218)
 
-**Context:**
-- Documentation completed: `docs/embedding-model-comparison.md`
-- Research shows +47-57% performance improvement vs current default
-- Installer currently hard-codes `nomic-embed-text` only
+**Testing completed:**
+- Component testing: Repository detection verified (6 repos found)
+- Bug found & fixed: Registry structure used `.projects[]?.path` not `.repositories[]?.path`
+- Code review: All features verified against plan requirements
+- Manual testing guide created for user verification
 
-**Technical Approach:**
-- Add interactive model selection menu (5 options: 3 recommended + legacy + custom)
-- Set REPO_SEARCH_VECTOR_DIMENSIONS correctly (1024 for new models, 768 for nomic)
-- Pull selected model automatically via Ollama
-- Maintain backward compatibility with nomic-embed-text option
+**Commits:**
+- 421deb6: Store old model and dimensions for mismatch detection
+- 81dbb85: Add dimension mismatch detection after model selection
+- 26b47a3: Add repository detection and batch re-embedding workflow
+- e5f6d58: Add config summary display before writing
+- 72b7a6a: Fix registry structure bug (critical fix)
 
-**Changes Made:**
-1. Added model selection menu at install.sh:349-374
-   - 5 options: bge-m3 (recommended), snowflake-arctic-embed, jina-embeddings-v3, nomic-embed-text (legacy), custom
-   - Display performance metrics (+47%, +57%, +50%)
-   - Show specs: dimensions, memory, context length
+**PR #28 created:** https://github.com/brian-lai/codetect/pull/28
+- +220 lines in install.sh
+- All changes backward compatible
+- Ready for review and merge
 
-2. Updated model check/pull logic at install.sh:422-448
-   - Check for selected model (not just nomic)
-   - Use OLLAMA_MODEL_NAME variable for correct pull command
-   - Handle jina/ prefix correctly
-   - Show model size and dimensions on success
+### 2026-01-22 - Execution Started
 
-3. Added VECTOR_DIMENSIONS to config generation at install.sh:993
-   - Set to 1024 for bge-m3, snowflake, jina
-   - Set to 768 for nomic-embed-text
-   - Custom value for option 5
+**Goal:** Fix installer reinstallation issues
 
-4. Updated Ollama not-found message at install.sh:331
-   - Changed from nomic-specific to generic bge-m3 recommendation
+**Problems to solve:**
+1. Config overwrites (line 965: `cat >` destroys existing config despite line 132 claiming preservation)
+2. No dimension mismatch detection when changing models
+3. No guidance for re-embedding after model changes
+4. Users lose custom settings (URLs, DB connections, API keys)
 
-**Validation:**
-- ✓ Bash syntax check passed
-- ✓ VECTOR_DIMENSIONS set correctly for all model options (1024/768)
-- ✓ Ollama model names correct (including jina/ prefix)
-- ✓ Config generation includes VECTOR_DIMENSIONS
-- ✓ Case statement logic complete (5 options + error handling)
-- ✓ Menu display formatted properly with colors and descriptions
+**Technical approach:**
+- **Priority 1:** Config preservation with backup/merge logic
+- **Priority 2:** Dimension mismatch detection and warnings
+- **Priority 3:** Repository detection (registry.json + file search)
+- **Priority 4:** Automated re-embedding with progress tracking
+- **Priority 5:** UX polish (diff display, clear messaging)
 
-**PR Created:** #27 - https://github.com/brian-lai/codetect/pull/27
-
-**Follow-up Task Identified:**
-During review, discovered installer doesn't handle reinstallation scenarios safely:
-- Config is overwritten (not preserved/merged)
-- No dimension mismatch detection when changing models
-- No guidance for re-embedding after model change
-- Created comprehensive plan: `context/plans/2026-01-22-installer-config-preservation-and-reembedding.md`
-- This should be addressed as a follow-up after PR #27 is merged
+**Success criteria:**
+- Existing config backed up before modification
+- Custom settings preserved
+- Dimension mismatches detected and warned
+- Batch re-embedding offered when needed
+- Clear, actionable user guidance
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-01-22-installer-embedding-model-selection.md",
     "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md"
   ],
   "completed_summaries": [],
-  "execution_branch": "para/installer-embedding-model-selection",
-  "execution_started": "2026-01-22T14:15:00Z",
-  "last_updated": "2026-01-22T15:30:00Z"
+  "execution_branch": "para/installer-config-preservation-and-reembedding",
+  "execution_started": "2026-01-22T16:15:00Z",
+  "last_updated": "2026-01-22T16:15:00Z"
 }
 ```

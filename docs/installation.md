@@ -48,7 +48,10 @@ The installer will:
 - Checks if Ollama is installed when you enable semantic search
 - Shows a prominent warning if Ollama is missing with installation instructions
 - If Ollama is installed, checks if it's running and if the embedding model is available
-- Offers to download the `nomic-embed-text` model (~274MB) during installation
+- Offers to download the default embedding model during installation
+  - **Recommended:** `bge-m3` (1024 dims, ~2.2GB) - 47% better retrieval than default
+  - **Default:** `nomic-embed-text` (768 dims, ~274MB) - smaller but lower quality
+  - See [Embedding Model Comparison](./embedding-model-comparison.md) for detailed analysis
 
 **Global Installation:**
 - Installs binaries to `~/.local/bin` for easy access from anywhere
@@ -207,8 +210,13 @@ The installer will detect if Ollama is missing and show prominent warnings. Manu
 # Install from https://ollama.ai
 # Download the installer for your platform and run it
 
-# After installation, pull the embedding model
-ollama pull nomic-embed-text
+# After installation, pull the recommended embedding model
+ollama pull bge-m3  # Recommended: best quality for code search
+
+# Or use the smaller default model
+# ollama pull nomic-embed-text  # Smaller but lower quality (-47% retrieval)
+
+# See docs/embedding-model-comparison.md for detailed comparison
 ```
 
 **Important:** The installer will display a prominent red warning box if you enable semantic search but Ollama is not installed. You have two options:
@@ -406,12 +414,20 @@ codetect embed
 
 **Using Ollama (default):**
 ```bash
-codetect embed  # Uses Ollama at localhost:11434 with nomic-embed-text
+codetect embed  # Uses Ollama at localhost:11434 with default model (nomic-embed-text)
+
+# To use the recommended model:
+CODETECT_EMBEDDING_MODEL=bge-m3 CODETECT_VECTOR_DIMENSIONS=1024 codetect embed
 ```
 
 **Using a custom Ollama model:**
 ```bash
-CODETECT_EMBEDDING_MODEL=mxbai-embed-large codetect embed
+# Recommended: Use bge-m3 for best code search quality
+CODETECT_EMBEDDING_MODEL=bge-m3 CODETECT_VECTOR_DIMENSIONS=1024 codetect embed
+
+# Other options (see docs/embedding-model-comparison.md):
+# CODETECT_EMBEDDING_MODEL=snowflake-arctic-embed CODETECT_VECTOR_DIMENSIONS=1024 codetect embed
+# CODETECT_EMBEDDING_MODEL=jina-embeddings-v3 CODETECT_VECTOR_DIMENSIONS=1024 codetect embed
 ```
 
 **Using LiteLLM with OpenAI:**

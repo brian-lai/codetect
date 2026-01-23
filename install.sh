@@ -1106,6 +1106,11 @@ if [[ -f "$CONFIG_FILE" ]]; then
         LITELLM_URL="${CODETECT_LITELLM_URL:-$LITELLM_URL}"
         LITELLM_API_KEY="${CODETECT_LITELLM_API_KEY:-$LITELLM_API_KEY}"
 
+        # Store old model and dimensions for mismatch detection
+        OLD_EMBEDDING_MODEL="${CODETECT_EMBEDDING_MODEL:-}"
+        OLD_VECTOR_DIMENSIONS="${CODETECT_VECTOR_DIMENSIONS:-768}"
+        EXISTING_CONFIG=true
+
         # Detect database backend change
         if [[ -n "$PREVIOUS_DB_TYPE" && "$PREVIOUS_DB_TYPE" != "$DB_TYPE" ]]; then
             echo ""
@@ -1139,7 +1144,11 @@ if [[ -f "$CONFIG_FILE" ]]; then
         mv "$CONFIG_FILE" "$BACKUP_FILE"
         info "Backed up corrupted config to $BACKUP_FILE"
         info "Creating fresh configuration..."
+        EXISTING_CONFIG=false
     fi
+else
+    # No existing config
+    EXISTING_CONFIG=false
 fi
 
 cat > "$CONFIG_FILE" << EOF

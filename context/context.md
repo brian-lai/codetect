@@ -1,12 +1,12 @@
 # Current Work Summary
 
-Planning: Parallel Eval Execution
+Planning: Fix Config Preservation Overwriting User Selections
 
-**Plan:** context/plans/2026-01-23-parallel-eval-execution.md
+**Plan:** context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md
 
 ## Objective
 
-Add configurable parallel execution to the eval runner to significantly reduce evaluation time. Currently, evals run sequentially (one after another) which takes a very long time. Target initial concurrency: 10 parallel evals.
+Fix installer config preservation logic that overwrites user selections with old config values. When users reinstall and select a new embedding model (e.g., bge-m3), the installer incorrectly preserves the old value (e.g., nomic-embed-text) instead of honoring the user's new selection.
 
 ## To-Do List
 
@@ -70,12 +70,13 @@ Planning phase - pending user approval to proceed with execution.
 ```json
 {
   "active_context": [
-    "context/plans/2026-01-23-parallel-eval-execution.md"
+    "context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md"
   ],
   "completed_summaries": [
-    "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md"
+    "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md",
+    "context/plans/2026-01-23-parallel-eval-execution.md"
   ],
   "execution_branch": null,
-  "last_updated": "2026-01-23T18:45:00Z"
+  "last_updated": "2026-01-23T20:30:00Z"
 }
 ```

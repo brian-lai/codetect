@@ -111,7 +111,7 @@ echo -e "${CYAN}${BOLD}"
 cat << 'EOF'
 ╔════════════════════════════════════════════════════════════════════╗
 ║                                                                    ║
-║                        codetect installer                       ║
+║                        codetect installer                          ║
 ║                                                                    ║
 ║            MCP server for codebase search & navigation             ║
 ║                                                                    ║
@@ -189,6 +189,32 @@ fi
 # Step 2: Optional Features Setup
 #
 print_header "Step 2/6: Optional Features Setup"
+
+# Load existing config if present (before prompts so we can use as defaults)
+OLD_DB_TYPE=""
+OLD_POSTGRES_DSN=""
+OLD_EMBEDDING_PROVIDER=""
+OLD_OLLAMA_URL=""
+OLD_EMBEDDING_MODEL=""
+OLD_VECTOR_DIMENSIONS=""
+OLD_LITELLM_URL=""
+OLD_LITELLM_API_KEY=""
+EXISTING_CONFIG=false
+
+if [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE" 2>/dev/null; then
+    EXISTING_CONFIG=true
+    OLD_DB_TYPE="${CODETECT_DB_TYPE:-}"
+    OLD_POSTGRES_DSN="${CODETECT_DB_DSN:-}"
+    OLD_EMBEDDING_PROVIDER="${CODETECT_EMBEDDING_PROVIDER:-}"
+    OLD_OLLAMA_URL="${CODETECT_OLLAMA_URL:-}"
+    OLD_EMBEDDING_MODEL="${CODETECT_EMBEDDING_MODEL:-}"
+    OLD_VECTOR_DIMENSIONS="${CODETECT_VECTOR_DIMENSIONS:-768}"
+    OLD_LITELLM_URL="${CODETECT_LITELLM_URL:-}"
+    OLD_LITELLM_API_KEY="${CODETECT_LITELLM_API_KEY:-}"
+
+    info "Found existing configuration - using as defaults"
+    echo ""
+fi
 
 # Symbol Indexing
 print_section "Symbol Indexing (enables find_symbol, list_defs_in_file)"
@@ -373,8 +399,26 @@ if [[ $ENABLE_SEMANTIC =~ ^[Yy] ]]; then
                 info "See docs/embedding-model-comparison.md for detailed comparison"
                 echo ""
 
-                read -p "$(prompt "Your choice [1]")" MODEL_CHOICE
-                MODEL_CHOICE=${MODEL_CHOICE:-1}
+                # Detect which option corresponds to old model (use as default)
+                DEFAULT_CHOICE=1
+                if [[ "$OLD_EMBEDDING_MODEL" == "bge-m3" ]]; then
+                    DEFAULT_CHOICE=1
+                elif [[ "$OLD_EMBEDDING_MODEL" == "snowflake-arctic-embed" ]]; then
+                    DEFAULT_CHOICE=2
+                elif [[ "$OLD_EMBEDDING_MODEL" == "jina-embeddings-v3" ]]; then
+                    DEFAULT_CHOICE=3
+                elif [[ "$OLD_EMBEDDING_MODEL" == "nomic-embed-text" ]]; then
+                    DEFAULT_CHOICE=4
+                elif [[ -n "$OLD_EMBEDDING_MODEL" ]]; then
+                    DEFAULT_CHOICE=5
+                fi
+
+                if [[ -n "$OLD_EMBEDDING_MODEL" ]]; then
+                    info "Current model: $OLD_EMBEDDING_MODEL"
+                fi
+
+                read -p "$(prompt "Your choice [$DEFAULT_CHOICE]")" MODEL_CHOICE
+                MODEL_CHOICE=${MODEL_CHOICE:-$DEFAULT_CHOICE}
 
                 # Set model variables based on choice
                 case $MODEL_CHOICE in
@@ -548,8 +592,18 @@ info "Good for: Large codebases, team deployments, millions of embeddings"
 info "Storage: PostgreSQL database with native vector search"
 echo ""
 
-read -p "$(prompt "Your choice [1]")" DB_CHOICE
-DB_CHOICE=${DB_CHOICE:-1}
+# Use old database type as default if available
+DEFAULT_DB_CHOICE=1
+if [[ "$OLD_DB_TYPE" == "postgres" ]]; then
+    DEFAULT_DB_CHOICE=2
+    info "Current database: PostgreSQL"
+elif [[ "$OLD_DB_TYPE" == "sqlite" ]]; then
+    DEFAULT_DB_CHOICE=1
+    info "Current database: SQLite"
+fi
+
+read -p "$(prompt "Your choice [$DEFAULT_DB_CHOICE]")" DB_CHOICE
+DB_CHOICE=${DB_CHOICE:-$DEFAULT_DB_CHOICE}
 
 DB_TYPE="sqlite"
 POSTGRES_DSN=""
@@ -1106,82 +1160,44 @@ fi
 #
 step 3 3 "Generating configuration..."
 
-# Helper function to load existing config
-load_existing_config() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        return 1
-    fi
-
-    if source "$CONFIG_FILE" 2>/dev/null; then
-        return 0
-    else
-        warn "Existing config file appears corrupted"
-        return 1
-    fi
-}
-
-# Check if config exists and load it
+# Prepare to write new config
 BACKUP_FILE=""
-if [[ -f "$CONFIG_FILE" ]]; then
+if [[ "$EXISTING_CONFIG" == "true" && -f "$CONFIG_FILE" ]]; then
     info "Configuration file already exists"
 
-    if load_existing_config; then
-        info "Preserving existing configuration values..."
+    # Detect database backend change
+    if [[ -n "$OLD_DB_TYPE" && "$OLD_DB_TYPE" != "$DB_TYPE" ]]; then
+        echo ""
+        warn "Database backend change detected!"
+        info "Previous: $OLD_DB_TYPE"
+        info "New:      $DB_TYPE"
+        echo ""
+        warn "Changing database backends requires migration."
+        info "Existing indexes in $OLD_DB_TYPE will not be accessible."
+        echo ""
+        read -p "$(prompt "Continue with database change? [y/N]")" CONFIRM_DB_CHANGE
+        CONFIRM_DB_CHANGE=${CONFIRM_DB_CHANGE:-N}
 
-        # Use existing values if set, otherwise use newly selected values
-        # This allows script to update with new selections while preserving user customizations
-        PREVIOUS_DB_TYPE="${CODETECT_DB_TYPE:-}"
-        DB_TYPE="${CODETECT_DB_TYPE:-$DB_TYPE}"
-        POSTGRES_DSN="${CODETECT_DB_DSN:-$POSTGRES_DSN}"
-        EMBEDDING_PROVIDER="${CODETECT_EMBEDDING_PROVIDER:-$EMBEDDING_PROVIDER}"
-        OLLAMA_URL="${CODETECT_OLLAMA_URL:-$OLLAMA_URL}"
-        EMBEDDING_MODEL="${CODETECT_EMBEDDING_MODEL:-$EMBEDDING_MODEL}"
-        LITELLM_URL="${CODETECT_LITELLM_URL:-$LITELLM_URL}"
-        LITELLM_API_KEY="${CODETECT_LITELLM_API_KEY:-$LITELLM_API_KEY}"
-
-        # Store old model and dimensions for mismatch detection
-        OLD_EMBEDDING_MODEL="${CODETECT_EMBEDDING_MODEL:-}"
-        OLD_VECTOR_DIMENSIONS="${CODETECT_VECTOR_DIMENSIONS:-768}"
-        EXISTING_CONFIG=true
-
-        # Detect database backend change
-        if [[ -n "$PREVIOUS_DB_TYPE" && "$PREVIOUS_DB_TYPE" != "$DB_TYPE" ]]; then
-            echo ""
-            warn "Database backend change detected!"
-            info "Previous: $PREVIOUS_DB_TYPE"
-            info "New:      $DB_TYPE"
-            echo ""
-            warn "Changing database backends requires migration."
-            info "Existing indexes in $PREVIOUS_DB_TYPE will not be accessible."
-            echo ""
-            read -p "$(prompt "Continue with database change? [y/N]")" CONFIRM_DB_CHANGE
-            CONFIRM_DB_CHANGE=${CONFIRM_DB_CHANGE:-N}
-
-            if [[ ! $CONFIRM_DB_CHANGE =~ ^[Yy] ]]; then
-                error "Database change cancelled"
-                info "Re-run installer and select '$PREVIOUS_DB_TYPE' to keep existing setup"
-                exit 1
-            fi
-
-            info "To migrate data later, use: make migrate-to-postgres"
-            echo ""
+        if [[ ! $CONFIRM_DB_CHANGE =~ ^[Yy] ]]; then
+            error "Database change cancelled"
+            info "Re-run installer and select '$OLD_DB_TYPE' to keep existing setup"
+            exit 1
         fi
 
-        # Create backup before regenerating
-        BACKUP_FILE="$CONFIG_FILE.backup.$(date +%Y%m%d-%H%M%S)"
-        cp "$CONFIG_FILE" "$BACKUP_FILE"
-        info "Backed up old config to $BACKUP_FILE"
-    else
-        # Corrupted config, back it up and create fresh
-        BACKUP_FILE="$CONFIG_FILE.corrupted.$(date +%Y%m%d-%H%M%S)"
-        mv "$CONFIG_FILE" "$BACKUP_FILE"
-        info "Backed up corrupted config to $BACKUP_FILE"
-        info "Creating fresh configuration..."
-        EXISTING_CONFIG=false
+        info "To migrate data later, use: make migrate-to-postgres"
+        echo ""
     fi
-else
-    # No existing config
-    EXISTING_CONFIG=false
+
+    # Preserve API keys and URLs that don't have interactive prompts
+    # (these are typically custom values users don't want to lose)
+    if [[ -n "$OLD_LITELLM_API_KEY" && -z "$LITELLM_API_KEY" ]]; then
+        LITELLM_API_KEY="$OLD_LITELLM_API_KEY"
+    fi
+
+    # Create backup before regenerating
+    BACKUP_FILE="$CONFIG_FILE.backup.$(date +%Y%m%d-%H%M%S)"
+    cp "$CONFIG_FILE" "$BACKUP_FILE"
+    info "Backed up old config to $BACKUP_FILE"
 fi
 
 # Show configuration summary before writing

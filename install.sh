@@ -328,7 +328,7 @@ if [[ $ENABLE_SEMANTIC =~ ^[Yy] ]]; then
                     "${BOLD}Installation:${NC}" \
                     "  • Visit: ${BOLD}https://ollama.ai${NC}" \
                     "  • Download and install for your platform" \
-                    "  • Run: ${BOLD}ollama pull nomic-embed-text${NC}" \
+                    "  • Run: ${BOLD}ollama pull bge-m3${NC} (or your preferred model)" \
                     "" \
                     "Without Ollama, semantic search features will be disabled."
 
@@ -346,29 +346,103 @@ if [[ $ENABLE_SEMANTIC =~ ^[Yy] ]]; then
             fi
 
             if [[ $OLLAMA_INSTALLED == true ]]; then
+                # Model Selection Menu
+                print_section "Embedding Model Selection"
+
+                echo "Select an embedding model for code search:"
+                echo ""
+                echo -e "  ${GREEN}${BOLD}1)${NC} bge-m3 ${YELLOW}(RECOMMENDED)${NC}"
+                info "Best overall performance (+47% vs nomic)"
+                info "Dimensions: 1024, Memory: 2.2 GB, Context: 8K tokens"
+                echo ""
+                echo -e "  ${GREEN}${BOLD}2)${NC} snowflake-arctic-embed-l-v2.0"
+                info "Highest retrieval quality (+57% vs nomic)"
+                info "Dimensions: 1024, Memory: 2.2 GB, Context: 8K tokens"
+                echo ""
+                echo -e "  ${GREEN}${BOLD}3)${NC} jina-embeddings-v3"
+                info "Best semantic similarity (+50% vs nomic)"
+                info "Dimensions: 1024, Memory: 1.1 GB, Context: 8K tokens"
+                echo ""
+                echo -e "  ${GREEN}${BOLD}4)${NC} nomic-embed-text ${YELLOW}(legacy)${NC}"
+                info "Backward compatibility, smallest footprint"
+                info "Dimensions: 768, Memory: 522 MB, Context: 8K tokens"
+                echo ""
+                echo -e "  ${GREEN}${BOLD}5)${NC} Custom model"
+                info "Specify your own Ollama-compatible model"
+                echo ""
+                info "See docs/embedding-model-comparison.md for detailed comparison"
+                echo ""
+
+                read -p "$(prompt "Your choice [1]")" MODEL_CHOICE
+                MODEL_CHOICE=${MODEL_CHOICE:-1}
+
+                # Set model variables based on choice
+                case $MODEL_CHOICE in
+                    1)
+                        EMBEDDING_MODEL="bge-m3"
+                        OLLAMA_MODEL_NAME="bge-m3"
+                        VECTOR_DIMENSIONS="1024"
+                        MODEL_SIZE="2.2 GB"
+                        ;;
+                    2)
+                        EMBEDDING_MODEL="snowflake-arctic-embed"
+                        OLLAMA_MODEL_NAME="snowflake-arctic-embed"
+                        VECTOR_DIMENSIONS="1024"
+                        MODEL_SIZE="2.2 GB"
+                        ;;
+                    3)
+                        EMBEDDING_MODEL="jina-embeddings-v3"
+                        OLLAMA_MODEL_NAME="jina/jina-embeddings-v3"
+                        VECTOR_DIMENSIONS="1024"
+                        MODEL_SIZE="1.1 GB"
+                        ;;
+                    4)
+                        EMBEDDING_MODEL="nomic-embed-text"
+                        OLLAMA_MODEL_NAME="nomic-embed-text"
+                        VECTOR_DIMENSIONS="768"
+                        MODEL_SIZE="274 MB"
+                        ;;
+                    5)
+                        read -p "$(prompt "Enter Ollama model name")" EMBEDDING_MODEL
+                        OLLAMA_MODEL_NAME="$EMBEDDING_MODEL"
+                        read -p "$(prompt "Enter vector dimensions [1024]")" VECTOR_DIMENSIONS
+                        VECTOR_DIMENSIONS=${VECTOR_DIMENSIONS:-1024}
+                        MODEL_SIZE="unknown"
+                        warn "Custom models are not validated - ensure compatibility"
+                        ;;
+                    *)
+                        error "Invalid choice"
+                        exit 1
+                        ;;
+                esac
+
+                success "Selected: $EMBEDDING_MODEL (dimensions: $VECTOR_DIMENSIONS)"
+                echo ""
+
                 # Check if Ollama is running
                 if curl -s http://localhost:11434/api/tags &> /dev/null; then
                     success "Ollama is running"
 
-                    # Check for nomic-embed-text model
-                    if curl -s http://localhost:11434/api/tags | grep -q "nomic-embed-text"; then
-                        success "nomic-embed-text model is available"
+                    # Check for selected model
+                    if curl -s http://localhost:11434/api/tags | grep -q "$EMBEDDING_MODEL"; then
+                        success "$EMBEDDING_MODEL model is available"
                     else
-                        warn "nomic-embed-text model not found"
+                        warn "$EMBEDDING_MODEL model not found"
                         echo ""
-                        info "The nomic-embed-text model is recommended for code embeddings."
-                        info "Size: ~274MB"
+                        info "The $EMBEDDING_MODEL model is required for semantic search."
+                        info "Download size: $MODEL_SIZE"
                         echo ""
-                        read -p "$(prompt "Pull nomic-embed-text now? [Y/n]")" PULL_MODEL
+                        read -p "$(prompt "Pull $EMBEDDING_MODEL now? [Y/n]")" PULL_MODEL
                         PULL_MODEL=${PULL_MODEL:-Y}
                         if [[ $PULL_MODEL =~ ^[Yy] ]]; then
                             echo ""
-                            info "Downloading model (this may take a few minutes)..."
-                            if ollama pull nomic-embed-text; then
+                            info "Downloading model (this may take several minutes)..."
+                            if ollama pull "$OLLAMA_MODEL_NAME"; then
                                 success "Model downloaded successfully"
+                                success "Vector dimensions: $VECTOR_DIMENSIONS"
                             else
                                 error "Failed to download model"
-                                warn "You can download it later with: ${BOLD}ollama pull nomic-embed-text${NC}"
+                                warn "You can download it later with: ${BOLD}ollama pull $OLLAMA_MODEL_NAME${NC}"
                             fi
                         fi
                     fi
@@ -382,10 +456,6 @@ if [[ $ENABLE_SEMANTIC =~ ^[Yy] ]]; then
                 echo ""
                 read -p "$(prompt "Ollama URL [http://localhost:11434]")" OLLAMA_URL
                 OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
-
-                # Custom model?
-                read -p "$(prompt "Embedding model [nomic-embed-text]")" EMBEDDING_MODEL
-                EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
             fi
             ;;
 
@@ -920,6 +990,7 @@ if [[ $EMBEDDING_PROVIDER == "ollama" ]]; then
 # Ollama configuration
 export REPO_SEARCH_OLLAMA_URL="$OLLAMA_URL"
 export REPO_SEARCH_EMBEDDING_MODEL="$EMBEDDING_MODEL"
+export REPO_SEARCH_VECTOR_DIMENSIONS="$VECTOR_DIMENSIONS"
 EOF
 elif [[ $EMBEDDING_PROVIDER == "litellm" ]]; then
     cat >> "$CONFIG_FILE" << EOF

@@ -9,9 +9,9 @@ Executing: Installer Embedding Model Selection
 
 - [x] Create git branch for installer updates
 - [x] Update context.md with execution tracking
-- [ ] Add model selection menu to install.sh
-- [ ] Update model availability check logic
-- [ ] Add VECTOR_DIMENSIONS to config generation
+- [x] Add model selection menu to install.sh
+- [x] Update model availability check logic
+- [x] Add VECTOR_DIMENSIONS to config generation
 - [ ] Test installer with each model option
 - [ ] Create PR with documentation updates
 

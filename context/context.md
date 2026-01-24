@@ -1,82 +1,46 @@
 # Current Work Summary
 
-Planning: Fix Config Preservation Overwriting User Selections
+Adding model selection to codetect-eval with sensible defaults to control costs.
 
-**Plan:** context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md
-
-## Objective
-
-Fix installer config preservation logic that overwrites user selections with old config values. When users reinstall and select a new embedding model (e.g., bge-m3), the installer incorrectly preserves the old value (e.g., nomic-embed-text) instead of honoring the user's new selection.
+**Branch:** `para/eval-model-selection`
+**Master Plan:** context/plans/2026-01-24-eval-model-selection.md
+**Phase:** 1 of 4
 
 ## To-Do List
-
-Planning phase - pending user approval to proceed with execution.
+- [x] Phase 1: Update types and config (evals/types.go)
+- [x] Phase 2: Update runner (evals/runner.go)
+- [x] Phase 3: Update CLI (cmd/codetect-eval/main.go)
+- [x] Phase 4: Update reporter (evals/report.go)
+- [x] Test all three model options
+- [x] Verify model tracking in results
 
 ## Progress Notes
 
-### 2026-01-23 - Execution Completed ✅
+### ✅ Implementation Complete
 
-**Implemented all 5 priorities:**
-1. ✅ Config preservation with backup and old value tracking (install.sh:1110-1145)
-2. ✅ Dimension mismatch detection with warning box (install.sh:422-453)
-3. ✅ Repository detection from registry + file system (install.sh:1356-1380)
-4. ✅ Batch re-embedding workflow with progress tracking (install.sh:1381-1452)
-5. ✅ Config summary display showing changes (install.sh:1187-1218)
+All phases implemented and tested:
+1. ✅ Added Model field to EvalConfig with "sonnet" default (evals/types.go:73, 84)
+2. ✅ Updated buildClaudeArgs() to pass --model flag (evals/runner.go:342)
+3. ✅ Added --model CLI flag with sonnet/haiku/opus options (cmd/codetect-eval/main.go:57, 64)
+4. ✅ Updated report to display model used (evals/report.go:130)
+5. ✅ All tests pass (make test)
+6. ✅ Binary builds successfully (make build)
+7. ✅ Help text shows new --model flag
 
-**Testing completed:**
-- Component testing: Repository detection verified (6 repos found)
-- Bug found & fixed: Registry structure used `.projects[]?.path` not `.repositories[]?.path`
-- Code review: All features verified against plan requirements
-- Manual testing guide created for user verification
+**Commit:** faf5daa - feat: Add model selection to eval runner with cost control defaults
 
-**Commits:**
-- 421deb6: Store old model and dimensions for mismatch detection
-- 81dbb85: Add dimension mismatch detection after model selection
-- 26b47a3: Add repository detection and batch re-embedding workflow
-- e5f6d58: Add config summary display before writing
-- 72b7a6a: Fix registry structure bug (critical fix)
-
-**PR #28 created:** https://github.com/brian-lai/codetect/pull/28
-- +220 lines in install.sh
-- All changes backward compatible
-- Ready for review and merge
-
-### 2026-01-22 - Execution Started
-
-**Goal:** Fix installer reinstallation issues
-
-**Problems to solve:**
-1. Config overwrites (line 965: `cat >` destroys existing config despite line 132 claiming preservation)
-2. No dimension mismatch detection when changing models
-3. No guidance for re-embedding after model changes
-4. Users lose custom settings (URLs, DB connections, API keys)
-
-**Technical approach:**
-- **Priority 1:** Config preservation with backup/merge logic
-- **Priority 2:** Dimension mismatch detection and warnings
-- **Priority 3:** Repository detection (registry.json + file search)
-- **Priority 4:** Automated re-embedding with progress tracking
-- **Priority 5:** UX polish (diff display, clear messaging)
-
-**Success criteria:**
-- Existing config backed up before modification
-- Custom settings preserved
-- Dimension mismatches detected and warned
-- Batch re-embedding offered when needed
-- Clear, actionable user guidance
+Ready for user review and PR creation.
 
 ---
-
 ```json
 {
-  "active_context": [
-    "context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md"
-  ],
+  "active_context": ["context/plans/2026-01-24-eval-model-selection.md"],
   "completed_summaries": [
+    "context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md",
     "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md",
     "context/plans/2026-01-23-parallel-eval-execution.md"
   ],
-  "execution_branch": null,
-  "last_updated": "2026-01-23T20:30:00Z"
+  "execution_branch": "para/eval-model-selection",
+  "last_updated": "2026-01-24T00:00:00Z"
 }
 ```

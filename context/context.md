@@ -16,22 +16,22 @@ Dimension-grouped tables (`embeddings_768`, `embeddings_1024`) with repo config 
 ## To-Do List
 
 ### Phase 1: Database Schema Updates
-- [ ] Add `tableNameForDimensions(dim int) string` helper function
-- [ ] Add `repo_embedding_configs` table schema and CRUD
-- [ ] Modify `initSchema()` to create dimension-specific tables
+- [x] Add `tableNameForDimensions(dim int) string` helper function
+- [x] Add `repo_embedding_configs` table schema and CRUD
+- [x] Modify `initSchema()` to create dimension-specific tables
 
 ### Phase 2: EmbeddingStore Refactor
-- [ ] Update `tableName()` method to return dimension-specific table
-- [ ] Update `Save()` and `SaveBatch()` to use correct table
-- [ ] Update `Search()` to query correct table
-- [ ] Update `Delete()` and `DeleteAll()` to target correct table
-- [ ] Update `GetByPath()` and `Count()` to use correct table
+- [x] Update `tableName()` method to return dimension-specific table
+- [x] Update `Save()` and `SaveBatch()` to use correct table
+- [x] Update `Search()` to query correct table (via GetAll)
+- [x] Update `Delete()` and `DeleteAll()` to target correct table
+- [x] Update `GetByPath()` and `Count()` to use correct table
 
 ### Phase 3: Repo Config Management
-- [ ] Create `RepoEmbeddingConfig` struct
-- [ ] Implement `GetRepoConfig()` method
-- [ ] Implement `SetRepoConfig()` method
-- [ ] Implement `ListRepoConfigs()` method
+- [x] Create `RepoEmbeddingConfig` struct
+- [x] Implement `GetRepoConfig()` method
+- [x] Implement `SetRepoConfig()` method
+- [x] Implement `ListRepoConfigs()` method
 
 ### Phase 4: Model Switch Handling
 - [ ] Add dimension change detection in `codetect-index embed`
@@ -54,7 +54,19 @@ Dimension-grouped tables (`embeddings_768`, `embeddings_1024`) with repo config 
 
 ## Progress Notes
 
-Starting execution...
+### Phases 1-3 Complete
+
+**Changes to `internal/embedding/store.go`:**
+- Added `tableNameForDimensions(dialect, dim)` helper - returns `embeddings_768`, `embeddings_1024`, etc. for PostgreSQL
+- Added `tableName()` method on EmbeddingStore - uses dimension-specific table for Postgres, single table for SQLite
+- Added `initRepoConfigTable()` - creates `repo_embedding_configs` table for tracking model/dimensions per repo
+- Added `RepoEmbeddingConfig` struct with `GetRepoConfig()`, `SetRepoConfig()`, `ListRepoConfigs()` methods
+- Updated ALL query methods to use `s.tableName()` instead of hardcoded "embeddings":
+  - `Save()`, `SaveBatch()`, `GetByPath()`, `GetAll()`, `HasEmbedding()`
+  - `DeleteByPath()`, `DeleteAll()`, `Count()`, `Stats()`
+- Schema initialization creates dimension-specific tables with dimension-specific index names
+
+**All tests pass** (`make test`)
 
 ---
 ```json

@@ -127,6 +127,7 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintf(w, "Timestamp: %s\n", report.Timestamp.Format(time.RFC3339))
 	fmt.Fprintf(w, "Repository: %s\n", report.Config.RepoPath)
+	fmt.Fprintf(w, "Model: %s\n", report.Config.Model)
 	fmt.Fprintf(w, "Test Cases: %d\n", report.Summary.TotalCases)
 	fmt.Fprintln(w, "")
 

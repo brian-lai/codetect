@@ -56,6 +56,7 @@ func runEval(args []string) {
 	parallel := fs.Int("parallel", 10, "Number of parallel test case executions")
 	fs.IntVar(parallel, "j", 10, "Short for --parallel (like make -j)")
 	timeout := fs.Duration("timeout", 5*time.Minute, "Timeout per test case")
+	model := fs.String("model", "sonnet", "Model to use (sonnet, haiku, opus)")
 	verbose := fs.Bool("verbose", false, "Verbose output")
 	fs.BoolVar(verbose, "v", false, "Short for --verbose")
 	fs.Parse(args)
@@ -65,6 +66,7 @@ func runEval(args []string) {
 	config.OutputDir = *outputDir
 	config.Parallel = *parallel
 	config.Timeout = *timeout
+	config.Model = *model
 	config.Verbose = *verbose
 
 	if *categories != "" {
@@ -370,6 +372,7 @@ Run Options:
   --category <cat>   Filter by category (search,navigate,understand)
   --parallel <n>     Number of parallel executions (default: 10)
   --timeout <dur>    Timeout per test (default: 5m)
+  --model <model>    Model to use: sonnet (default), haiku, opus
   --verbose          Verbose output
 
 Report Options:

@@ -71,6 +71,7 @@ type EvalConfig struct {
 	Parallel      int      `json:"parallel"`       // Number of parallel runs (default: 1)
 	Timeout       time.Duration `json:"timeout"`   // Timeout per test case
 	OutputDir     string   `json:"output_dir"`
+	Model         string   `json:"model"`          // Model to use (sonnet, haiku, opus)
 	Verbose       bool     `json:"verbose"`
 }
 
@@ -81,6 +82,7 @@ func DefaultConfig() EvalConfig {
 		Parallel:  1,
 		Timeout:   5 * time.Minute,
 		OutputDir: "evals/results",
+		Model:     "sonnet", // Default to sonnet for cost control
 		Verbose:   false,
 	}
 }

@@ -341,6 +341,7 @@ func (r *Runner) buildClaudeArgs(tc TestCase, mode ExecutionMode) []string {
 		"-p", tc.Prompt,
 		"--output-format", "stream-json",
 		"--verbose",
+		"--model", r.config.Model,
 	}
 
 	if mode == ModeWithMCP {

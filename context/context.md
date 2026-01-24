@@ -1,46 +1,73 @@
 # Current Work Summary
 
-Adding model selection to codetect-eval with sensible defaults to control costs.
+Executing: Dimension-Grouped Embedding Tables for Org-Scale Multi-Repo Support
 
-**Branch:** `para/eval-model-selection`
-**Master Plan:** context/plans/2026-01-24-eval-model-selection.md
-**Phase:** 1 of 4
+**Branch:** `para/dimension-grouped-embeddings`
+**Master Plan:** context/plans/2026-01-24-dimension-grouped-embeddings.md
+
+## Problem
+
+Single `embeddings` table with fixed vector dimensions causes dimension mismatch errors when users switch models, prevents cross-repo search, and doesn't scale for org deployment (3000+ repos at Justworks).
+
+## Solution
+
+Dimension-grouped tables (`embeddings_768`, `embeddings_1024`) with repo config tracking.
 
 ## To-Do List
-- [x] Phase 1: Update types and config (evals/types.go)
-- [x] Phase 2: Update runner (evals/runner.go)
-- [x] Phase 3: Update CLI (cmd/codetect-eval/main.go)
-- [x] Phase 4: Update reporter (evals/report.go)
-- [x] Test all three model options
-- [x] Verify model tracking in results
+
+### Phase 1: Database Schema Updates
+- [ ] Add `tableNameForDimensions(dim int) string` helper function
+- [ ] Add `repo_embedding_configs` table schema and CRUD
+- [ ] Modify `initSchema()` to create dimension-specific tables
+
+### Phase 2: EmbeddingStore Refactor
+- [ ] Update `tableName()` method to return dimension-specific table
+- [ ] Update `Save()` and `SaveBatch()` to use correct table
+- [ ] Update `Search()` to query correct table
+- [ ] Update `Delete()` and `DeleteAll()` to target correct table
+- [ ] Update `GetByPath()` and `Count()` to use correct table
+
+### Phase 3: Repo Config Management
+- [ ] Create `RepoEmbeddingConfig` struct
+- [ ] Implement `GetRepoConfig()` method
+- [ ] Implement `SetRepoConfig()` method
+- [ ] Implement `ListRepoConfigs()` method
+
+### Phase 4: Model Switch Handling
+- [ ] Add dimension change detection in `codetect-index embed`
+- [ ] Implement `MigrateRepoDimensions()` to move data between tables
+- [ ] Update installer dimension mismatch handling
+
+### Phase 5: Cross-Repo Search
+- [ ] Add `SearchOptions` struct with `RepoRoots` filter
+- [ ] Implement `SearchAcrossRepos()` method
+- [ ] Update MCP tool to expose cross-repo search (optional)
+
+### Phase 6: SQLite Compatibility
+- [ ] Keep single table for SQLite (conditional in `tableName()`)
+- [ ] Test SQLite path still works
+
+### Phase 7: Migration Tool
+- [ ] Add `codetect migrate-embeddings` command
+- [ ] Implement migration from old `embeddings` table
+- [ ] Add `--dry-run` flag for safety
 
 ## Progress Notes
 
-### ✅ Implementation Complete
-
-All phases implemented and tested:
-1. ✅ Added Model field to EvalConfig with "sonnet" default (evals/types.go:73, 84)
-2. ✅ Updated buildClaudeArgs() to pass --model flag (evals/runner.go:342)
-3. ✅ Added --model CLI flag with sonnet/haiku/opus options (cmd/codetect-eval/main.go:57, 64)
-4. ✅ Updated report to display model used (evals/report.go:130)
-5. ✅ All tests pass (make test)
-6. ✅ Binary builds successfully (make build)
-7. ✅ Help text shows new --model flag
-
-**Commit:** faf5daa - feat: Add model selection to eval runner with cost control defaults
-
-Ready for user review and PR creation.
+Starting execution...
 
 ---
 ```json
 {
-  "active_context": ["context/plans/2026-01-24-eval-model-selection.md"],
+  "active_context": ["context/plans/2026-01-24-dimension-grouped-embeddings.md"],
   "completed_summaries": [
+    "context/plans/2026-01-24-eval-model-selection.md",
     "context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md",
     "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md",
     "context/plans/2026-01-23-parallel-eval-execution.md"
   ],
-  "execution_branch": "para/eval-model-selection",
-  "last_updated": "2026-01-24T00:00:00Z"
+  "execution_branch": "para/dimension-grouped-embeddings",
+  "execution_started": "2026-01-24T12:45:00Z",
+  "last_updated": "2026-01-24T12:45:00Z"
 }
 ```

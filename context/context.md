@@ -22,7 +22,7 @@ Replace ctags with ast-grep as the primary symbol indexer for supported language
 - [x] Add configuration option for index backend (auto/ast-grep/ctags)
 - [x] Write unit tests for ast-grep wrapper
 - [x] Write integration tests for hybrid indexing
-- [ ] Benchmark performance vs ctags-only approach
+- [x] Benchmark performance vs ctags-only approach
 
 ## Progress Notes
 

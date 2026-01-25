@@ -202,10 +202,6 @@ func (idx *Index) ListDefsInFile(path string) ([]Symbol, error) {
 
 // Update re-indexes files that have changed since last index
 func (idx *Index) Update(root string) error {
-	if !CtagsAvailable() {
-		return fmt.Errorf("universal-ctags not available")
-	}
-
 	idx.root = root
 
 	// Get list of files that need reindexing
@@ -218,13 +214,59 @@ func (idx *Index) Update(root string) error {
 		return nil // Nothing to do
 	}
 
-	// Run ctags on all files
-	entries, err := RunCtags(root, nil) // Recursive scan
-	if err != nil {
-		return fmt.Errorf("running ctags: %w", err)
+	// Group files by language for hybrid indexing
+	filesByLang := make(map[string][]string)
+	var unsupportedFiles []string
+
+	for path := range filesToIndex {
+		lang := LanguageFromExtension(path)
+		if lang != "" && AstGrepAvailable() {
+			filesByLang[lang] = append(filesByLang[lang], filepath.Join(root, path))
+		} else {
+			unsupportedFiles = append(unsupportedFiles, path)
+		}
 	}
 
-	// Begin transaction for bulk insert using the adapter
+	// Collect all symbols from both ast-grep and ctags
+	var allSymbols []Symbol
+
+	// Run ast-grep for supported languages
+	for lang, files := range filesByLang {
+		symbols, err := RunAstGrep(root, files, lang)
+		if err != nil {
+			// If ast-grep fails, fall back to ctags for these files
+			unsupportedFiles = append(unsupportedFiles, files...)
+			continue
+		}
+		allSymbols = append(allSymbols, symbols...)
+	}
+
+	// Run ctags for unsupported files (if ctags available)
+	if len(unsupportedFiles) > 0 && CtagsAvailable() {
+		// Convert relative paths to absolute for ctags
+		var absUnsupportedFiles []string
+		for _, path := range unsupportedFiles {
+			if filepath.IsAbs(path) {
+				absUnsupportedFiles = append(absUnsupportedFiles, path)
+			} else {
+				absUnsupportedFiles = append(absUnsupportedFiles, filepath.Join(root, path))
+			}
+		}
+
+		entries, err := RunCtags(root, absUnsupportedFiles)
+		if err != nil {
+			// Only error if both indexers failed and we have no symbols
+			if len(allSymbols) == 0 {
+				return fmt.Errorf("running ctags: %w", err)
+			}
+		} else {
+			for _, entry := range entries {
+				allSymbols = append(allSymbols, entry.ToSymbol())
+			}
+		}
+	}
+
+	// Begin transaction for bulk insert
 	tx, err := idx.adapter.Begin()
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -240,31 +282,9 @@ func (idx *Index) Update(root string) error {
 		}
 	}
 
-	// Build dialect-aware upsert statement for symbols with repo_root
-	symbolUpsertSQL := idx.dialect.UpsertSQL(
-		"symbols",
-		[]string{"repo_root", "name", "kind", "path", "line", "language", "pattern", "scope", "signature"},
-		[]string{"repo_root", "name", "path", "line"},
-		[]string{"kind", "language", "pattern", "scope", "signature"},
-	)
-	stmt, err := tx.Prepare(symbolUpsertSQL)
-	if err != nil {
-		return fmt.Errorf("preparing insert: %w", err)
-	}
-	defer stmt.Close()
-
-	// Insert new symbols with repo_root
-	for _, entry := range entries {
-		sym := entry.ToSymbol()
-		_, err := stmt.Exec(
-			idx.root, sym.Name, sym.Kind, sym.Path, sym.Line,
-			nullString(sym.Language), nullString(sym.Pattern),
-			nullString(sym.Scope), nullString(""), // signature empty for now
-		)
-		if err != nil {
-			// Log but continue on duplicate/constraint errors
-			continue
-		}
+	// Batch insert symbols (500 at a time for performance)
+	if err := idx.batchInsertSymbols(tx, allSymbols, 500); err != nil {
+		return fmt.Errorf("inserting symbols: %w", err)
 	}
 
 	// Build dialect-aware upsert statement for files with repo_root
@@ -290,6 +310,48 @@ func (idx *Index) Update(root string) error {
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return nil
+}
+
+// batchInsertSymbols inserts symbols in batches to reduce DB round-trips
+func (idx *Index) batchInsertSymbols(tx db.Tx, symbols []Symbol, batchSize int) error {
+	if len(symbols) == 0 {
+		return nil
+	}
+
+	// Build dialect-aware upsert statement
+	symbolUpsertSQL := idx.dialect.UpsertSQL(
+		"symbols",
+		[]string{"repo_root", "name", "kind", "path", "line", "language", "pattern", "scope", "signature"},
+		[]string{"repo_root", "name", "path", "line"},
+		[]string{"kind", "language", "pattern", "scope", "signature"},
+	)
+	stmt, err := tx.Prepare(symbolUpsertSQL)
+	if err != nil {
+		return fmt.Errorf("preparing insert: %w", err)
+	}
+	defer stmt.Close()
+
+	// Insert in batches
+	for i := 0; i < len(symbols); i += batchSize {
+		end := i + batchSize
+		if end > len(symbols) {
+			end = len(symbols)
+		}
+
+		for _, sym := range symbols[i:end] {
+			_, err := stmt.Exec(
+				idx.root, sym.Name, sym.Kind, sym.Path, sym.Line,
+				nullString(sym.Language), nullString(sym.Pattern),
+				nullString(sym.Scope), nullString(""), // signature empty for now
+			)
+			if err != nil {
+				// Log but continue on duplicate/constraint errors
+				continue
+			}
+		}
 	}
 
 	return nil

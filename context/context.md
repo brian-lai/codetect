@@ -16,9 +16,9 @@ Replace ctags with ast-grep as the primary symbol indexer for supported language
 - [x] Define symbol extraction patterns for Go, TypeScript, JavaScript, Python, Rust
 - [x] Implement JSON parsing for ast-grep output into Symbol structs
 - [x] Add language detection from file extensions
-- [ ] Modify index.go Update() to group files by language
-- [ ] Implement hybrid logic: ast-grep for supported languages, ctags for others
-- [ ] Add batch symbol insertion (500-1000 at a time) to reduce DB round-trips
+- [x] Modify index.go Update() to group files by language
+- [x] Implement hybrid logic: ast-grep for supported languages, ctags for others
+- [x] Add batch symbol insertion (500-1000 at a time) to reduce DB round-trips
 - [ ] Add configuration option for index backend (auto/ast-grep/ctags)
 - [ ] Write unit tests for ast-grep wrapper
 - [ ] Write integration tests for hybrid indexing

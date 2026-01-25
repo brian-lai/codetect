@@ -345,7 +345,7 @@ func astGrepEntryToSymbol(entry AstGrepEntry, kind string, root string) Symbol {
 func extractNameFromText(text string) string {
 	// Remove common keywords
 	text = strings.TrimSpace(text)
-	for _, prefix := range []string{"func ", "function ", "def ", "class ", "interface ", "type ", "struct ", "enum ", "trait "} {
+	for _, prefix := range []string{"func ", "function ", "def ", "class ", "interface ", "type ", "struct ", "enum ", "trait ", "const ", "let ", "var "} {
 		text = strings.TrimPrefix(text, prefix)
 	}
 

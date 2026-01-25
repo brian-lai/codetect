@@ -20,7 +20,7 @@ Replace ctags with ast-grep as the primary symbol indexer for supported language
 - [x] Implement hybrid logic: ast-grep for supported languages, ctags for others
 - [x] Add batch symbol insertion (500-1000 at a time) to reduce DB round-trips
 - [x] Add configuration option for index backend (auto/ast-grep/ctags)
-- [ ] Write unit tests for ast-grep wrapper
+- [x] Write unit tests for ast-grep wrapper
 - [ ] Write integration tests for hybrid indexing
 - [ ] Benchmark performance vs ctags-only approach
 

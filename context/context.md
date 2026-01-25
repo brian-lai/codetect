@@ -1,82 +1,51 @@
 # Current Work Summary
 
-Planning: Fix Config Preservation Overwriting User Selections
+Executing: ast-grep Hybrid Indexer Prototype
 
-**Plan:** context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md
+**Branch:** `para/ast-grep-hybrid-indexer`
+**Plan:** context/plans/2026-01-24-ast-grep-hybrid-indexer.md
 
 ## Objective
 
-Fix installer config preservation logic that overwrites user selections with old config values. When users reinstall and select a new embedding model (e.g., bge-m3), the installer incorrectly preserves the old value (e.g., nomic-embed-text) instead of honoring the user's new selection.
+Replace ctags with ast-grep as the primary symbol indexer for supported languages, falling back to ctags for languages ast-grep doesn't support. This provides tree-sitter-based AST accuracy with broad language coverage.
 
 ## To-Do List
 
-Planning phase - pending user approval to proceed with execution.
+- [ ] Create ast-grep wrapper with pattern definitions for common languages (internal/search/symbols/astgrep.go)
+- [ ] Implement ast-grep availability check (AstGrepAvailable function)
+- [ ] Define symbol extraction patterns for Go, TypeScript, JavaScript, Python, Rust
+- [ ] Implement JSON parsing for ast-grep output into Symbol structs
+- [ ] Add language detection from file extensions
+- [ ] Modify index.go Update() to group files by language
+- [ ] Implement hybrid logic: ast-grep for supported languages, ctags for others
+- [ ] Add batch symbol insertion (500-1000 at a time) to reduce DB round-trips
+- [ ] Add configuration option for index backend (auto/ast-grep/ctags)
+- [ ] Write unit tests for ast-grep wrapper
+- [ ] Write integration tests for hybrid indexing
+- [ ] Benchmark performance vs ctags-only approach
 
 ## Progress Notes
 
-### 2026-01-23 - Execution Completed ✅
+### 2026-01-24 - Execution Started
 
-**Implemented all 5 priorities:**
-1. ✅ Config preservation with backup and old value tracking (install.sh:1110-1145)
-2. ✅ Dimension mismatch detection with warning box (install.sh:422-453)
-3. ✅ Repository detection from registry + file system (install.sh:1356-1380)
-4. ✅ Batch re-embedding workflow with progress tracking (install.sh:1381-1452)
-5. ✅ Config summary display showing changes (install.sh:1187-1218)
+Starting implementation of ast-grep hybrid indexer. Will create ast-grep wrapper first, then integrate with existing index logic.
 
-**Testing completed:**
-- Component testing: Repository detection verified (6 repos found)
-- Bug found & fixed: Registry structure used `.projects[]?.path` not `.repositories[]?.path`
-- Code review: All features verified against plan requirements
-- Manual testing guide created for user verification
-
-**Commits:**
-- 421deb6: Store old model and dimensions for mismatch detection
-- 81dbb85: Add dimension mismatch detection after model selection
-- 26b47a3: Add repository detection and batch re-embedding workflow
-- e5f6d58: Add config summary display before writing
-- 72b7a6a: Fix registry structure bug (critical fix)
-
-**PR #28 created:** https://github.com/brian-lai/codetect/pull/28
-- +220 lines in install.sh
-- All changes backward compatible
-- Ready for review and merge
-
-### 2026-01-22 - Execution Started
-
-**Goal:** Fix installer reinstallation issues
-
-**Problems to solve:**
-1. Config overwrites (line 965: `cat >` destroys existing config despite line 132 claiming preservation)
-2. No dimension mismatch detection when changing models
-3. No guidance for re-embedding after model changes
-4. Users lose custom settings (URLs, DB connections, API keys)
-
-**Technical approach:**
-- **Priority 1:** Config preservation with backup/merge logic
-- **Priority 2:** Dimension mismatch detection and warnings
-- **Priority 3:** Repository detection (registry.json + file search)
-- **Priority 4:** Automated re-embedding with progress tracking
-- **Priority 5:** UX polish (diff display, clear messaging)
-
-**Success criteria:**
-- Existing config backed up before modification
-- Custom settings preserved
-- Dimension mismatches detected and warned
-- Batch re-embedding offered when needed
-- Clear, actionable user guidance
+**Key design decisions:**
+- ast-grep for top 12+ languages (Go, TS, JS, Python, Rust, Java, C/C++, Ruby, PHP, C#, Kotlin, Swift)
+- Graceful fallback to universal-ctags for unsupported languages
+- Batch insertions to improve performance
+- Configuration option for backend selection
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md"
+    "context/plans/2026-01-24-ast-grep-hybrid-indexer.md"
   ],
-  "completed_summaries": [
-    "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md",
-    "context/plans/2026-01-23-parallel-eval-execution.md"
-  ],
-  "execution_branch": null,
-  "last_updated": "2026-01-23T20:30:00Z"
+  "completed_summaries": [],
+  "execution_branch": "para/ast-grep-hybrid-indexer",
+  "execution_started": "2026-01-24T13:30:00Z",
+  "last_updated": "2026-01-24T13:30:00Z"
 }
 ```

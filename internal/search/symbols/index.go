@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"codetect/internal/config"
 	"codetect/internal/db"
 )
 
@@ -16,11 +17,12 @@ import (
 // Uses the adapter pattern to support multiple database backends (SQLite, PostgreSQL).
 // All database operations go through the adapter interface for database portability.
 type Index struct {
-	sqlDB   *sql.DB    // Raw SQL connection (deprecated, for legacy compatibility only)
-	adapter db.DB      // Adapter interface - use this for all database operations
-	dialect db.Dialect // SQL dialect for database-specific syntax (placeholders, etc.)
-	dbPath  string
-	root    string
+	sqlDB      *sql.DB           // Raw SQL connection (deprecated, for legacy compatibility only)
+	adapter    db.DB             // Adapter interface - use this for all database operations
+	dialect    db.Dialect        // SQL dialect for database-specific syntax (placeholders, etc.)
+	dbPath     string
+	root       string
+	indexCfg   config.IndexConfig // Indexing backend configuration
 }
 
 // NewIndex creates or opens a symbol index at the given path.
@@ -38,11 +40,12 @@ func NewIndex(dbPath string) (*Index, error) {
 	cwd, _ := os.Getwd()
 
 	return &Index{
-		sqlDB:   sqlDB,
-		adapter: db.WrapSQL(sqlDB),
-		dialect: db.GetDialect(db.DatabaseSQLite),
-		dbPath:  dbPath,
-		root:    cwd,
+		sqlDB:    sqlDB,
+		adapter:  db.WrapSQL(sqlDB),
+		dialect:  db.GetDialect(db.DatabaseSQLite),
+		dbPath:   dbPath,
+		root:     cwd,
+		indexCfg: config.LoadIndexConfigFromEnv(),
 	}, nil
 }
 
@@ -68,10 +71,11 @@ func NewIndexWithConfig(cfg db.Config, repoRoot string) (*Index, error) {
 	}
 
 	return &Index{
-		adapter: database,
-		dialect: dialect,
-		dbPath:  cfg.Path,
-		root:    repoRoot,
+		adapter:  database,
+		dialect:  dialect,
+		dbPath:   cfg.Path,
+		root:     repoRoot,
+		indexCfg: config.LoadIndexConfigFromEnv(),
 	}, nil
 }
 
@@ -214,35 +218,55 @@ func (idx *Index) Update(root string) error {
 		return nil // Nothing to do
 	}
 
-	// Group files by language for hybrid indexing
-	filesByLang := make(map[string][]string)
+	// Collect all symbols based on configured backend
+	var allSymbols []Symbol
+
+	// Decide which indexer(s) to use based on configuration
+	useAstGrep := idx.indexCfg.UseAstGrep() && AstGrepAvailable()
+	useCtags := idx.indexCfg.UseCtags() && CtagsAvailable()
+
+	// If ast-grep is required but not available, error
+	if idx.indexCfg.RequireAstGrep() && !AstGrepAvailable() {
+		return fmt.Errorf("ast-grep backend required but not available")
+	}
+
 	var unsupportedFiles []string
 
-	for path := range filesToIndex {
-		lang := LanguageFromExtension(path)
-		if lang != "" && AstGrepAvailable() {
-			filesByLang[lang] = append(filesByLang[lang], filepath.Join(root, path))
-		} else {
+	// Try ast-grep for supported languages (if configured)
+	if useAstGrep {
+		filesByLang := make(map[string][]string)
+
+		for path := range filesToIndex {
+			lang := LanguageFromExtension(path)
+			if lang != "" {
+				filesByLang[lang] = append(filesByLang[lang], filepath.Join(root, path))
+			} else {
+				unsupportedFiles = append(unsupportedFiles, path)
+			}
+		}
+
+		// Run ast-grep for each language
+		for lang, files := range filesByLang {
+			symbols, err := RunAstGrep(root, files, lang)
+			if err != nil {
+				// If ast-grep fails and ctags is allowed, fall back
+				if useCtags {
+					unsupportedFiles = append(unsupportedFiles, files...)
+					continue
+				}
+				return fmt.Errorf("ast-grep failed for %s: %w", lang, err)
+			}
+			allSymbols = append(allSymbols, symbols...)
+		}
+	} else {
+		// Not using ast-grep, mark all files as unsupported
+		for path := range filesToIndex {
 			unsupportedFiles = append(unsupportedFiles, path)
 		}
 	}
 
-	// Collect all symbols from both ast-grep and ctags
-	var allSymbols []Symbol
-
-	// Run ast-grep for supported languages
-	for lang, files := range filesByLang {
-		symbols, err := RunAstGrep(root, files, lang)
-		if err != nil {
-			// If ast-grep fails, fall back to ctags for these files
-			unsupportedFiles = append(unsupportedFiles, files...)
-			continue
-		}
-		allSymbols = append(allSymbols, symbols...)
-	}
-
-	// Run ctags for unsupported files (if ctags available)
-	if len(unsupportedFiles) > 0 && CtagsAvailable() {
+	// Run ctags for unsupported files (if configured and available)
+	if len(unsupportedFiles) > 0 && useCtags {
 		// Convert relative paths to absolute for ctags
 		var absUnsupportedFiles []string
 		for _, path := range unsupportedFiles {

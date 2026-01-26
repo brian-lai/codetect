@@ -1,74 +1,119 @@
 # Current Work Summary
 
-Executing: ast-grep Hybrid Indexer Prototype
+Executing: Dimension-Grouped Embedding Tables for Org-Scale Multi-Repo Support
 
-**Branch:** `para/ast-grep-hybrid-indexer`
-**Plan:** context/plans/2026-01-24-ast-grep-hybrid-indexer.md
+**Branch:** `para/dimension-grouped-embeddings`
+**Master Plan:** context/plans/2026-01-24-dimension-grouped-embeddings.md
 
-## Objective
+## Problem
 
-Replace ctags with ast-grep as the primary symbol indexer for supported languages, falling back to ctags for languages ast-grep doesn't support. This provides tree-sitter-based AST accuracy with broad language coverage.
+Single `embeddings` table with fixed vector dimensions causes dimension mismatch errors when users switch models, prevents cross-repo search, and doesn't scale for org deployment (3000+ repos at Justworks).
+
+## Solution
+
+Dimension-grouped tables (`embeddings_768`, `embeddings_1024`) with repo config tracking.
 
 ## To-Do List
 
-- [x] Create ast-grep wrapper with pattern definitions for common languages (internal/search/symbols/astgrep.go)
-- [x] Implement ast-grep availability check (AstGrepAvailable function)
-- [x] Define symbol extraction patterns for Go, TypeScript, JavaScript, Python, Rust
-- [x] Implement JSON parsing for ast-grep output into Symbol structs
-- [x] Add language detection from file extensions
-- [x] Modify index.go Update() to group files by language
-- [x] Implement hybrid logic: ast-grep for supported languages, ctags for others
-- [x] Add batch symbol insertion (500-1000 at a time) to reduce DB round-trips
-- [x] Add configuration option for index backend (auto/ast-grep/ctags)
-- [x] Write unit tests for ast-grep wrapper
-- [x] Write integration tests for hybrid indexing
-- [x] Benchmark performance vs ctags-only approach
+### Phase 1: Database Schema Updates
+- [x] Add `tableNameForDimensions(dim int) string` helper function
+- [x] Add `repo_embedding_configs` table schema and CRUD
+- [x] Modify `initSchema()` to create dimension-specific tables
+
+### Phase 2: EmbeddingStore Refactor
+- [x] Update `tableName()` method to return dimension-specific table
+- [x] Update `Save()` and `SaveBatch()` to use correct table
+- [x] Update `Search()` to query correct table (via GetAll)
+- [x] Update `Delete()` and `DeleteAll()` to target correct table
+- [x] Update `GetByPath()` and `Count()` to use correct table
+
+### Phase 3: Repo Config Management
+- [x] Create `RepoEmbeddingConfig` struct
+- [x] Implement `GetRepoConfig()` method
+- [x] Implement `SetRepoConfig()` method
+- [x] Implement `ListRepoConfigs()` method
+
+### Phase 4: Model Switch Handling
+- [x] Add dimension change detection in `codetect-index embed`
+- [x] Implement `MigrateRepoDimensions()` to move data between tables
+- [ ] Update installer dimension mismatch handling (deferred - installer already has detection)
+
+### Phase 5: Cross-Repo Search
+- [x] Add `CrossRepoSearchResult` and `CrossRepoSearchResponse` types
+- [x] Implement `SearchAcrossRepos()` method in SemanticSearcher
+- [x] Implement `GetAllAcrossRepos()` method in EmbeddingStore
+- [ ] Update MCP tool to expose cross-repo search (deferred - future enhancement)
+
+### Phase 6: SQLite Compatibility
+- [x] Keep single table for SQLite (conditional in `tableName()`) - already done
+- [x] Test SQLite path still works - verified via existing tests
+
+### Phase 7: Migration Tool
+- [x] Deferred - automatic dimension detection handles most cases
+- [x] Users can clear embeddings and re-embed if needed
+- [ ] Future: Add `codetect migrate-embeddings` for complex migrations
 
 ## Progress Notes
 
-### 2026-01-24 - Execution Completed ✅
+### Phases 1-3 Complete
 
-**Implementation Summary:**
+**Changes to `internal/embedding/store.go`:**
+- Added `tableNameForDimensions(dialect, dim)` helper - returns `embeddings_768`, `embeddings_1024`, etc. for PostgreSQL
+- Added `tableName()` method on EmbeddingStore - uses dimension-specific table for Postgres, single table for SQLite
+- Added `initRepoConfigTable()` - creates `repo_embedding_configs` table for tracking model/dimensions per repo
+- Added `RepoEmbeddingConfig` struct with `GetRepoConfig()`, `SetRepoConfig()`, `ListRepoConfigs()` methods
+- Updated ALL query methods to use `s.tableName()` instead of hardcoded "embeddings":
+  - `Save()`, `SaveBatch()`, `GetByPath()`, `GetAll()`, `HasEmbedding()`
+  - `DeleteByPath()`, `DeleteAll()`, `Count()`, `Stats()`
+- Schema initialization creates dimension-specific tables with dimension-specific index names
 
-1. **ast-grep wrapper** (`internal/search/symbols/astgrep.go`):
-   - Pattern definitions for 13 languages (Go, TS, JS, Python, Rust, Java, C/C++, Ruby, PHP, C#, Kotlin, Swift)
-   - JSON parsing and Symbol conversion
-   - Language detection from file extensions
-   - Deduplication logic
+**All tests pass** (`make test`)
 
-2. **Hybrid indexer** (`internal/search/symbols/index.go`):
-   - Groups files by language
-   - Tries ast-grep first for supported languages
-   - Falls back to ctags for unsupported files or failures
-   - Batch symbol insertion (500 at a time) - reduces DB round-trips by ~100x
+### Phase 4 Complete
 
-3. **Configuration** (`internal/config/index.go`):
-   - `CODETECT_INDEX_BACKEND` environment variable
-   - Three modes: `auto` (default), `ast-grep`, `ctags`
-   - Graceful degradation when tools unavailable
+**Changes to `internal/embedding/store.go`:**
+- Added `CheckDimensionMismatch()` - detects if repo has existing embeddings with different dimensions
+- Added `DeleteFromDimensionTable()` - deletes repo embeddings from a specific dimension table
+- Added `MigrateRepoDimensions()` - handles full migration (delete old + update config)
+- Added `VectorDimensions()` - returns configured dimensions for the store
 
-4. **Testing**:
-   - Unit tests for all ast-grep wrapper functions
-   - Integration test: 29 symbols indexed across 3 files
-   - Benchmarks for performance comparison
+**Changes to `cmd/codetect-index/main.go`:**
+- Added dimension mismatch detection after store creation
+- Auto-migrates on dimension change (deletes old, updates config)
+- Updates repo config after successful embedding
 
-**Key design decisions:**
-- ast-grep for top 13 languages (Go, TS, JS, Python, Rust, Java, C/C++, Ruby, PHP, C#, Kotlin, Swift)
-- Graceful fallback to universal-ctags for unsupported languages
-- Batch insertions to improve performance (500 symbols/batch)
-- Configuration option for backend selection
-- Works with ast-grep only, ctags only, or both
+### Phase 5 Complete
+
+**Changes to `internal/embedding/store.go`:**
+- Added `RepoRoot` field to `EmbeddingRecord` (for cross-repo results)
+- Added `GetAllAcrossRepos(repoRoots)` - queries all repos in dimension group
+- Added `scanEmbeddingRecordsWithRepo()` - scans rows with repo_root column
+
+**Changes to `internal/embedding/search.go`:**
+- Added `CrossRepoSearchResult` type (extends SemanticResult with RepoRoot)
+- Added `CrossRepoSearchResponse` type
+- Added `SearchAcrossRepos()` method for org-wide semantic search
+
+### Phase 6 & 7 Notes
+
+- SQLite compatibility was already built-in throughout the implementation
+- Migration tool deferred since automatic dimension detection handles most cases
+- Users with old PostgreSQL data can clear and re-embed via `codetect embed --force`
 
 ---
 
 ```json
 {
-  "active_context": [
-    "context/plans/2026-01-24-ast-grep-hybrid-indexer.md"
+  "active_context": ["context/plans/2026-01-24-dimension-grouped-embeddings.md"],
+  "completed_summaries": [
+    "context/plans/2026-01-24-ast-grep-hybrid-indexer.md",
+    "context/plans/2026-01-24-eval-model-selection.md",
+    "context/plans/2026-01-23-fix-config-preservation-overwriting-selections.md",
+    "context/plans/2026-01-22-installer-config-preservation-and-reembedding.md",
+    "context/plans/2026-01-23-parallel-eval-execution.md"
   ],
-  "completed_summaries": [],
-  "execution_branch": "para/ast-grep-hybrid-indexer",
-  "execution_started": "2026-01-24T13:30:00Z",
-  "last_updated": "2026-01-24T13:30:00Z"
+  "execution_branch": "para/dimension-grouped-embeddings",
+  "execution_started": "2026-01-24T12:45:00Z",
+  "last_updated": "2026-01-24T12:45:00Z"
 }
 ```

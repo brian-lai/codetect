@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -14,13 +15,14 @@ import (
 	"codetect/internal/config"
 	"codetect/internal/db"
 	"codetect/internal/embedding"
+	"codetect/internal/indexer"
 	"codetect/internal/logging"
 	"codetect/internal/search/symbols"
 )
 
 var logger *slog.Logger
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 func main() {
 	logger = logging.Default("codetect-index")
@@ -57,6 +59,10 @@ func runIndex(args []string) {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	force := fs.Bool("force", false, "Force full reindex")
 	fs.BoolVar(force, "f", false, "Short for --force")
+	useV2 := fs.Bool("v2", false, "Use v2 indexer (AST chunking, Merkle tree)")
+	verbose := fs.Bool("verbose", false, "Enable verbose output")
+	fs.BoolVar(verbose, "v", false, "Short for --verbose")
+	jsonOutput := fs.Bool("json", false, "Output results as JSON")
 	fs.Parse(args)
 
 	path := "."
@@ -70,6 +76,13 @@ func runIndex(args []string) {
 		logger.Error("invalid path", "error", err)
 		os.Exit(1)
 	}
+
+	if *useV2 {
+		runIndexV2(absPath, *force, *verbose, *jsonOutput)
+		return
+	}
+
+	// V1 path: ctags-based symbol indexing
 
 	// Check if ctags is available
 	if !symbols.CtagsAvailable() {
@@ -132,6 +145,96 @@ func runIndex(args []string) {
 			"symbols", symbolCount,
 			"files", fileCount,
 			"duration", elapsed.Round(time.Millisecond))
+	}
+}
+
+// runIndexV2 uses the new v2 indexer with Merkle tree change detection,
+// AST-based chunking, and content-addressed embedding cache.
+func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
+	// Load configuration from environment
+	dbConfig := config.LoadDatabaseConfigFromEnv()
+	embConfig := embedding.LoadConfigFromEnv()
+
+	// Build indexer config
+	cfg := &indexer.Config{
+		DBType:            string(dbConfig.Type),
+		Dimensions:        dbConfig.VectorDimensions,
+		EmbeddingProvider: string(embConfig.Provider),
+		EmbeddingModel:    embConfig.Model,
+		OllamaURL:         embConfig.OllamaURL,
+		LiteLLMURL:        embConfig.LiteLLMURL,
+		LiteLLMKey:        embConfig.LiteLLMKey,
+		BatchSize:         32,
+		MaxWorkers:        4,
+	}
+
+	// Set database path/DSN
+	if dbConfig.Type == db.DatabasePostgres {
+		cfg.DSN = dbConfig.DSN
+	} else {
+		cfg.DBPath = filepath.Join(absPath, ".codetect", "index.db")
+	}
+
+	// Load gitignore patterns
+	cfg.IgnorePatterns = indexer.LoadGitignore(absPath)
+
+	if verbose {
+		logger.Info("v2 indexer starting",
+			"path", absPath,
+			"db_type", cfg.DBType,
+			"embedding_provider", cfg.EmbeddingProvider,
+			"embedding_model", cfg.EmbeddingModel)
+	}
+
+	// Create indexer
+	idx, err := indexer.New(absPath, cfg)
+	if err != nil {
+		logger.Error("creating v2 indexer failed", "error", err)
+		os.Exit(1)
+	}
+	defer idx.Close()
+
+	// Run indexing
+	ctx := context.Background()
+	result, err := idx.Index(ctx, indexer.IndexOptions{
+		Force:   force,
+		Verbose: verbose,
+	})
+	if err != nil {
+		logger.Error("v2 indexing failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Output results
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(result); err != nil {
+			logger.Error("encoding JSON failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Human-readable output
+	switch result.ChangeType {
+	case "none":
+		logger.Info("no changes detected, index is up to date")
+	case "incremental":
+		logger.Info("incremental index complete",
+			"files_processed", result.FilesProcessed,
+			"files_deleted", result.FilesDeleted,
+			"chunks_created", result.ChunksCreated,
+			"cache_hits", result.CacheHits,
+			"chunks_embedded", result.ChunksEmbedded,
+			"duration", result.Duration.Round(time.Millisecond))
+	case "full":
+		logger.Info("full index complete",
+			"files_processed", result.FilesProcessed,
+			"chunks_created", result.ChunksCreated,
+			"cache_hits", result.CacheHits,
+			"chunks_embedded", result.ChunksEmbedded,
+			"duration", result.Duration.Round(time.Millisecond))
 	}
 }
 
@@ -495,9 +598,14 @@ func isComment(line string) bool {
 }
 
 func runStats(args []string) {
+	fs := flag.NewFlagSet("stats", flag.ExitOnError)
+	useV2 := fs.Bool("v2", false, "Show v2 index stats")
+	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
+	fs.Parse(args)
+
 	path := "."
-	if len(args) > 0 {
-		path = args[0]
+	if fs.NArg() > 0 {
+		path = fs.Arg(0)
 	}
 
 	absPath, err := filepath.Abs(path)
@@ -505,6 +613,13 @@ func runStats(args []string) {
 		logger.Error("invalid path", "error", err)
 		os.Exit(1)
 	}
+
+	if *useV2 {
+		runStatsV2(absPath, *jsonOutput)
+		return
+	}
+
+	// V1 stats path
 
 	// Load database configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
@@ -555,23 +670,117 @@ func runStats(args []string) {
 	}
 }
 
+// runStatsV2 shows statistics from the v2 indexer.
+func runStatsV2(absPath string, jsonOutput bool) {
+	// Load configuration from environment
+	dbConfig := config.LoadDatabaseConfigFromEnv()
+	embConfig := embedding.LoadConfigFromEnv()
+
+	// Build indexer config
+	cfg := &indexer.Config{
+		DBType:            string(dbConfig.Type),
+		Dimensions:        dbConfig.VectorDimensions,
+		EmbeddingProvider: "off", // Don't need embedder for stats
+		EmbeddingModel:    embConfig.Model,
+	}
+
+	// Set database path/DSN
+	if dbConfig.Type == db.DatabasePostgres {
+		cfg.DSN = dbConfig.DSN
+	} else {
+		cfg.DBPath = filepath.Join(absPath, ".codetect", "index.db")
+	}
+
+	// Create indexer
+	idx, err := indexer.New(absPath, cfg)
+	if err != nil {
+		logger.Error("opening v2 indexer failed", "error", err)
+		os.Exit(1)
+	}
+	defer idx.Close()
+
+	// Get stats
+	stats, err := idx.Stats()
+	if err != nil {
+		logger.Error("getting v2 stats failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Output
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(stats); err != nil {
+			logger.Error("encoding JSON failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Human-readable output
+	fmt.Printf("v2 Index Statistics\n")
+	fmt.Printf("==================\n")
+	fmt.Printf("Total Chunks:      %d\n", stats.TotalChunks)
+	fmt.Printf("Unique Hashes:     %d\n", stats.UniqueHashes)
+	fmt.Printf("Files:             %d\n", stats.FileCount)
+	fmt.Printf("Cached Embeddings: %d\n", stats.CachedEmbeddings)
+
+	if stats.IndexedVectors > 0 {
+		indexType := "brute-force"
+		if stats.VectorIndexNative {
+			indexType = "native HNSW"
+		}
+		fmt.Printf("Indexed Vectors:   %d (%s)\n", stats.IndexedVectors, indexType)
+	}
+
+	if len(stats.ByNodeType) > 0 {
+		fmt.Printf("\nBy Node Type:\n")
+		for nodeType, count := range stats.ByNodeType {
+			fmt.Printf("  %-20s %d\n", nodeType+":", count)
+		}
+	}
+
+	if len(stats.ByLanguage) > 0 {
+		fmt.Printf("\nBy Language:\n")
+		for lang, count := range stats.ByLanguage {
+			fmt.Printf("  %-20s %d\n", lang+":", count)
+		}
+	}
+}
+
 func printUsage() {
 	fmt.Println(`codetect-index - Codebase indexer for codetect MCP
 
 Usage:
-  codetect-index index [--force] [path]   Index symbols using ctags
+  codetect-index index [options] [path]   Index symbols using ctags
   codetect-index embed [options] [path]   Generate embeddings
-  codetect-index stats [path]             Show index statistics
+  codetect-index stats [options] [path]   Show index statistics
   codetect-index version                  Print version
   codetect-index help                     Show this help
 
 Index Options:
-  --force    Force full reindex (default: incremental)
+  --force, -f    Force full reindex (default: incremental)
+  --v2           Use v2 indexer (AST chunking, Merkle tree change detection)
+  --verbose, -v  Enable verbose output
+  --json         Output results as JSON
+
+Stats Options:
+  --v2           Show v2 index statistics
+  --json         Output stats as JSON
 
 Embed Options:
-  --force      Re-embed all chunks (ignore cache)
-  --provider   Embedding provider (ollama, litellm, off)
-  --model      Embedding model (provider-specific default if empty)
+  --force, -f    Re-embed all chunks (ignore cache)
+  --provider     Embedding provider (ollama, litellm, off)
+  --model        Embedding model (provider-specific default if empty)
+  --parallel, -j Number of parallel workers (default: 10)
+
+v2 Indexer Features:
+  The v2 indexer (--v2) provides significant improvements:
+  - Merkle tree change detection for fast incremental updates
+  - AST-based syntactic chunking (tree-sitter) for better code understanding
+  - Content-addressed embedding cache for deduplication across repos
+  - Support for 10 languages: Go, Python, JavaScript, TypeScript, Rust,
+    Java, C, C++, Ruby, PHP
 
 Database Environment Variables:
   CODETECT_DB_TYPE              Database type: sqlite (default), postgres
@@ -591,16 +800,25 @@ Logging Environment Variables:
   CODETECT_LOG_FORMAT           Output format (text, json) [default: text]
 
 Database:
-  Default: SQLite stored in .codetect/symbols.db relative to indexed path.
+  Default: SQLite stored in .codetect/ relative to indexed path.
   PostgreSQL: Set CODETECT_DB_TYPE=postgres and CODETECT_DB_DSN.
 
 Requirements:
-  - universal-ctags (for symbol extraction)
+  - universal-ctags (for v1 symbol extraction)
   - Ollama OR LiteLLM (optional, for semantic search)
   - PostgreSQL + pgvector (optional, for production deployments)
 
 Install:
   macOS:   brew install universal-ctags
   Ubuntu:  apt install universal-ctags
-  Ollama:  https://ollama.ai then 'ollama pull nomic-embed-text'`)
+  Ollama:  https://ollama.ai then 'ollama pull nomic-embed-text'
+
+Examples:
+  # v1 indexing (ctags-based)
+  codetect-index index .
+  codetect-index embed .
+
+  # v2 indexing (AST-based, recommended)
+  codetect-index index --v2 .
+  codetect-index stats --v2 .`)
 }

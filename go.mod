@@ -4,14 +4,15 @@ go 1.25.5
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/lib/pq v1.10.9
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	modernc.org/sqlite v1.42.2
 )
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

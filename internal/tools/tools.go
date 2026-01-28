@@ -16,6 +16,7 @@ func RegisterAll(server *mcp.Server) {
 	registerGetFile(server)
 	RegisterSymbolTools(server)
 	RegisterSemanticTools(server)
+	RegisterV2SemanticTools(server) // v2 tools with RRF fusion
 }
 
 func registerSearchKeyword(server *mcp.Server) {

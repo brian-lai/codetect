@@ -2,6 +2,21 @@
 
 A local MCP server providing fast codebase search, file retrieval, symbol navigation, and semantic search for Claude Code.
 
+## What's New in v2.0.0 🎉
+
+codetect v2.0.0 brings **multi-repo support**, **parallel embedding**, and **improved user experience**:
+
+- ✨ **Dimension-grouped embedding tables** - Multiple repos can use different embedding models without conflicts
+- ⚡ **Parallel embedding** with `-j` flag - 3.3x faster embedding with configurable workers
+- 🎯 **Model selection in eval runner** - Choose `sonnet`, `haiku`, or `opus` with cost-aware defaults
+- 🔧 **Short flag aliases** - Use `-f` for `--force` and `-j` for `--parallel` (Unix-style)
+- 🛡️ **Config preservation** - Reinstalls no longer overwrite your settings
+- 🐛 **Better error handling** - Improved ripgrep error messages and diagnostics
+
+**Upgrading from v1.x?** v2.0.0 is fully backward compatible. See [Migration Guide](docs/MIGRATION.md) for details.
+
+**Full changelog:** [CHANGELOG.md](CHANGELOG.md)
+
 ## Features
 
 - **`search_keyword`** - Fast regex search powered by ripgrep

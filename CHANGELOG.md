@@ -5,6 +5,20 @@ All notable changes to codetect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-02-01
+
+### Fixed
+
+- **v2 indexer is now the default** (was incorrectly still using v1 as default in 2.0.0)
+  - `codetect index` now correctly uses AST-based chunking by default
+  - v1 indexer moved to `--v1` flag with deprecation warnings
+  - This aligns v2.0.x with semantic versioning expectations
+  - No action required for users - both v1 and v2 indexes coexist peacefully
+
+**Note:** v2.0.0 accidentally kept v1 as the default despite being a v2 release. This patch fixes that oversight. If you used v2.0.0, your v1 index continues to work. Simply run `codetect index` (no flags) to create a new v2 index alongside it.
+
+---
+
 ## [2.0.0] - 2026-02-01
 
 ### Added
@@ -124,5 +138,6 @@ Previous releases not documented in changelog. See git history for details.
 
 ---
 
+[2.0.1]: https://github.com/brian-lai/codetect/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/brian-lai/codetect/compare/v1.13.0...v2.0.0
 [1.13.0]: https://github.com/brian-lai/codetect/releases/tag/v1.13.0

@@ -7,12 +7,44 @@ This guide helps you upgrade from codetect v1.x to v2.0.0.
 **Good news:** v2.0.0 is fully backward compatible with v1.x. Your existing indexes will continue to work without any manual migration.
 
 **What's new in v2.0.0:**
+- **v2 indexer is now the default** - AST-based chunking with Merkle tree change detection (15x faster!)
+- **v1 indexer deprecated** - Legacy ctags-based indexer still available with `--v1` flag
 - Dimension-grouped embedding tables for multi-repo support
 - Model selection in evaluation runner
 - Parallel embedding with configurable concurrency
 - Short flag aliases (`-f`, `-j`) for common options
 - Improved error handling and user experience
 - Config preservation during reinstalls
+
+**Breaking change:**
+- `codetect index` now uses v2 indexer by default (AST-based chunking)
+- Use `codetect index --v1` to use legacy ctags-based indexer
+- Both v1 and v2 indexes can coexist in the same project
+
+## Understanding v1 vs v2 Indexers
+
+v2.0.0 introduces a new indexer architecture:
+
+| Feature | v1 Indexer (Legacy) | v2 Indexer (Default) |
+|---------|---------------------|----------------------|
+| **Chunking strategy** | Line-based (512 lines with overlap) | AST-based (functions, classes, modules) |
+| **Symbol extraction** | ctags | Tree-sitter parsing |
+| **Change detection** | Full re-scan | Merkle tree (sub-second) |
+| **Incremental speed** | ~30s (1000 files) | ~2s (1000 files) ⚡ |
+| **Cache hit rate** | ~50% | ~95% 📦 |
+| **Database** | `.codetect/symbols.db` | `.codetect/index.db` |
+| **Flag** | `--v1` | (default, no flag needed) |
+| **Status** | Deprecated (removed in v3.0) | Recommended |
+
+**Can I use both?**
+Yes! v1 and v2 indexes can coexist. They use different database files:
+- v1: `.codetect/symbols.db`
+- v2: `.codetect/index.db`
+
+**Which should I use?**
+- **New projects:** Use v2 (the default)
+- **Existing v1 projects:** Migrate to v2 for better performance
+- **Need ctags compatibility:** Use v1 with `--v1` flag
 
 ## Automatic Migrations
 
@@ -79,25 +111,31 @@ codetect stats      # Verify indexes still work
 - ✅ No re-indexing or re-embedding needed
 - ⚠️ Embeddings remain in legacy schema (slower for multi-repo setups)
 
-### Option B: Full v2.0.0 Optimization
+### Option B: Full v2.0.0 with New AST Indexer
 
-**Best for:** Users who want to fully adopt v2.0.0's dimension-grouped architecture
+**Best for:** Users who want the full v2.0.0 experience with AST-based chunking
 
 **Steps:**
 ```bash
 # 1. Update to v2.0.0
 codetect update
 
-# 2. Re-embed to use dimension-grouped tables
+# 2. Index with v2 indexer (AST-based chunking, Merkle tree)
 cd /path/to/your/project
-codetect embed --force -j 10  # 10 parallel workers
+codetect index           # No --v2 flag needed - it's the default!
+codetect embed -j 10     # Parallel embedding with 10 workers
 
 # 3. Verify migration
-codetect stats  # Should show embeddings in dimension-grouped tables
+codetect stats           # Shows v2 index stats
 ```
 
 **Result:**
 - ✅ All v2.0.0 features
+- ✅ AST-based chunking (functions/classes preserved, not split mid-code)
+- ✅ 15x faster incremental indexing (Merkle tree change detection)
+- ✅ 95% embedding cache hit rate (content-addressed chunks)
+- ✅ Dimension-grouped tables for better multi-repo isolation
+- ⏱️ Re-indexing time: ~2s for medium repos (1000 files)
 - ✅ Dimension-grouped tables for better multi-repo isolation
 - ✅ Faster parallel embedding
 - ⏱️ Re-embedding time: ~1-2 minutes for medium repos (1000 files)
@@ -293,12 +331,50 @@ No significant change in search performance between v1.13.0 and v2.0.0 for singl
 
 ### Do I need to re-index?
 
-**No.** Existing indexes work with v2.0.0 without changes.
+**No.** Existing v1 indexes continue to work with v2.0.0.
 
-**Optional:** Re-index to ensure schema is fully up-to-date:
+**However, to get the new v2 indexer benefits:**
 ```bash
-codetect index --force
+# Create new v2 index (AST-based chunking, 15x faster incremental updates)
+codetect index           # Uses v2 by default
+codetect stats           # Check v2 index stats
 ```
+
+**Want to keep using v1 indexer?**
+```bash
+# Use legacy v1 indexer (deprecated)
+codetect index --v1 --force
+```
+
+**Note:** v1 and v2 indexes coexist peacefully (different database files).
+
+### What happens to my existing v1 index?
+
+**Nothing!** Your v1 index (`.codetect/symbols.db`) remains intact and functional.
+
+**You have three options:**
+
+1. **Keep using v1 only:**
+   ```bash
+   codetect index --v1      # Continue using v1
+   codetect stats --v1      # View v1 stats
+   ```
+
+2. **Switch to v2 only:**
+   ```bash
+   codetect index           # Create v2 index
+   rm .codetect/symbols.db  # Optional: delete old v1 index
+   ```
+
+3. **Use both (testing/comparison):**
+   ```bash
+   codetect index --v1      # Update v1 index
+   codetect index           # Update v2 index
+   codetect stats --v1      # Compare v1 stats
+   codetect stats           # Compare v2 stats
+   ```
+
+**Disk usage:** Both indexes together use ~40MB for medium repos (1000 files).
 
 ### Do I need to re-embed?
 

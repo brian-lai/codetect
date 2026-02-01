@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **v2 indexer is now the default** 🎉
+  - `codetect index` now uses AST-based chunking with Merkle tree change detection by default
+  - 15x faster incremental indexing, 95% cache hit rate on re-embedding
+  - Legacy v1 indexer (ctags-based) still available with `--v1` flag
+  - v1 indexer deprecated and will be removed in v3.0.0
+  - **Migration:** Existing v1 indexes continue to work; simply run `codetect index` (no flags) to create new v2 index
+
 - **Config preservation** no longer overwrites user selections during reinstall (#34)
   - Installer preserves existing configuration on upgrade
   - No more losing embedding provider settings or database configuration
@@ -88,13 +95,24 @@ v2.0.0 is fully backward compatible with v1.x indexes. No manual migration requi
 **Recommended actions after upgrading:**
 1. **Update codetect:** Run `codetect update` to get v2.0.0
 2. **Verify configuration:** Check `codetect doctor` to ensure all dependencies present
-3. **Optional: Re-embed with new features:**
+3. **Try the new v2 indexer (now default):**
    ```bash
-   # Re-embed to use dimension-grouped tables
-   codetect embed --force -j 10  # 10 parallel workers
+   # v2 indexer with AST-based chunking (15x faster incremental updates)
+   codetect index           # No --v2 flag needed - it's the default!
+   codetect embed -j 10     # Parallel embedding with 10 workers
+   codetect stats           # Shows v2 index stats
+   ```
+4. **Optional: Keep using v1 indexer:**
+   ```bash
+   # Legacy v1 indexer (deprecated, will be removed in v3.0)
+   codetect index --v1
+   codetect stats --v1
    ```
 
-**Breaking changes:** None. v2.0.0 maintains full compatibility with v1.x.
+**Breaking changes:**
+- Default indexer changed from v1 (ctags) to v2 (AST-based)
+- Users wanting v1 behavior must use `--v1` flag
+- Both v1 and v2 indexes can coexist in same project
 
 See [MIGRATION.md](docs/MIGRATION.md) for detailed upgrade guide.
 

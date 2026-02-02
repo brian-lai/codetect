@@ -5,6 +5,22 @@ All notable changes to codetect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-02-01
+
+### Fixed
+
+- **Registry stats update after v2 indexing** (#40)
+  - v2 indexer now correctly updates centralized registry (`~/.config/codetect/registry.json`) after indexing
+  - Registry properly tracks embeddings count, database size, and last indexed timestamp
+  - `codetect registry list` displays accurate statistics instead of showing zeros
+  - Registry-based features (daemon, multi-project management) now have correct metadata
+  - Non-fatal error handling: registry update failures log warnings but don't break indexing
+  - Fixes regression from v2.0.0 where local indexes were created but registry wasn't updated
+
+**Impact:** Users running `codetect index` will now see their registry automatically updated with current stats. This fixes the disconnect between local `.codetect/index.db` (which was working) and the registry metadata (which showed zeros).
+
+---
+
 ## [2.0.1] - 2026-02-01
 
 ### Fixed
@@ -138,6 +154,7 @@ Previous releases not documented in changelog. See git history for details.
 
 ---
 
+[2.0.2]: https://github.com/brian-lai/codetect/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/brian-lai/codetect/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/brian-lai/codetect/compare/v1.13.0...v2.0.0
 [1.13.0]: https://github.com/brian-lai/codetect/releases/tag/v1.13.0

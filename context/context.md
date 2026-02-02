@@ -12,7 +12,7 @@ Add registry update logic to the v2 indexer so that `codetect index` updates the
 ## To-Do List
 
 - [x] Add registry import to `cmd/codetect-index/main.go`
-- [ ] Create `getDBSize()` helper function for SQLite database size
+- [x] Create `getDBSize()` helper function for SQLite database size
 - [ ] Add registry update logic after successful indexing in `runIndexV2()`
 - [ ] Map indexer stats to registry stats structure
 - [ ] Add error handling (non-fatal warnings)

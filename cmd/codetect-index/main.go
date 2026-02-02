@@ -755,6 +755,16 @@ func runStatsV2(absPath string, jsonOutput bool) {
 	}
 }
 
+// getDBSize returns the size of the database file in bytes.
+// Returns 0 if the file doesn't exist or on error.
+func getDBSize(dbPath string) int64 {
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
 func printUsage() {
 	fmt.Println(`codetect-index - Codebase indexer for codetect MCP
 

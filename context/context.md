@@ -12,7 +12,7 @@ Release v2.0.2 with the registry stats update bug fix (PR #40 already merged).
 ## To-Do List
 
 - [x] Merge PR #40 (already done)
-- [ ] Update version constants to 2.0.2 in cmd files
+- [x] Update version constants to 2.0.2 in cmd files
 - [ ] Update CHANGELOG.md with v2.0.2 entry
 - [ ] Run tests to verify everything works
 - [ ] Create git tag v2.0.2

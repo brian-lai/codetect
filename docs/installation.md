@@ -11,7 +11,7 @@ This guide covers all installation methods for codetect.
 
 ### Optional
 
-- **[universal-ctags](https://github.com/universal-ctags/ctags)** - for symbol indexing
+- **[universal-ctags](https://github.com/universal-ctags/ctags)** - for symbol indexing (v2 uses tree-sitter, ctags optional)
 - **[Ollama](https://ollama.ai)** - for semantic search (default embedding provider)
 - **[LiteLLM](https://github.com/BerriAI/litellm)** - alternative embedding provider
 - **[Docker](https://www.docker.com/get-started)** - for running PostgreSQL + pgvector (recommended)
@@ -390,7 +390,7 @@ codetect doctor
 |----------|-------------|---------|
 | `CODETECT_DB_TYPE` | Database backend: `sqlite` or `postgres` | `sqlite` |
 | `CODETECT_DB_DSN` | PostgreSQL connection string (required if type=postgres) | (none) |
-| `CODETECT_DB_PATH` | SQLite database path (used if type=sqlite) | `.codetect/symbols.db` |
+| `CODETECT_DB_PATH` | SQLite database path (used if type=sqlite) | `.codetect/index.db` (v2) |
 | `CODETECT_EMBEDDING_PROVIDER` | Provider: `ollama`, `litellm`, or `off` | `ollama` |
 | `CODETECT_OLLAMA_URL` | Ollama server URL | `http://localhost:11434` |
 | `CODETECT_LITELLM_URL` | LiteLLM server URL | `http://localhost:4000` |
@@ -402,7 +402,7 @@ codetect doctor
 
 **Using SQLite (default):**
 ```bash
-codetect embed  # Uses SQLite at .codetect/symbols.db
+codetect embed  # Uses SQLite at .codetect/index.db (v2)
 ```
 
 **Using PostgreSQL:**
@@ -485,8 +485,11 @@ When you run `codetect init` in a project:
 your-project/
 ├── .mcp.json                # MCP server registration
 └── .codetect/            # Index storage (gitignored)
-    └── symbols.db           # SQLite database
+    └── index.db             # SQLite database (v2)
+                             # Or symbols.db (v1, legacy)
 ```
+
+**Note:** v2 uses `index.db` with dimension-grouped tables. v1 (deprecated) used `symbols.db`. Both can coexist.
 
 ## Uninstalling
 

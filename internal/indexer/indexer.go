@@ -241,10 +241,15 @@ func (idx *Indexer) Close() error {
 	return nil
 }
 
+// ProgressCallback reports indexing progress.
+// stage is the current operation name, current is items processed, total is total items (-1 if unknown).
+type ProgressCallback func(stage string, current, total int)
+
 // IndexOptions configures the index operation.
 type IndexOptions struct {
-	Force   bool // Force full reindex
-	Verbose bool // Enable verbose logging
+	Force    bool             // Force full reindex
+	Verbose  bool             // Enable verbose logging
+	Progress ProgressCallback // Optional progress callback
 }
 
 // IndexResult contains statistics from an index operation.
@@ -264,6 +269,9 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 	result := &IndexResult{}
 
 	// 1. Build current Merkle tree
+	if opts.Progress != nil {
+		opts.Progress("Scanning files", 0, -1)
+	}
 	if opts.Verbose {
 		idx.logger.Info("building merkle tree", "path", idx.repoPath)
 	}
@@ -274,6 +282,10 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 	}
 
 	// 2. Determine what changed
+	if opts.Progress != nil {
+		opts.Progress("Detecting changes", 1, 1)
+	}
+
 	var filesToProcess []string
 	var filesToDelete []string
 
@@ -309,23 +321,32 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 	}
 
 	// 3. Handle deletions
-	for _, path := range filesToDelete {
+	if len(filesToDelete) > 0 && opts.Progress != nil {
+		opts.Progress("Deleting files", 0, len(filesToDelete))
+	}
+	for i, path := range filesToDelete {
 		if err := idx.locations.DeleteByPath(idx.repoPath, path); err != nil {
 			idx.logger.Warn("failed to delete locations", "path", path, "error", err)
+		}
+		if opts.Progress != nil {
+			opts.Progress("Deleting files", i+1, len(filesToDelete))
 		}
 	}
 	result.FilesDeleted = len(filesToDelete)
 
 	// 4. Process files in batches
 	batchSize := 100
+	totalBatches := (len(filesToProcess) + batchSize - 1) / batchSize
 	for i := 0; i < len(filesToProcess); i += batchSize {
-		end := i + batchSize
-		if end > len(filesToProcess) {
-			end = len(filesToProcess)
-		}
+		end := min(i+batchSize, len(filesToProcess))
 		batch := filesToProcess[i:end]
+		batchNum := i/batchSize + 1
 
-		batchResult, err := idx.processBatch(ctx, batch, opts.Verbose)
+		if opts.Progress != nil {
+			opts.Progress("Processing files", batchNum, totalBatches)
+		}
+
+		batchResult, err := idx.processBatch(ctx, batch, opts)
 		if err != nil {
 			idx.logger.Warn("batch processing error", "error", err)
 			continue
@@ -338,6 +359,9 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 	}
 
 	// 5. Save Merkle tree
+	if opts.Progress != nil {
+		opts.Progress("Saving index", 1, 1)
+	}
 	if err := idx.merkleStore.Save(newTree); err != nil {
 		return nil, fmt.Errorf("saving merkle tree: %w", err)
 	}
@@ -347,16 +371,20 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 }
 
 // processBatch processes a batch of files.
-func (idx *Indexer) processBatch(ctx context.Context, files []string, verbose bool) (*IndexResult, error) {
+func (idx *Indexer) processBatch(ctx context.Context, files []string, opts IndexOptions) (*IndexResult, error) {
 	result := &IndexResult{}
 
 	// Chunk all files using AST chunker
 	var allChunks []embedding.Chunk
-	for _, relPath := range files {
+	for i, relPath := range files {
+		if opts.Progress != nil {
+			opts.Progress("Chunking files", i+1, len(files))
+		}
+
 		fullPath := filepath.Join(idx.repoPath, relPath)
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
-			if verbose {
+			if opts.Verbose {
 				idx.logger.Debug("skipping file", "path", relPath, "error", err)
 			}
 			continue
@@ -365,7 +393,7 @@ func (idx *Indexer) processBatch(ctx context.Context, files []string, verbose bo
 		// Use AST chunker
 		astChunks, err := idx.astChunker.ChunkFile(ctx, relPath, content)
 		if err != nil {
-			if verbose {
+			if opts.Verbose {
 				idx.logger.Debug("chunk error", "path", relPath, "error", err)
 			}
 			continue

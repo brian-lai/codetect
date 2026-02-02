@@ -12,9 +12,9 @@ Comprehensive documentation update to reflect v2 as the default, while preservin
 ## To-Do List
 
 ### Phase 1: Audit & Research
-- [ ] Use Explore agent to audit all markdown files and identify v1/v2 content
-- [ ] Catalog v1-specific references (ctags, .repo_search, etc.)
-- [ ] List all code examples that need updating
+- [x] Use Explore agent to audit all markdown files and identify v1/v2 content
+- [x] Catalog v1-specific references (ctags, .repo_search, etc.)
+- [x] List all code examples that need updating
 
 ### Phase 2: Create v1 Legacy Docs
 - [ ] Create `docs/v1/` directory structure

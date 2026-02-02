@@ -19,20 +19,20 @@ Comprehensive documentation update to reflect v2 as the default, while preservin
 ### Phase 2: Create v1 Legacy Docs
 - [x] Create `docs/v1/` directory structure
 - [x] Create `docs/v1/README.md` with v1 overview + deprecation notice
-- [ ] Create `docs/v1/architecture.md` from current architecture.md (ctags content)
-- [ ] Create `docs/v1/commands.md` with v1 command reference
+- [x] Create `docs/v1/architecture.md` from current architecture.md (ctags content)
+- [x] Create `docs/v1/commands.md` with v1 command reference
 
 ### Phase 3: Update Main Documentation Files
-- [ ] Update README.md to default to v2 examples
-- [ ] Update docs/installation.md (ctags optional, v2 default)
-- [ ] Replace docs/architecture.md with v2-architecture.md content
-- [ ] Update docs/MIGRATION.md with v1 doc links
+- [x] Update README.md to default to v2 examples (already excellent)
+- [x] Update docs/installation.md (ctags optional, v2 default)
+- [x] Replace docs/architecture.md with v2-architecture.md content
+- [x] Update docs/MIGRATION.md with v1 doc links
 - [ ] Update docs/benchmarks.md with v2 performance data
 - [ ] Update docs/postgres-setup.md for v2
 - [ ] Update docs/evaluation.md with v2 tools
 - [ ] Update docs/mcp-compatibility.md with v2 MCP tools
 - [ ] Review and update README.docker.md
-- [ ] Review and update CLAUDE.md
+- [x] Review and update CLAUDE.md (already v2-focused)
 
 ### Phase 4: Create New Documentation
 - [ ] Create docs/registry.md (registry usage guide)
@@ -67,11 +67,36 @@ Comprehensive audit completed using Explore agent. Key findings:
 3. Fix CLAUDE.md line 26 (codetect-index → codetect-eval)
 4. Create docs/registry.md (new guide)
 
-**Audit Report:** See agent output above for full details
+### Phase 2 Complete ✅
+
+Created comprehensive v1 legacy documentation:
+- ✅ `docs/v1/README.md` - v1 overview, comparison table, migration path
+- ✅ `docs/v1/architecture.md` - ctags-based architecture, limitations, deprecated features
+- ✅ `docs/v1/commands.md` - Complete v1 command reference
+
+All v1-specific content now preserved with deprecation notices.
+
+**Commits:**
+- 88f5b2e: Create v1 legacy README with deprecation notice
+- 5d35d47: Create docs/v1/architecture.md and docs/v1/commands.md
+
+### Phase 3 In Progress ⏳
+
+Updating main documentation files for v2:
+- ✅ docs/architecture.md - Replaced with v2-focused content
+- ✅ docs/installation.md - Updated database file structure references
+- ✅ docs/MIGRATION.md - Added v1 documentation links
+- ✅ README.md, CLAUDE.md - Already v2-focused (verified)
+
+**Commits:**
+- 12973cc: Replace docs/architecture.md with v2-focused content
+- 915d157: Update docs/installation.md with v2 database file structure clarifications
+- b57de0b: Update docs/MIGRATION.md with v1 documentation links
 
 ### Next Steps
 
-Ready to proceed with Phase 2: Creating v1 legacy docs structure
+Continue Phase 3: Review remaining documentation files
+- docs/benchmarks.md, postgres-setup.md, evaluation.md, mcp-compatibility.md, README.docker.md
 
 ---
 

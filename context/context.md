@@ -17,8 +17,8 @@ Comprehensive documentation update to reflect v2 as the default, while preservin
 - [x] List all code examples that need updating
 
 ### Phase 2: Create v1 Legacy Docs
-- [ ] Create `docs/v1/` directory structure
-- [ ] Create `docs/v1/README.md` with v1 overview + deprecation notice
+- [x] Create `docs/v1/` directory structure
+- [x] Create `docs/v1/README.md` with v1 overview + deprecation notice
 - [ ] Create `docs/v1/architecture.md` from current architecture.md (ctags content)
 - [ ] Create `docs/v1/commands.md` with v1 command reference
 

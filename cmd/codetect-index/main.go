@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/mattn/go-isatty"
+	"github.com/schollz/progressbar/v3"
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"codetect/internal/config"
@@ -199,15 +201,54 @@ func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
 	}
 	defer idx.Close()
 
+	// Create progress bar if outputting to terminal and not in verbose mode
+	var progressBar *progressbar.ProgressBar
+	var progressCallback indexer.ProgressCallback
+
+	if isatty.IsTerminal(os.Stderr.Fd()) && !verbose {
+		progressBar = progressbar.NewOptions(-1,
+			progressbar.OptionSetDescription("Indexing..."),
+			progressbar.OptionSetWriter(os.Stderr),
+			progressbar.OptionShowCount(),
+			progressbar.OptionShowIts(),
+			progressbar.OptionOnCompletion(func() {
+				fmt.Fprintf(os.Stderr, "\n")
+			}),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionFullWidth(),
+			progressbar.OptionThrottle(65*time.Millisecond),
+		)
+
+		currentStage := ""
+		progressCallback = func(stage string, current, total int) {
+			if stage != currentStage {
+				progressBar.Describe(stage)
+				currentStage = stage
+			}
+			if total > 0 {
+				progressBar.ChangeMax(total)
+				progressBar.Set(current)
+			} else {
+				progressBar.Add(1)
+			}
+		}
+	}
+
 	// Run indexing
 	ctx := context.Background()
 	result, err := idx.Index(ctx, indexer.IndexOptions{
-		Force:   force,
-		Verbose: verbose,
+		Force:    force,
+		Verbose:  verbose,
+		Progress: progressCallback,
 	})
 	if err != nil {
 		logger.Error("v2 indexing failed", "error", err)
 		os.Exit(1)
+	}
+
+	// Finish progress bar if it exists
+	if progressBar != nil {
+		progressBar.Finish()
 	}
 
 	// Output results

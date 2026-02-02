@@ -17,6 +17,7 @@ import (
 	"codetect/internal/embedding"
 	"codetect/internal/indexer"
 	"codetect/internal/logging"
+	"codetect/internal/registry"
 	"codetect/internal/search/symbols"
 )
 

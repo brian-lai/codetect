@@ -17,6 +17,7 @@ import (
 	"codetect/internal/embedding"
 	"codetect/internal/indexer"
 	"codetect/internal/logging"
+	"codetect/internal/registry"
 	"codetect/internal/search/symbols"
 )
 
@@ -240,6 +241,9 @@ func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
 			"chunks_embedded", result.ChunksEmbedded,
 			"duration", result.Duration.Round(time.Millisecond))
 	}
+
+	// Update centralized registry with index statistics
+	updateRegistry(absPath, idx, cfg, verbose)
 }
 
 func runEmbed(args []string) {
@@ -752,6 +756,72 @@ func runStatsV2(absPath string, jsonOutput bool) {
 			fmt.Printf("  %-20s %d\n", lang+":", count)
 		}
 	}
+}
+
+// updateRegistry updates the centralized registry with index statistics.
+// This is a non-fatal operation - warnings are logged but indexing success is not affected.
+func updateRegistry(absPath string, idx *indexer.Indexer, cfg *indexer.Config, verbose bool) {
+	// Create or load registry
+	reg, err := registry.NewRegistry()
+	if err != nil {
+		logger.Warn("failed to load registry, skipping stats update", "error", err)
+		return
+	}
+
+	// Ensure project is registered
+	if err := reg.Add(absPath); err != nil {
+		logger.Warn("failed to register project", "error", err)
+		return
+	}
+
+	// Get index statistics
+	indexStats, err := idx.Stats()
+	if err != nil {
+		logger.Warn("failed to get index stats", "error", err)
+		return
+	}
+
+	// Map indexer stats to registry stats
+	// Note: v2 doesn't track symbols separately (uses AST chunks instead)
+	dbSize := int64(0)
+	if cfg.DBType == "sqlite" && cfg.DBPath != "" {
+		dbSize = getDBSize(cfg.DBPath)
+	}
+	// For PostgreSQL, we could query database size, but defer that to future enhancement
+
+	registryStats := registry.IndexStats{
+		Symbols:     0, // v2 uses chunks, not symbols
+		Embeddings:  indexStats.CachedEmbeddings,
+		DBSizeBytes: dbSize,
+	}
+
+	// Update registry with stats
+	if err := reg.UpdateStats(absPath, registryStats); err != nil {
+		logger.Warn("failed to update registry stats", "error", err)
+		return
+	}
+
+	// Set last indexed timestamp
+	if err := reg.SetLastIndexed(absPath); err != nil {
+		logger.Warn("failed to update last indexed timestamp", "error", err)
+		return
+	}
+
+	if verbose {
+		logger.Info("updated registry",
+			"embeddings", registryStats.Embeddings,
+			"db_size_bytes", registryStats.DBSizeBytes)
+	}
+}
+
+// getDBSize returns the size of the database file in bytes.
+// Returns 0 if the file doesn't exist or on error.
+func getDBSize(dbPath string) int64 {
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func printUsage() {

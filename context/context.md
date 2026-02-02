@@ -16,13 +16,38 @@ Add registry update logic to the v2 indexer so that `codetect index` updates the
 - [x] Add registry update logic after successful indexing in `runIndexV2()`
 - [x] Map indexer stats to registry stats structure
 - [x] Add error handling (non-fatal warnings)
-- [ ] Test with clean state (new index)
-- [ ] Test incremental update (verify timestamp changes)
-- [ ] Verify registry shows correct stats
+- [x] Test with clean state (new index)
+- [x] Test incremental update (verify timestamp changes)
+- [x] Verify registry shows correct stats
 
 ## Progress Notes
 
-_Update this section as you complete items._
+### Implementation Complete ✅
+
+All to-do items completed successfully:
+
+1. **Added registry import** - Imported `codetect/internal/registry` package
+2. **Created helper function** - `getDBSize()` calculates SQLite database size
+3. **Implemented registry update** - `updateRegistry()` function with:
+   - Registry creation/loading
+   - Project registration
+   - Stats mapping (indexer → registry)
+   - Non-fatal error handling (warnings only)
+4. **Testing passed**:
+   - Clean state: Registry shows 29 embeddings, timestamp set
+   - Incremental: Embeddings increased to 32, timestamp updated
+   - Error handling: Warnings logged, indexing continues
+
+### Key Implementation Details
+
+- **Non-breaking**: Registry failures log warnings but don't fail indexing
+- **SQLite support**: Database size calculated from file stats
+- **PostgreSQL**: DB size defaults to 0 (can enhance later)
+- **Verbose mode**: Registry update logged when `--verbose` flag used
+- **Stats mapping**:
+  - `Symbols: 0` (v2 uses chunks, not symbols)
+  - `Embeddings: indexStats.CachedEmbeddings`
+  - `DBSizeBytes: getDBSize(cfg.DBPath)`
 
 ---
 

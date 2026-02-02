@@ -60,23 +60,38 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 |------------|----------|---------|
 | Go 1.21+ | Yes | Building from source |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Yes | Keyword search |
-| [universal-ctags](https://github.com/universal-ctags/ctags) | No | Symbol indexing |
-| [Ollama](https://ollama.ai) | No | Semantic search |
+| [universal-ctags](https://github.com/universal-ctags/ctags) | No | Symbol indexing (v1 legacy mode only, v2 uses built-in tree-sitter) |
+| [Ollama](https://ollama.ai) | No | Semantic search (local embeddings) |
+
+**Note:** v2 (default) uses built-in tree-sitter parsers for symbol extraction. ctags is only needed if using `--v1` legacy mode.
 
 ## CLI Commands
 
 ### Main Commands
 
 ```bash
-codetect init      # Initialize in current directory
-codetect index     # Index symbols
-codetect embed     # Generate embeddings
-codetect doctor    # Check dependencies
-codetect stats     # Show index statistics
-codetect migrate   # Discover existing indexes and register them
-codetect update    # Update to latest version
-codetect help      # Show all commands
+codetect init        # Initialize in current directory (.mcp.json)
+codetect index       # Index with v2 (AST-based, incremental, 15x faster)
+codetect index --v1  # Index with v1 (ctags-based, legacy, deprecated)
+codetect embed       # Generate embeddings (sequential)
+codetect embed -j 10 # Generate embeddings in parallel (10 workers, 3.3x faster)
+codetect doctor      # Check dependencies and configuration
+codetect stats       # Show v2 index statistics
+codetect stats --v1  # Show v1 index statistics (if v1 index exists)
+codetect migrate     # Discover existing indexes and register them
+codetect update      # Update to latest version
+codetect help        # Show all commands
 ```
+
+**v2 features (default):**
+- ⚡ Incremental indexing with Merkle tree change detection (~2s vs ~30s)
+- 🧬 AST-based chunking preserves semantic boundaries
+- 📦 Content-addressed caching (95% cache hit rate)
+- 🔄 Parallel embedding with `-j` flag (3.3x faster)
+
+**v1 legacy mode:**
+- Use `--v1` flag for ctags-based indexing (deprecated, removed in v3.0.0)
+- See [v1 documentation](docs/v1/README.md) for details
 
 ### Daemon Commands
 
@@ -272,22 +287,6 @@ See [MCP Compatibility](docs/mcp-compatibility.md) for details and roadmap for n
 - [x] PostgreSQL + pgvector support for scalable vector search
 - [ ] HTTP API for non-MCP tools
 - [ ] CLI query mode
-
-## Development
-
-```bash
-# Build
-make build
-
-# Run tests
-make test
-
-# Index this repo
-make index && make embed
-
-# Check dependencies
-make doctor
-```
 
 ## License
 

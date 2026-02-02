@@ -17,7 +17,7 @@ import (
 
 var logger *slog.Logger
 
-const version = "2.0.2"
+const version = "2.1.0"
 
 func main() {
 	logger = logging.Default("codetect-eval")

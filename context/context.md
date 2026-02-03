@@ -41,10 +41,10 @@ Validate technical approach and gather specifications for Phase 1 features:
 - [x] Document design in context/data/2026-02-03-http-api-design.md
 
 ### Step 5: .codetectignore Specification
-- [ ] Document file format (gitignore syntax)
-- [ ] Specify precedence rules
-- [ ] Write common use case examples
-- [ ] Create specification doc: context/data/2026-02-03-codetectignore-spec.md
+- [x] Document file format (gitignore syntax)
+- [x] Specify precedence rules
+- [x] Write common use case examples
+- [x] Create specification doc: context/data/2026-02-03-codetectignore-spec.md
 
 ### Step 6: Consolidate Findings
 - [ ] Review all research deliverables
@@ -186,6 +186,42 @@ Validate technical approach and gather specifications for Phase 1 features:
 - Cloud: Docker + Kubernetes manifests provided
 
 **Deliverable:** context/data/2026-02-03-http-api-design.md
+
+---
+
+### Step 5 Complete: .codetectignore Specification ✅
+
+**Key Features:**
+
+1. **File Format:**
+   - .gitignore-compatible syntax (no learning curve)
+   - Supports wildcards: `*`, `**`, `?`, `[a-z]`
+   - Negation patterns: `!vendor/important/`
+   - Comments and blank lines
+
+2. **Independence from .gitignore:**
+   - Can exclude tracked files (e.g., `*.generated.go`)
+   - Can include gitignored files (e.g., `vendor/`)
+   - Four scenarios: tracked/indexed, tracked/excluded, ignored/indexed, ignored/excluded
+
+3. **Hierarchical Loading:**
+   - Project `.codetectignore` (highest priority)
+   - Global `~/.codetectignore` (applies to all projects)
+   - Patterns merged (OR logic)
+
+4. **Common Use Cases:**
+   - Exclude generated code (`*.generated.ts`, `*_pb.go`)
+   - Exclude minified files (`*.min.js`, `dist/`)
+   - Exclude test fixtures (`fixtures/`, `testdata/`)
+   - Exclude vendor with exceptions (`vendor/`, `!vendor/critical/`)
+   - Exclude large data files (`*.csv`, `!config.json`)
+
+5. **Implementation:**
+   - Library: `github.com/sabhiram/go-gitignore` (mature, fast)
+   - Integration: File scanning + embedding stages
+   - CLI: `--ignore-file`, `--no-ignore` flags
+
+**Deliverable:** context/data/2026-02-03-codetectignore-spec.md
 
 ---
 

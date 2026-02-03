@@ -2,9 +2,11 @@ package hybrid
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"codetect/internal/embedding"
+	"codetect/internal/reranker"
 	"codetect/internal/search/keyword"
 )
 
@@ -33,13 +35,20 @@ type SearchResult struct {
 // Searcher performs hybrid searches combining keyword and semantic results
 type Searcher struct {
 	semantic *embedding.SemanticSearcher
+	reranker reranker.Reranker
 }
 
 // NewSearcher creates a new hybrid searcher
 func NewSearcher(semantic *embedding.SemanticSearcher) *Searcher {
 	return &Searcher{
 		semantic: semantic,
+		reranker: nil, // Reranker is optional, set via SetReranker
 	}
+}
+
+// SetReranker sets the reranker for this searcher
+func (s *Searcher) SetReranker(r reranker.Reranker) {
+	s.reranker = r
 }
 
 // Config configures hybrid search behavior
@@ -49,6 +58,8 @@ type Config struct {
 	KeywordWeight   float32 // Weight for keyword results (default 0.6)
 	SemanticWeight  float32 // Weight for semantic results (default 0.4)
 	SnippetFn       func(path string, start, end int) string
+	Rerank          bool    // Enable cross-encoder reranking (default false)
+	RerankTopK      int     // Number of results to return after reranking (default 20)
 }
 
 // DefaultConfig returns the default hybrid search configuration
@@ -158,10 +169,21 @@ func (s *Searcher) Search(ctx context.Context, query, dir string, config Config)
 		return results[i].Score > results[j].Score
 	})
 
-	// Limit total results
+	// Limit total results before reranking
 	maxResults := config.KeywordLimit + config.SemanticLimit
 	if len(results) > maxResults {
 		results = results[:maxResults]
+	}
+
+	// Apply reranking if enabled
+	if config.Rerank && s.reranker != nil && len(results) > 0 {
+		rerankedResults, err := s.rerankResults(query, results, config.RerankTopK)
+		if err != nil {
+			// Graceful fallback: log error and continue with original results
+			fmt.Printf("Warning: reranking failed, using original results: %v\n", err)
+		} else {
+			results = rerankedResults
+		}
 	}
 
 	return &SearchResult{
@@ -170,6 +192,56 @@ func (s *Searcher) Search(ctx context.Context, query, dir string, config Config)
 		SemanticCount:   semanticCount,
 		SemanticEnabled: semanticEnabled,
 	}, nil
+}
+
+// rerankResults applies cross-encoder reranking to search results
+func (s *Searcher) rerankResults(query string, results []Result, topK int) ([]Result, error) {
+	if topK <= 0 {
+		topK = 20
+	}
+
+	// Extract snippets/text for reranking
+	candidates := make([]string, len(results))
+	for i, r := range results {
+		// Use snippet if available, otherwise use path as fallback
+		if r.Snippet != "" {
+			candidates[i] = r.Snippet
+		} else {
+			candidates[i] = fmt.Sprintf("%s (lines %d-%d)", r.Path, r.StartLine, r.EndLine)
+		}
+	}
+
+	// Rerank candidates
+	scored, err := s.reranker.Rerank(query, candidates, topK)
+	if err != nil {
+		return nil, fmt.Errorf("reranking failed: %w", err)
+	}
+
+	// Map reranked results back to original Result structs
+	reranked := make([]Result, 0, len(scored))
+	for i, sr := range scored {
+		// Find original result by matching snippet/text
+		for _, orig := range results {
+			origText := orig.Snippet
+			if origText == "" {
+				origText = fmt.Sprintf("%s (lines %d-%d)", orig.Path, orig.StartLine, orig.EndLine)
+			}
+			if origText == sr.Text {
+				// Update score with reranker score
+				rerankedResult := orig
+				rerankedResult.Score = float32(sr.Score)
+				reranked = append(reranked, rerankedResult)
+				break
+			}
+		}
+
+		// Safety check: if we found fewer results than expected, stop
+		if i >= len(results) {
+			break
+		}
+	}
+
+	return reranked, nil
 }
 
 // resultKey creates a unique key for deduplication

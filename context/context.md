@@ -33,11 +33,11 @@ Implement cross-encoder reranking to improve search quality by 10-15% through tw
 - [x] Implement batch scoring (parallel goroutines for speed)
 
 ### Step 3: Update Hybrid Search v2 with Reranking
-- [ ] Add `Rerank bool` field to `HybridSearchV2Request`
-- [ ] Integrate reranker after RRF fusion
-- [ ] Implement reranking pipeline: retrieve → fuse → rerank → return top-K
-- [ ] Add graceful fallback if reranker unavailable
-- [ ] Measure latency for each stage
+- [x] Add `Rerank bool` field to `HybridSearchV2Request`
+- [x] Integrate reranker after RRF fusion
+- [x] Implement reranking pipeline: retrieve → fuse → rerank → return top-K
+- [x] Add graceful fallback if reranker unavailable
+- [x] Measure latency for each stage
 
 ### Step 4: Add MCP Tool Support
 - [ ] Update `hybrid_search_v2` tool schema to include `rerank` parameter

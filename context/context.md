@@ -25,12 +25,12 @@ Implement cross-encoder reranking to improve search quality by 10-15% through tw
 - [x] Add error handling for unavailable rerankers
 
 ### Step 2: Implement Qwen3-Reranker Integration
-- [ ] Create `Qwen3Reranker` struct with Ollama client
-- [ ] Implement `score(query, document)` method using `/api/generate`
-- [ ] Design scoring prompt for relevance (0.0-1.0 scale)
-- [ ] Parse float score from Ollama response
-- [ ] Add timeout handling (5s per candidate)
-- [ ] Implement batch scoring (parallel goroutines for speed)
+- [x] Create `Qwen3Reranker` struct with Ollama client
+- [x] Implement `score(query, document)` method using `/api/generate`
+- [x] Design scoring prompt for relevance (0.0-1.0 scale)
+- [x] Parse float score from Ollama response
+- [x] Add timeout handling (5s per candidate)
+- [x] Implement batch scoring (parallel goroutines for speed)
 
 ### Step 3: Update Hybrid Search v2 with Reranking
 - [ ] Add `Rerank bool` field to `HybridSearchV2Request`

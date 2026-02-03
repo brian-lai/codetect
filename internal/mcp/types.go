@@ -11,7 +11,7 @@ type Request struct {
 
 type Response struct {
 	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id,omitempty"`
+	ID      interface{} `json:"id"` // Required by JSON-RPC, even for errors
 	Result  interface{} `json:"result,omitempty"`
 	Error   *Error      `json:"error,omitempty"`
 }

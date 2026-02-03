@@ -19,10 +19,10 @@ Implement cross-encoder reranking to improve search quality by 10-15% through tw
 ## To-Do List
 
 ### Step 1: Add Reranker Infrastructure
-- [ ] Define `Reranker` interface with `Rerank(query, candidates, topK)` method
-- [ ] Create `ScoredResult` type (text + score)
-- [ ] Implement factory function `NewReranker(provider string)`
-- [ ] Add error handling for unavailable rerankers
+- [x] Define `Reranker` interface with `Rerank(query, candidates, topK)` method
+- [x] Create `ScoredResult` type (text + score)
+- [x] Implement factory function `NewReranker(provider string)`
+- [x] Add error handling for unavailable rerankers
 
 ### Step 2: Implement Qwen3-Reranker Integration
 - [ ] Create `Qwen3Reranker` struct with Ollama client

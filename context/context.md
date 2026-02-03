@@ -34,11 +34,11 @@ Validate technical approach and gather specifications for Phase 1 features:
 - [ ] Document results in research file
 
 ### Step 4: HTTP API Design
-- [ ] Define endpoint structure and paths
-- [ ] Map all MCP tools to HTTP endpoints
-- [ ] Design authentication scheme
-- [ ] Create OpenAPI 3.0 spec
-- [ ] Document design in context/data/2026-02-03-http-api-design.md
+- [x] Define endpoint structure and paths
+- [x] Map all MCP tools to HTTP endpoints
+- [x] Design authentication scheme
+- [x] Create OpenAPI 3.0 spec
+- [x] Document design in context/data/2026-02-03-http-api-design.md
 
 ### Step 5: .codetectignore Specification
 - [ ] Document file format (gitignore syntax)
@@ -140,6 +140,52 @@ Validate technical approach and gather specifications for Phase 1 features:
 - [Reranking with Ollama and Qwen3](https://medium.com/@rosgluk/reranking-documents-with-ollama-and-qwen3-reranker-model-in-go-6dc9c2fb5f0b)
 - [Qwen3 Models on Ollama](https://www.glukhov.org/post/2025/06/qwen3-embedding-qwen3-reranker-on-ollama/)
 - [MS MARCO Cross-Encoders](https://www.sbert.net/docs/pretrained-models/ce-msmarco.html)
+
+---
+
+### Step 4 Complete: HTTP API Design ✅
+
+**Key Features:**
+
+1. **10 REST Endpoints:**
+   - 3 search endpoints (keyword, semantic, hybrid)
+   - 2 symbol endpoints (find, list)
+   - 1 file endpoint (get with line-range)
+   - 2 project endpoints (list, status)
+   - 2 utility endpoints (health, version)
+
+2. **Authentication Strategy:**
+   - Local mode: No auth (localhost-only binding)
+   - Cloud mode: API key authentication (`Authorization: Bearer`)
+   - Rate limiting: Token bucket algorithm (60 req/min default)
+
+3. **API Design Principles:**
+   - REST-first (familiar, cacheable, tool-friendly)
+   - JSON everything (requests, responses, errors)
+   - RFC 7807 error format (Problem Details)
+   - URL-based versioning (`/api/v1/...`)
+
+4. **OpenAPI 3.0 Spec:**
+   - Full specification template provided
+   - Enables automatic client generation
+   - Supports Swagger UI / Redoc documentation
+
+5. **Integration Examples:**
+   - cURL commands
+   - Python client library
+   - TypeScript auto-generated client
+   - VS Code extension proof-of-concept
+
+**Architecture:**
+- Chi router (lightweight, stdlib-compatible)
+- Layer architecture (HTTP → Service → MCP Adapter → MCP Server)
+- Wraps existing MCP tools (no duplication)
+
+**Deployment:**
+- Local: `codetect serve --port 8765`
+- Cloud: Docker + Kubernetes manifests provided
+
+**Deliverable:** context/data/2026-02-03-http-api-design.md
 
 ---
 

@@ -22,9 +22,9 @@ Validate technical approach and gather specifications for Phase 1 features:
 - [x] Document decision rationale in progress notes
 
 ### Step 2: Cross-Encoder Reranking Research
-- [ ] Research cross-encoder models available in Ollama
-- [ ] If none, evaluate sentence-transformers integration
-- [ ] Document findings in context/data/2026-02-03-cross-encoder-reranking-research.md
+- [x] Research cross-encoder models available in Ollama
+- [x] If none, evaluate sentence-transformers integration
+- [x] Document findings in context/data/2026-02-03-cross-encoder-reranking-research.md
 
 ### Step 3: Cross-Encoder Prototype
 - [ ] Build proof-of-concept reranking script
@@ -102,6 +102,44 @@ Validate technical approach and gather specifications for Phase 1 features:
 **Total Phase 1 Timeline:** 5-7 weeks (down from 8-12 weeks)
 
 **Future Work:** Evaluate dual-model in Phase 2 if user feedback indicates code search quality is insufficient.
+
+---
+
+### Step 2 Complete: Cross-Encoder Reranking Research ✅
+
+**Key Findings:**
+
+1. **Ollama Support: YES!** ✅
+   - Qwen3-Reranker models available (0.6B, 4B, 8B)
+   - Native Go integration possible
+   - Code-aware training (supports programming languages)
+
+2. **Performance Expectations:**
+   - Industry standard: 10-15% MRR improvement
+   - Latency target: <200ms end-to-end (retrieve + rerank)
+   - Quality: MTEB #1 ranking (70.58 score)
+
+3. **Integration Strategy:**
+   - Primary: Qwen3-Reranker via Ollama (native Go)
+   - Fallback: MS MARCO MiniLM via Python (optional)
+   - Workaround needed: No native `/rerank` API in Ollama
+
+4. **Recommended Model:**
+   - **Qwen3-Reranker-0.6B** for prototyping (fastest, ~700MB)
+   - Upgrade to 4B if quality insufficient
+   - MS MARCO MiniLM as Python fallback (proven quality, 90MB)
+
+**Next Steps:**
+- Build prototype to validate >5% improvement
+- Test on 10-20 codetect queries
+- Measure actual latency
+
+**Deliverable:** context/data/2026-02-03-cross-encoder-reranking-research.md
+
+**Sources:**
+- [Reranking with Ollama and Qwen3](https://medium.com/@rosgluk/reranking-documents-with-ollama-and-qwen3-reranker-model-in-go-6dc9c2fb5f0b)
+- [Qwen3 Models on Ollama](https://www.glukhov.org/post/2025/06/qwen3-embedding-qwen3-reranker-on-ollama/)
+- [MS MARCO Cross-Encoders](https://www.sbert.net/docs/pretrained-models/ce-msmarco.html)
 
 ---
 

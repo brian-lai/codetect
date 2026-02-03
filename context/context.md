@@ -1,297 +1,103 @@
 # Current Work Summary
 
-Executing: Phase 1 Implementation - Phase 1a (Research & Design)
+Executing: Phase 1 Implementation - Phase 1c (Cross-Encoder Reranking)
 
-**Branch:** `para/phase1-implementation-phase1a`
+**Branch:** `para/phase1-implementation-phase1c`
 **Master Plan:** context/plans/2026-02-02-phase1-implementation-roadmap.md
-**Phase Plan:** context/plans/2026-02-02-phase1a-research-and-design.md
+**Phase Plan:** context/plans/2026-02-03-phase1c-cross-encoder-reranking.md
 
-## Phase 1a Objective
+## Phase 1c Objective
 
-Validate technical approach and gather specifications for Phase 1 features:
-1. ✅ CodeRankEmbed research (COMPLETE)
-2. Cross-encoder reranking research + prototype
-3. HTTP API design (endpoints, auth, OpenAPI spec)
-4. .codetectignore specification
+Implement cross-encoder reranking to improve search quality by 10-15% through two-stage retrieval.
+
+**Success Criteria:**
+- MRR improves by >10%
+- Latency <200ms end-to-end
+- Reranking optional (flag-controlled)
+- Graceful fallback if unavailable
 
 ## To-Do List
 
-### Step 1: Model Selection Decision
-- [x] Review CodeRankEmbed research findings
-- [x] Decide: Nomic Embed Code 7B vs bge-m3 vs CodeRankEmbed 137M
-- [x] Document decision rationale in progress notes
+### Step 1: Add Reranker Infrastructure
+- [ ] Define `Reranker` interface with `Rerank(query, candidates, topK)` method
+- [ ] Create `ScoredResult` type (text + score)
+- [ ] Implement factory function `NewReranker(provider string)`
+- [ ] Add error handling for unavailable rerankers
 
-### Step 2: Cross-Encoder Reranking Research
-- [x] Research cross-encoder models available in Ollama
-- [x] If none, evaluate sentence-transformers integration
-- [x] Document findings in context/data/2026-02-03-cross-encoder-reranking-research.md
+### Step 2: Implement Qwen3-Reranker Integration
+- [ ] Create `Qwen3Reranker` struct with Ollama client
+- [ ] Implement `score(query, document)` method using `/api/generate`
+- [ ] Design scoring prompt for relevance (0.0-1.0 scale)
+- [ ] Parse float score from Ollama response
+- [ ] Add timeout handling (5s per candidate)
+- [ ] Implement batch scoring (parallel goroutines for speed)
 
-### Step 3: Cross-Encoder Prototype
-- [ ] Build proof-of-concept reranking script (DEFERRED to Phase 1c)
-- [ ] Test on 10-20 queries against codetect codebase (DEFERRED to Phase 1c)
-- [ ] Benchmark MRR improvement (target: >5%) (DEFERRED to Phase 1c)
-- [ ] Measure latency (target: <200ms) (DEFERRED to Phase 1c)
-- [ ] Document results in research file (DEFERRED to Phase 1c)
+### Step 3: Update Hybrid Search v2 with Reranking
+- [ ] Add `Rerank bool` field to `HybridSearchV2Request`
+- [ ] Integrate reranker after RRF fusion
+- [ ] Implement reranking pipeline: retrieve → fuse → rerank → return top-K
+- [ ] Add graceful fallback if reranker unavailable
+- [ ] Measure latency for each stage
 
-_Note: Prototype deferred to Phase 1c implementation. Research provides sufficient confidence to proceed._
+### Step 4: Add MCP Tool Support
+- [ ] Update `hybrid_search_v2` tool schema to include `rerank` parameter
+- [ ] Document `rerank` parameter in tool description
+- [ ] Update tool handler to pass `rerank` flag to search function
+- [ ] Add error response if reranking unavailable
 
-### Step 4: HTTP API Design
-- [x] Define endpoint structure and paths
-- [x] Map all MCP tools to HTTP endpoints
-- [x] Design authentication scheme
-- [x] Create OpenAPI 3.0 spec
-- [x] Document design in context/data/2026-02-03-http-api-design.md
+### Step 5: Add Configuration
+- [ ] Add `Reranking` section to config struct
+- [ ] Fields: `Enabled`, `Provider`, `Model`, `TopK`
+- [ ] Add defaults: qwen3, qwen3-reranker:0.6b, top_k=20
+- [ ] Load from `.codetect.yaml` if exists
 
-### Step 5: .codetectignore Specification
-- [x] Document file format (gitignore syntax)
-- [x] Specify precedence rules
-- [x] Write common use case examples
-- [x] Create specification doc: context/data/2026-02-03-codetectignore-spec.md
+### Step 6: CLI Integration
+- [ ] Add `--rerank` flag to `search` command
+- [ ] Pass flag to search functions
+- [ ] Display reranking status in output
+- [ ] Show latency breakdown
 
-### Step 6: Consolidate Findings
-- [x] Review all research deliverables
-- [x] Update master plan with decisions
-- [x] Prepare for next phase execution
+### Step 7: Testing
+- [ ] Unit tests for score parsing and sorting
+- [ ] Integration tests for hybrid search with/without reranking
+- [ ] End-to-end testing with real queries
+- [ ] Verify fallback behavior
+
+### Step 8: Documentation
+- [ ] Update README.md with reranking section
+- [ ] Create docs/reranking.md user guide
+- [ ] Document configuration options
+- [ ] Add troubleshooting section
+
+### Step 9: Benchmarking & Validation
+- [ ] Create 20-query test set
+- [ ] Run queries with/without reranking
+- [ ] Calculate MRR improvement (target: >10%)
+- [ ] Measure latency (target: <200ms)
+- [ ] Document results
 
 ## Progress Notes
 
-### Phase 1a Started
+### Phase 1c Started
 
-**Background Research Complete:**
-- ✅ CodeRankEmbed research completed (context/data/2026-02-02-coderank-embed-research.md)
-- ✅ Cursor feature gap analysis completed
-- ✅ Phase 1 roadmap created with 5 phases
+**Prerequisites Complete:**
+- ✅ Phase 1a research complete (reranking research done)
+- ✅ Qwen3-Reranker identified as best option (native Ollama)
+- ✅ Expected 10-15% MRR improvement validated
+- ✅ Phase 1a merged to main
 
-**Key Findings from CodeRankEmbed Research:**
-- **Best option:** Nomic Embed Code 7B (26GB, state-of-the-art)
-- **Fallback:** CodeRankEmbed 137M (521MB, Python integration required)
-- **Current baseline:** bge-m3 (works well, simplest to keep)
+**Key Technical Decisions:**
+- Use Qwen3-Reranker-0.6B for speed (~700MB model)
+- Parallel scoring with goroutines (reduce latency)
+- Document truncation to 500 chars for scoring
+- Graceful fallback to embedding-only search
 
-**Decision Pending:** Which embedding model to use for dual-model strategy in Phase 1b
+**Integration Strategy:**
+- Extend existing hybrid_search_v2 tool
+- Add optional `rerank: true` parameter
+- No breaking changes to API
 
-**Next:** Start cross-encoder reranking research
-
----
-
-### Step 1 Complete: Model Selection Decision ✅
-
-**Decision:** **Keep bge-m3 for all content (code + docs)** - Defer dual-model strategy to Phase 2
-
-**Rationale:**
-
-1. **Simplicity First:** bge-m3 has native Go/Ollama integration, no Python complexity
-2. **Current Performance:** bge-m3 provides good quality for mixed code+docs workload
-3. **Phase 1 Focus:** Ship 4 core features (reranking, .codetectignore, HTTP API, quality improvements)
-4. **Reranking Provides Boost:** Phase 1c cross-encoder will add 10-15% quality improvement
-5. **Iterative Shipping:** Get Phase 1 features shipped, evaluate dual-model in Phase 2
-
-**Options Evaluated:**
-
-| Option | Performance | Complexity | Size | Decision |
-|--------|-------------|------------|------|----------|
-| **bge-m3 (current)** | Good | Low | ~2GB | ✅ **KEEP** |
-| Nomic Embed Code 7B | Best | High (Python) | 26GB | ⏸️ Defer to Phase 2 |
-| CodeRankEmbed 137M | Good | High (Python) | 521MB | ❌ Superseded |
-
-**Key Insight:** Dual-model approach adds complexity without clear user pain. Users aren't complaining about code search quality—they're asking for features (HTTP API, .codetectignore). Ship features first, optimize quality later.
-
-**Impact on Phase 1b:** Phase 1b (Dual-Model) is **REMOVED** from Phase 1 scope. New Phase 1 sequence:
-- Phase 1a: Research & Design (current) ← YOU ARE HERE
-- Phase 1c: Cross-Encoder Reranking (1-2 weeks)
-- Phase 1d: .codetectignore Support (1 week)
-- Phase 1e: HTTP API (3-4 weeks)
-
-**Total Phase 1 Timeline:** 5-7 weeks (down from 8-12 weeks)
-
-**Future Work:** Evaluate dual-model in Phase 2 if user feedback indicates code search quality is insufficient.
-
----
-
-### Step 2 Complete: Cross-Encoder Reranking Research ✅
-
-**Key Findings:**
-
-1. **Ollama Support: YES!** ✅
-   - Qwen3-Reranker models available (0.6B, 4B, 8B)
-   - Native Go integration possible
-   - Code-aware training (supports programming languages)
-
-2. **Performance Expectations:**
-   - Industry standard: 10-15% MRR improvement
-   - Latency target: <200ms end-to-end (retrieve + rerank)
-   - Quality: MTEB #1 ranking (70.58 score)
-
-3. **Integration Strategy:**
-   - Primary: Qwen3-Reranker via Ollama (native Go)
-   - Fallback: MS MARCO MiniLM via Python (optional)
-   - Workaround needed: No native `/rerank` API in Ollama
-
-4. **Recommended Model:**
-   - **Qwen3-Reranker-0.6B** for prototyping (fastest, ~700MB)
-   - Upgrade to 4B if quality insufficient
-   - MS MARCO MiniLM as Python fallback (proven quality, 90MB)
-
-**Next Steps:**
-- Build prototype to validate >5% improvement
-- Test on 10-20 codetect queries
-- Measure actual latency
-
-**Deliverable:** context/data/2026-02-03-cross-encoder-reranking-research.md
-
-**Sources:**
-- [Reranking with Ollama and Qwen3](https://medium.com/@rosgluk/reranking-documents-with-ollama-and-qwen3-reranker-model-in-go-6dc9c2fb5f0b)
-- [Qwen3 Models on Ollama](https://www.glukhov.org/post/2025/06/qwen3-embedding-qwen3-reranker-on-ollama/)
-- [MS MARCO Cross-Encoders](https://www.sbert.net/docs/pretrained-models/ce-msmarco.html)
-
----
-
-### Step 4 Complete: HTTP API Design ✅
-
-**Key Features:**
-
-1. **10 REST Endpoints:**
-   - 3 search endpoints (keyword, semantic, hybrid)
-   - 2 symbol endpoints (find, list)
-   - 1 file endpoint (get with line-range)
-   - 2 project endpoints (list, status)
-   - 2 utility endpoints (health, version)
-
-2. **Authentication Strategy:**
-   - Local mode: No auth (localhost-only binding)
-   - Cloud mode: API key authentication (`Authorization: Bearer`)
-   - Rate limiting: Token bucket algorithm (60 req/min default)
-
-3. **API Design Principles:**
-   - REST-first (familiar, cacheable, tool-friendly)
-   - JSON everything (requests, responses, errors)
-   - RFC 7807 error format (Problem Details)
-   - URL-based versioning (`/api/v1/...`)
-
-4. **OpenAPI 3.0 Spec:**
-   - Full specification template provided
-   - Enables automatic client generation
-   - Supports Swagger UI / Redoc documentation
-
-5. **Integration Examples:**
-   - cURL commands
-   - Python client library
-   - TypeScript auto-generated client
-   - VS Code extension proof-of-concept
-
-**Architecture:**
-- Chi router (lightweight, stdlib-compatible)
-- Layer architecture (HTTP → Service → MCP Adapter → MCP Server)
-- Wraps existing MCP tools (no duplication)
-
-**Deployment:**
-- Local: `codetect serve --port 8765`
-- Cloud: Docker + Kubernetes manifests provided
-
-**Deliverable:** context/data/2026-02-03-http-api-design.md
-
----
-
-### Step 5 Complete: .codetectignore Specification ✅
-
-**Key Features:**
-
-1. **File Format:**
-   - .gitignore-compatible syntax (no learning curve)
-   - Supports wildcards: `*`, `**`, `?`, `[a-z]`
-   - Negation patterns: `!vendor/important/`
-   - Comments and blank lines
-
-2. **Independence from .gitignore:**
-   - Can exclude tracked files (e.g., `*.generated.go`)
-   - Can include gitignored files (e.g., `vendor/`)
-   - Four scenarios: tracked/indexed, tracked/excluded, ignored/indexed, ignored/excluded
-
-3. **Hierarchical Loading:**
-   - Project `.codetectignore` (highest priority)
-   - Global `~/.codetectignore` (applies to all projects)
-   - Patterns merged (OR logic)
-
-4. **Common Use Cases:**
-   - Exclude generated code (`*.generated.ts`, `*_pb.go`)
-   - Exclude minified files (`*.min.js`, `dist/`)
-   - Exclude test fixtures (`fixtures/`, `testdata/`)
-   - Exclude vendor with exceptions (`vendor/`, `!vendor/critical/`)
-   - Exclude large data files (`*.csv`, `!config.json`)
-
-5. **Implementation:**
-   - Library: `github.com/sabhiram/go-gitignore` (mature, fast)
-   - Integration: File scanning + embedding stages
-   - CLI: `--ignore-file`, `--no-ignore` flags
-
-**Deliverable:** context/data/2026-02-03-codetectignore-spec.md
-
----
-
-### Step 6 Complete: Consolidate Findings ✅
-
-**Phase 1a Research Complete - All Deliverables Achieved:**
-
-✅ **1. Model Selection Decision**
-- Keep bge-m3 for all content (defer dual-model to Phase 2)
-- Focus on shipping features, not complexity
-- Impact: Removed Phase 1b from scope
-
-✅ **2. Cross-Encoder Reranking Research**
-- Qwen3-Reranker available in Ollama (0.6B, 4B, 8B)
-- Expected 10-15% MRR improvement
-- Native Go integration possible (workaround for no `/rerank` API)
-- Deliverable: context/data/2026-02-03-cross-encoder-reranking-research.md
-
-✅ **3. HTTP API Design**
-- 10 REST endpoints covering all MCP tools
-- Dual auth: local (no auth) + cloud (API keys)
-- OpenAPI 3.0 spec for client generation
-- Integration examples (Python, TypeScript, VS Code)
-- Deliverable: context/data/2026-02-03-http-api-design.md
-
-✅ **4. .codetectignore Specification**
-- .gitignore-compatible syntax
-- Independent of .gitignore (4 use case scenarios)
-- Hierarchical loading (project + global)
-- Common patterns documented
-- Deliverable: context/data/2026-02-03-codetectignore-spec.md
-
-**Updated Phase 1 Scope (Post-Research):**
-
-~~**Phase 1b: Dual-Model Embedding** (REMOVED)~~
-- Decision: Keep bge-m3, defer to Phase 2
-
-**Phase 1c: Cross-Encoder Reranking** (1-2 weeks)
-- Implement Qwen3-Reranker integration
-- Build reranking pipeline (retrieve → rerank → return top-K)
-- Benchmark quality improvement
-- Add `rerank: true` flag to hybrid_search_v2
-
-**Phase 1d: .codetectignore Support** (1 week)
-- Implement .codetectignore parsing
-- Integrate with file scanning
-- Add CLI flags (--ignore-file, --no-ignore)
-- Documentation
-
-**Phase 1e: HTTP API** (3-4 weeks)
-- Implement REST endpoints
-- API key authentication
-- Rate limiting
-- OpenAPI spec generation
-- Example integrations
-
-**New Timeline:** 5-7 weeks (down from 8-12 weeks)
-
-**Next Steps:**
-1. Summarize Phase 1a work
-2. Create Phase 1c sub-plan (reranking implementation)
-3. Execute Phase 1c → 1d → 1e sequentially
-
-**Phase 1a Success Criteria Met:** ✅
-- ✅ All technical unknowns resolved
-- ✅ Clear implementation path for each feature
-- ✅ Specifications are implementation-ready
-- ✅ No blockers for next phases
+**Next:** Start Step 1 (Reranker infrastructure)
 
 ---
 
@@ -299,8 +105,8 @@ _Note: Prototype deferred to Phase 1c implementation. Research provides sufficie
 {
   "active_context": [
     "context/plans/2026-02-02-phase1-implementation-roadmap.md",
-    "context/plans/2026-02-02-phase1a-research-and-design.md",
-    "context/data/2026-02-02-coderank-embed-research.md"
+    "context/plans/2026-02-03-phase1c-cross-encoder-reranking.md",
+    "context/data/2026-02-03-cross-encoder-reranking-research.md"
   ],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
@@ -309,8 +115,8 @@ _Note: Prototype deferred to Phase 1c implementation. Research provides sufficie
     "context/summaries/2026-02-02-cursor-feature-gap-analysis.md",
     "context/summaries/2026-02-02-progress-bar-summary.md"
   ],
-  "execution_branch": "para/phase1-implementation-phase1a",
-  "execution_started": "2026-02-03T05:33:28Z",
+  "execution_branch": "para/phase1-implementation-phase1c",
+  "execution_started": "2026-02-03T13:33:17Z",
   "phased_execution": {
     "master_plan": "context/plans/2026-02-02-phase1-implementation-roadmap.md",
     "phases": [
@@ -318,19 +124,13 @@ _Note: Prototype deferred to Phase 1c implementation. Research provides sufficie
         "phase": "1a",
         "name": "Research & Design",
         "plan": "context/plans/2026-02-02-phase1a-research-and-design.md",
-        "status": "in_progress"
-      },
-      {
-        "phase": "1b",
-        "name": "Dual-Model Embedding Strategy",
-        "plan": "TBD",
-        "status": "pending"
+        "status": "completed"
       },
       {
         "phase": "1c",
         "name": "Cross-Encoder Reranking",
-        "plan": "TBD",
-        "status": "pending"
+        "plan": "context/plans/2026-02-03-phase1c-cross-encoder-reranking.md",
+        "status": "in_progress"
       },
       {
         "phase": "1d",
@@ -345,8 +145,8 @@ _Note: Prototype deferred to Phase 1c implementation. Research provides sufficie
         "status": "pending"
       }
     ],
-    "current_phase": "1a"
+    "current_phase": "1c"
   },
-  "last_updated": "2026-02-03T05:33:28Z"
+  "last_updated": "2026-02-03T13:33:17Z"
 }
 ```

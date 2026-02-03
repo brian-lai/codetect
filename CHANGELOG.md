@@ -5,6 +5,21 @@ All notable changes to codetect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-02-02
+
+### Fixed
+
+- **MCP server response ID always present** (#46)
+  - Removed `omitempty` tag from `Response.ID` field in MCP protocol implementation
+  - Per JSON-RPC 2.0 specification, the `id` field must always be present in responses
+  - Fixes issue where multiple Claude Code sessions from different projects couldn't connect simultaneously
+  - Previously, only one session could successfully connect and use MCP tools
+  - Now multiple concurrent sessions can properly correlate requests/responses
+
+**Impact:** Users can now run multiple Claude Code sessions from different project directories, all connecting to the same codetect MCP server without conflicts.
+
+---
+
 ## [2.0.2] - 2026-02-01
 
 ### Fixed

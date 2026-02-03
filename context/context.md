@@ -17,9 +17,9 @@ Validate technical approach and gather specifications for Phase 1 features:
 ## To-Do List
 
 ### Step 1: Model Selection Decision
-- [ ] Review CodeRankEmbed research findings
-- [ ] Decide: Nomic Embed Code 7B vs bge-m3 vs CodeRankEmbed 137M
-- [ ] Document decision rationale in progress notes
+- [x] Review CodeRankEmbed research findings
+- [x] Decide: Nomic Embed Code 7B vs bge-m3 vs CodeRankEmbed 137M
+- [x] Document decision rationale in progress notes
 
 ### Step 2: Cross-Encoder Reranking Research
 - [ ] Research cross-encoder models available in Ollama
@@ -68,6 +68,40 @@ Validate technical approach and gather specifications for Phase 1 features:
 **Decision Pending:** Which embedding model to use for dual-model strategy in Phase 1b
 
 **Next:** Start cross-encoder reranking research
+
+---
+
+### Step 1 Complete: Model Selection Decision ✅
+
+**Decision:** **Keep bge-m3 for all content (code + docs)** - Defer dual-model strategy to Phase 2
+
+**Rationale:**
+
+1. **Simplicity First:** bge-m3 has native Go/Ollama integration, no Python complexity
+2. **Current Performance:** bge-m3 provides good quality for mixed code+docs workload
+3. **Phase 1 Focus:** Ship 4 core features (reranking, .codetectignore, HTTP API, quality improvements)
+4. **Reranking Provides Boost:** Phase 1c cross-encoder will add 10-15% quality improvement
+5. **Iterative Shipping:** Get Phase 1 features shipped, evaluate dual-model in Phase 2
+
+**Options Evaluated:**
+
+| Option | Performance | Complexity | Size | Decision |
+|--------|-------------|------------|------|----------|
+| **bge-m3 (current)** | Good | Low | ~2GB | ✅ **KEEP** |
+| Nomic Embed Code 7B | Best | High (Python) | 26GB | ⏸️ Defer to Phase 2 |
+| CodeRankEmbed 137M | Good | High (Python) | 521MB | ❌ Superseded |
+
+**Key Insight:** Dual-model approach adds complexity without clear user pain. Users aren't complaining about code search quality—they're asking for features (HTTP API, .codetectignore). Ship features first, optimize quality later.
+
+**Impact on Phase 1b:** Phase 1b (Dual-Model) is **REMOVED** from Phase 1 scope. New Phase 1 sequence:
+- Phase 1a: Research & Design (current) ← YOU ARE HERE
+- Phase 1c: Cross-Encoder Reranking (1-2 weeks)
+- Phase 1d: .codetectignore Support (1 week)
+- Phase 1e: HTTP API (3-4 weeks)
+
+**Total Phase 1 Timeline:** 5-7 weeks (down from 8-12 weeks)
+
+**Future Work:** Evaluate dual-model in Phase 2 if user feedback indicates code search quality is insufficient.
 
 ---
 

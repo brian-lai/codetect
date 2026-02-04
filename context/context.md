@@ -34,8 +34,8 @@ Enable search results to include function/class/struct names and surrounding con
 - [x] Handle edge cases (start of file, end of file, nonexistent files)
 
 ### Search Result Updates
-- [ ] Update SearchResult struct with new fields
-- [ ] Implement `EnrichResults()` in search service
+- [x] Update SearchResult struct with new fields (hybrid and keyword)
+- [ ] Implement `EnrichResults()` function
 - [ ] Update `hybrid_search_v2` to call `EnrichResults()`
 - [ ] Update `search_semantic` to call `EnrichResults()`
 - [ ] Update `search_keyword` to call `EnrichResults()`

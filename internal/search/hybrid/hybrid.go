@@ -20,6 +20,13 @@ type Result struct {
 	Source      string  `json:"source"` // "keyword", "semantic", or "both"
 	MatchLine   int     `json:"match_line,omitempty"`
 	MatchColumn int     `json:"match_column,omitempty"`
+
+	// Phase 2a: Rich context fields
+	ParentScope   string   `json:"parent_scope,omitempty"`    // Fully qualified name of containing scope
+	ScopeKind     string   `json:"scope_kind,omitempty"`      // Type of containing scope (function, method, class, etc.)
+	ReceiverType  string   `json:"receiver_type,omitempty"`   // For methods: struct/class name
+	ContextBefore []string `json:"context_before,omitempty"`  // Lines before the match
+	ContextAfter  []string `json:"context_after,omitempty"`   // Lines after the match
 }
 
 // SearchResult is the full result of a hybrid search

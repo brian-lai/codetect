@@ -34,12 +34,12 @@ Enable search results to include function/class/struct names and surrounding con
 - [x] Handle edge cases (start of file, end of file, nonexistent files)
 
 ### Search Result Updates
-- [x] Update SearchResult struct with new fields (hybrid and keyword)
-- [x] Implement enrichment functions (Enricher with EnrichHybridResults, EnrichKeywordResults)
-- [ ] Update `hybrid_search_v2` to call enrichment
-- [ ] Update `search_semantic` to call enrichment
-- [ ] Update `search_keyword` to call enrichment
-- [ ] Add `include_context` parameter to all MCP tool schemas
+- [x] Update SearchResult struct with new fields (hybrid, keyword, fusion)
+- [x] Implement enrichment functions (Enricher with Enrich*Results methods)
+- [x] Update `hybrid_search_v2` to call enrichment
+- [x] Update `search_keyword` to call enrichment
+- [x] Add `include_context` parameter to MCP tool schemas
+- [x] Implement dependency injection via tools.Config (easily removable)
 
 ### Testing & Validation
 - [ ] Write unit tests for scope extraction

@@ -16,7 +16,8 @@ import (
 )
 
 // RegisterSemanticTools registers the semantic search MCP tools
-func RegisterSemanticTools(server *mcp.Server) {
+// Phase 2a: Config parameter added for consistency, not used by v1 tools yet
+func RegisterSemanticTools(server *mcp.Server, _ *Config) {
 	registerSearchSemantic(server)
 	registerHybridSearch(server)
 }

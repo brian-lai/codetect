@@ -24,7 +24,7 @@ Enable search results to include function/class/struct names and surrounding con
 - [ ] Implement `mapNodeTypeToKind()` for all supported languages
 - [ ] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
 - [ ] Update `processNode()` to populate new chunk fields
-- [ ] Update Chunk struct definition
+- [x] Update Chunk struct definition
 - [ ] Test scope extraction on sample files (Go, Python, TS)
 
 ### Context Extraction

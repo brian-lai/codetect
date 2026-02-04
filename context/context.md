@@ -19,13 +19,13 @@ Implement `.codetectignore` file support for fine-grained indexing control, inde
 ## To-Do List
 
 ### Step 1: Add Dependencies & Core Infrastructure
-- [ ] Add `github.com/sabhiram/go-gitignore` dependency
-- [ ] Create `internal/indexer/ignore.go`
-- [ ] Implement `LoadCodetectIgnore(repoRoot string)` function
-- [ ] Implement `LoadCodetectIgnoreHierarchy(repoRoot string)` function
-- [ ] Support loading from project root `.codetectignore`
-- [ ] Support loading from global `~/.codetectignore`
-- [ ] Merge patterns from both files (OR logic)
+- [x] Add `github.com/sabhiram/go-gitignore` dependency
+- [x] Create `internal/indexer/ignore.go`
+- [x] Implement `LoadCodetectIgnore(repoRoot string)` function
+- [x] Implement `LoadCodetectIgnoreHierarchy(repoRoot string)` function
+- [x] Support loading from project root `.codetectignore`
+- [x] Support loading from global `~/.codetectignore`
+- [x] Merge patterns from both files (OR logic)
 
 ### Step 2: Integrate with File Scanning
 - [ ] Add `Ignore *ignore.GitIgnore` field to `IndexOptions` struct

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	ignore "github.com/sabhiram/go-gitignore"
 )
 
 // DefaultIgnorePatterns contains common directories and files to skip.
@@ -60,6 +62,11 @@ type Builder struct {
 	// IncludeDotfiles is a more specific list of hidden files to include
 	// even when IncludeHidden is false (e.g., ".gitignore", ".env.example").
 	IncludeDotfiles []string
+
+	// CodetectIgnore holds .codetectignore patterns for path-based exclusion.
+	// This is more powerful than IgnorePatterns as it supports glob patterns
+	// and full path matching.
+	CodetectIgnore *ignore.GitIgnore
 }
 
 // NewBuilder creates a Builder with default settings.
@@ -137,11 +144,17 @@ func (b *Builder) buildNode(basePath, relPath string) (*Node, int, error) {
 		for _, entry := range entries {
 			name := entry.Name()
 
+			// Check name-based ignore patterns
 			if b.shouldIgnore(name) {
 				continue
 			}
 
 			childPath := filepath.Join(relPath, name)
+
+			// Check .codetectignore patterns (path-based)
+			if b.CodetectIgnore != nil && b.CodetectIgnore.MatchesPath(childPath) {
+				continue
+			}
 			child, count, err := b.buildNode(basePath, childPath)
 			if err != nil {
 				// Skip unreadable files/directories
@@ -219,6 +232,12 @@ func (b *Builder) WithIgnorePatterns(patterns ...string) *Builder {
 // WithIncludeHidden enables including all hidden files.
 func (b *Builder) WithIncludeHidden(include bool) *Builder {
 	b.IncludeHidden = include
+	return b
+}
+
+// WithCodetectIgnore sets the .codetectignore patterns for path-based exclusion.
+func (b *Builder) WithCodetectIgnore(ig *ignore.GitIgnore) *Builder {
+	b.CodetectIgnore = ig
 	return b
 }
 

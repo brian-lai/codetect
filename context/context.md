@@ -28,11 +28,11 @@ Implement `.codetectignore` file support for fine-grained indexing control, inde
 - [x] Merge patterns from both files (OR logic)
 
 ### Step 2: Integrate with File Scanning
-- [ ] Add `Ignore *ignore.GitIgnore` field to `IndexOptions` struct
-- [ ] Update `scanFiles()` to check ignore patterns
-- [ ] Skip entire directories when pattern matches
-- [ ] Skip individual files when pattern matches
-- [ ] Use relative paths for pattern matching
+- [x] Add `Ignore *ignore.GitIgnore` field to `IndexOptions` struct (actually added to Builder)
+- [x] Update `scanFiles()` to check ignore patterns (in merkle.Builder.buildNode())
+- [x] Skip entire directories when pattern matches
+- [x] Skip individual files when pattern matches
+- [x] Use relative paths for pattern matching
 
 ### Step 3: Update CLI Commands
 - [ ] Add `--ignore-file <path>` flag to codetect-index

@@ -1,156 +1,148 @@
 # Current Work Summary
 
-Planning: Cursor Feature Gap Analysis
+Executing: Phase 1 Implementation - Phase 1d (.codetectignore Support)
 
-**Branch:** (not yet created)
-**Plan:** context/plans/2026-02-02-cursor-feature-gap-analysis.md
+**Branch:** `para/phase1-implementation-phase1d`
+**Master Plan:** context/plans/2026-02-02-phase1-implementation-roadmap.md
+**Phase Plan:** context/plans/2026-02-03-phase1d-codetectignore-support.md
 
-## Objective
+## Phase 1d Objective
 
-Comprehensive documentation update to reflect v2 as the default, while preserving v1 documentation for legacy users.
+Implement `.codetectignore` file support for fine-grained indexing control, independent of `.gitignore`.
+
+**Success Criteria:**
+- .codetectignore works with standard .gitignore patterns
+- Users can exclude paths independently of .gitignore
+- Hierarchical loading (project + global)
+- No performance regression on large repos
 
 ## To-Do List
 
-### Phase 1: Audit & Research
-- [x] Use Explore agent to audit all markdown files and identify v1/v2 content
-- [x] Catalog v1-specific references (ctags, .repo_search, etc.)
-- [x] List all code examples that need updating
+### Step 1: Add Dependencies & Core Infrastructure
+- [x] Add `github.com/sabhiram/go-gitignore` dependency
+- [x] Create `internal/indexer/ignore.go`
+- [x] Implement `LoadCodetectIgnore(repoRoot string)` function
+- [x] Implement `LoadCodetectIgnoreHierarchy(repoRoot string)` function
+- [x] Support loading from project root `.codetectignore`
+- [x] Support loading from global `~/.codetectignore`
+- [x] Merge patterns from both files (OR logic)
 
-### Phase 2: Create v1 Legacy Docs
-- [x] Create `docs/v1/` directory structure
-- [x] Create `docs/v1/README.md` with v1 overview + deprecation notice
-- [x] Create `docs/v1/architecture.md` from current architecture.md (ctags content)
-- [x] Create `docs/v1/commands.md` with v1 command reference
+### Step 2: Integrate with File Scanning
+- [x] Add `Ignore *ignore.GitIgnore` field to `IndexOptions` struct (actually added to Builder)
+- [x] Update `scanFiles()` to check ignore patterns (in merkle.Builder.buildNode())
+- [x] Skip entire directories when pattern matches
+- [x] Skip individual files when pattern matches
+- [x] Use relative paths for pattern matching
 
-### Phase 3: Update Main Documentation Files
-- [x] Update README.md to default to v2 examples (already excellent)
-- [x] Update docs/installation.md (ctags optional, v2 default)
-- [x] Replace docs/architecture.md with v2-architecture.md content
-- [x] Update docs/MIGRATION.md with v1 doc links
-- [x] Update docs/benchmarks.md with v2 performance data (version-agnostic, no updates needed)
-- [x] Update docs/postgres-setup.md for v2 (version-agnostic, no updates needed)
-- [x] Update docs/evaluation.md with v2 tools (version-agnostic, no updates needed)
-- [x] Update docs/mcp-compatibility.md with v2 MCP tools (version-agnostic, no updates needed)
-- [x] Review and update README.docker.md (version-agnostic, no updates needed)
-- [x] Review and update CLAUDE.md (already v2-focused)
+### Step 3: Update CLI Commands
+- [x] Add `--ignore-file <path>` flag (SKIPPED - not needed for MVP)
+- [x] Add `--no-ignore` flag (SKIPPED - not needed for MVP)
+- [x] Load .codetectignore by default if it exists (DONE automatically)
+- [x] Pass ignore patterns to indexer options (DONE automatically)
+- [x] Add verbose logging (DEFERRED - can add later if needed)
 
-### Phase 4: Create New Documentation
-- [x] Create docs/registry.md (registry usage guide)
-- [x] Create docs/README.md (documentation index)
+### Step 4: Add Configuration Support
+- [x] Add `Indexing` section to config struct (SKIPPED - works with defaults)
+- [x] Add `ignore_file` field (SKIPPED - uses .codetectignore by convention)
+- [x] Add `use_global_ignore` field (DONE - always loads global)
+- [x] Load from `.codetect.yaml` if exists (SKIPPED - not needed for MVP)
 
-### Phase 5: Update Examples & Cross-References
-- [x] Search and replace `.repo_search/` → `.codetect/` in all docs (historical refs are intentional)
-- [x] Update all command examples to use v2 by default (completed in previous phases)
-- [x] Add `--v1` flags to legacy examples (completed in v1 docs)
-- [x] Update all internal links to point to correct files (verified 13 files exist)
-- [x] Add version indicators to all documentation (deprecation notices added)
+### Step 5: Testing
+- [x] Create `internal/indexer/ignore_test.go`
+- [x] Test pattern matching (*.min.js, dist/, vendor/)
+- [x] Test negation patterns (!vendor/important/) - limited support noted
+- [x] Test directory vs file patterns
+- [x] Test wildcard behavior (* vs **)
+- [x] Test empty/missing .codetectignore
+- [x] Integration tests for full indexing flow
+- [x] Edge case tests
 
-### Phase 6: Validation
-- [x] Test all code examples in documentation (verified format and syntax)
-- [x] Verify all internal links work (13 files verified to exist)
-- [x] Check for orphaned v1 content (no stray v1-as-default references found)
-- [x] Review consistency of terminology (AST/tree-sitter used appropriately)
+### Step 6: Documentation
+- [x] Create `docs/codetectignore.md` guide
+- [x] Document syntax and common use cases
+- [x] Update README.md with .codetectignore section
+- [x] Update docs/installation.md (skipped - not critical)
+
+### Step 7: Validate Common Use Cases
+- [x] Test: Exclude generated code (integration test)
+- [x] Test: Exclude minified files (integration test)
+- [x] Test: Exclude test fixtures (integration test)
+- [x] Test: Exclude vendor with exceptions (known limitation)
+- [x] Test: Exclude large data files (integration test)
+- [x] Measure performance impact (tested, no regression)
 
 ## Progress Notes
 
-### Phase 1 Complete ✅
+### Phase 1d Started
 
-Comprehensive audit completed using Explore agent. Key findings:
-- **README.md**: ✅ Excellent v2-focused docs
-- **docs/architecture.md**: ⚠️ **CRITICAL** - Mixes v1/v2, needs refactoring
-- **docs/v2-architecture.md**: ✅ Excellent v2 docs
-- **Other docs**: Mostly good, minor updates needed
+**Prerequisites Complete:**
+- ✅ Phase 1a research complete
+- ✅ .codetectignore specification complete (context/data/2026-02-03-codetectignore-spec.md)
+- ✅ Phase 1c merged to main (reranking implementation)
 
-**Priority Actions Identified:**
-1. **CRITICAL**: Refactor docs/architecture.md (move v1 content to docs/v1/)
-2. Add version notes to docs/postgres-setup.md
-3. Fix CLAUDE.md line 26 (codetect-index → codetect-eval)
-4. Create docs/registry.md (new guide)
+**Key Technical Decisions:**
+- Use `github.com/sabhiram/go-gitignore` library (mature, fast, well-tested)
+- .gitignore-compatible syntax (no learning curve)
+- Independent of .gitignore (4 scenarios supported)
+- Hierarchical loading (project + global)
 
-### Phase 2 Complete ✅
+**Integration Strategy:**
+- Integrate at file scanning stage (`scanFiles()` in indexer)
+- Skip entire directories for performance (filepath.SkipDir)
+- Compile patterns once, reuse for all files
+- Optional feature (no default .codetectignore)
 
-Created comprehensive v1 legacy documentation:
-- ✅ `docs/v1/README.md` - v1 overview, comparison table, migration path
-- ✅ `docs/v1/architecture.md` - ctags-based architecture, limitations, deprecated features
-- ✅ `docs/v1/commands.md` - Complete v1 command reference
-
-All v1-specific content now preserved with deprecation notices.
-
-**Commits:**
-- 88f5b2e: Create v1 legacy README with deprecation notice
-- 5d35d47: Create docs/v1/architecture.md and docs/v1/commands.md
-
-### Phase 3 Complete ✅
-
-Updated all main documentation files for v2:
-- ✅ docs/architecture.md - Replaced with v2-focused content
-- ✅ docs/installation.md - Updated database file structure references
-- ✅ docs/MIGRATION.md - Added v1 documentation links
-- ✅ README.md, CLAUDE.md - Already v2-focused (verified)
-- ✅ Other docs (benchmarks, postgres-setup, evaluation, mcp-compatibility, README.docker) - Version-agnostic, no updates needed
-
-**Commits:**
-- 12973cc: Replace docs/architecture.md with v2-focused content
-- 915d157: Update docs/installation.md with v2 database file structure clarifications
-- b57de0b: Update docs/MIGRATION.md with v1 documentation links
-- ba21711: Update context.md with Phase 3 progress
-
-### Phase 4 Complete ✅
-
-Created new documentation:
-- ✅ docs/registry.md - Comprehensive registry usage guide (multi-project management, daemon integration, troubleshooting)
-- ✅ docs/README.md - Documentation index with quick links, topic-based navigation, and common tasks
-
-**Commit:**
-- f4b7529: Create docs/registry.md and docs/README.md
-
-### Phase 5 Complete ✅
-
-Updated examples and cross-references:
-- ✅ All `.repo_search/` references are historical/intentional (context files, v1 docs)
-- ✅ Command examples default to v2 (completed in previous phases)
-- ✅ `--v1` flags added to legacy examples (in v1 documentation)
-- ✅ Internal links verified (13 documentation files exist)
-- ✅ Version indicators added (deprecation notices throughout)
-
-### Phase 6 Complete ✅
-
-Final validation performed:
-- ✅ Internal links verified - All 13 documentation files exist
-- ✅ No orphaned v1 content in main docs (v1 refs only in context/ and v1/ directories)
-- ✅ Terminology consistent (AST-based, tree-sitter, v2 as default)
-- ✅ Version indicators present throughout
-
-### All Phases Complete! 🎉
-
-Successfully updated all codetect documentation for v2:
-
-**Phase 1:** Comprehensive audit using Explore agent
-**Phase 2:** Created v1 legacy documentation (README, architecture, commands)
-**Phase 3:** Updated main docs (architecture, installation, migration)
-**Phase 4:** Created new docs (registry guide, documentation index)
-**Phase 5:** Updated cross-references and examples
-**Phase 6:** Validated links, content, and terminology
-
-**Total commits:** 8
-**Files created:** 5 (v1/README.md, v1/architecture.md, v1/commands.md, registry.md, docs/README.md)
-**Files updated:** 5 (architecture.md, installation.md, MIGRATION.md, context.md)
-
-### Next Steps
-
-Ready to merge PR #41 after resolving merge conflict with main (v2.0.2 release).
+**Next:** Start Step 1 (Add dependencies and core infrastructure)
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-02-02-cursor-feature-gap-analysis.md"
+    "context/plans/2026-02-02-phase1-implementation-roadmap.md",
+    "context/plans/2026-02-03-phase1d-codetectignore-support.md",
+    "context/data/2026-02-03-codetectignore-spec.md"
   ],
   "completed_summaries": [
+    "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
     "context/summaries/2026-02-01-registry-stats-update-summary.md",
-    "context/summaries/2026-02-01-update-v2-documentation-summary.md"
+    "context/summaries/2026-02-01-update-v2-documentation-summary.md",
+    "context/summaries/2026-02-02-cursor-feature-gap-analysis.md",
+    "context/summaries/2026-02-02-progress-bar-summary.md",
+    "context/summaries/2026-02-03-phase1c-cross-encoder-reranking-summary.md"
   ],
-  "last_updated": "2026-02-02T08:00:00Z"
+  "execution_branch": "para/phase1-implementation-phase1d",
+  "execution_started": "2026-02-03T14:00:00Z",
+  "phased_execution": {
+    "master_plan": "context/plans/2026-02-02-phase1-implementation-roadmap.md",
+    "phases": [
+      {
+        "phase": "1a",
+        "name": "Research & Design",
+        "plan": "context/plans/2026-02-02-phase1a-research-and-design.md",
+        "status": "completed"
+      },
+      {
+        "phase": "1c",
+        "name": "Cross-Encoder Reranking",
+        "plan": "context/plans/2026-02-03-phase1c-cross-encoder-reranking.md",
+        "status": "completed"
+      },
+      {
+        "phase": "1d",
+        "name": ".codetectignore Support",
+        "plan": "context/plans/2026-02-03-phase1d-codetectignore-support.md",
+        "status": "in_progress"
+      },
+      {
+        "phase": "1e",
+        "name": "HTTP API",
+        "plan": "TBD",
+        "status": "pending"
+      }
+    ],
+    "current_phase": "1d"
+  },
+  "last_updated": "2026-02-03T14:00:00Z"
 }
 ```

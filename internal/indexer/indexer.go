@@ -170,6 +170,18 @@ func (idx *Indexer) initComponents() error {
 
 	// Embedding cache and locations
 	var err error
+
+	// Load .codetectignore patterns
+	codetectIgnore, err := LoadCodetectIgnoreHierarchy(idx.repoPath)
+	if err != nil {
+		// Non-fatal: log warning and continue without .codetectignore
+		idx.logger.Warn("failed to load .codetectignore", "error", err)
+	} else if codetectIgnore != nil {
+		idx.merkleBuilder.WithCodetectIgnore(codetectIgnore)
+		if idx.logger != nil {
+			idx.logger.Info("loaded .codetectignore patterns")
+		}
+	}
 	idx.cache, err = embedding.NewEmbeddingCache(
 		idx.database,
 		idx.dialect,

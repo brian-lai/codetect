@@ -52,6 +52,8 @@ codetect embed     # Optional: enable semantic search
 claude                # Start Claude Code
 ```
 
+**Optional:** Create `.codetectignore` to exclude files from indexing (generated code, minified files, etc.). See [.codetectignore Guide](docs/codetectignore.md).
+
 See [Installation Guide](docs/installation.md) for detailed setup instructions.
 
 ## Requirements

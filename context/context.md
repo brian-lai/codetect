@@ -13,9 +13,9 @@ Enable search results to include function/class/struct names and surrounding con
 ## To-Do List
 
 ### Database Schema
-- [ ] Add migration for new columns (parent_scope, scope_kind, receiver_type)
-- [ ] Update SQLite schema in `internal/db/sqlite.go`
-- [ ] Update PostgreSQL schema in `internal/db/postgres.go`
+- [x] Add migration for new columns (parent_scope, scope_kind, receiver_type)
+- [x] Update SQLite schema in embeddings table
+- [x] Update PostgreSQL schema via embeddingColumnsForDialect
 - [ ] Add `GetChunkScopeInfo()` method to both adapters
 - [ ] Test migration on existing databases
 

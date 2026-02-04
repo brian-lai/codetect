@@ -23,6 +23,11 @@ type EmbeddingRecord struct {
 	Embedding   []float32 `json:"embedding"`
 	Model       string    `json:"model"`
 	CreatedAt   time.Time `json:"created_at"`
+
+	// Phase 2a: Rich context fields
+	ParentScope  string `json:"parent_scope,omitempty"`  // Fully qualified name of containing scope
+	ScopeKind    string `json:"scope_kind,omitempty"`    // Type of containing scope (function, method, class, etc.)
+	ReceiverType string `json:"receiver_type,omitempty"` // For methods: struct/class name
 }
 
 // EmbeddingStore manages embedding storage in the database.
@@ -80,6 +85,10 @@ func embeddingColumnsForDialect(dialect db.Dialect, vectorDim int) []db.ColumnDe
 		embeddingCol,
 		{Name: "model", Type: db.ColTypeText, Nullable: false},
 		{Name: "created_at", Type: db.ColTypeInteger, Nullable: false},
+		// Phase 2a: Rich context fields
+		{Name: "parent_scope", Type: db.ColTypeText, Nullable: true},
+		{Name: "scope_kind", Type: db.ColTypeText, Nullable: true},
+		{Name: "receiver_type", Type: db.ColTypeText, Nullable: true},
 	}
 }
 
@@ -213,6 +222,9 @@ CREATE TABLE IF NOT EXISTS embeddings (
     embedding TEXT NOT NULL,
     model TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    parent_scope TEXT,
+    scope_kind TEXT,
+    receiver_type TEXT,
     UNIQUE(repo_root, path, start_line, end_line, model)
 );
 
@@ -222,6 +234,11 @@ CREATE INDEX IF NOT EXISTS idx_embeddings_repo_path ON embeddings(repo_root, pat
 `
 	if _, err := s.db.Exec(sqliteSchema); err != nil {
 		return fmt.Errorf("creating embedding schema: %w", err)
+	}
+
+	// Phase 2a migration: Add rich context columns if they don't exist
+	if err := s.migratePhase2aColumns(); err != nil {
+		return fmt.Errorf("migrating Phase 2a columns: %w", err)
 	}
 
 	return nil
@@ -242,6 +259,41 @@ func (s *EmbeddingStore) initRepoConfigTable() error {
 	sql := s.dialect.CreateTableSQL("repo_embedding_configs", columns)
 	if _, err := s.db.Exec(sql); err != nil {
 		return fmt.Errorf("creating repo_embedding_configs table: %w", err)
+	}
+
+	return nil
+}
+
+// migratePhase2aColumns adds Phase 2a rich context columns to existing tables.
+// Uses ALTER TABLE ADD COLUMN IF NOT EXISTS for idempotent migrations.
+// This handles both SQLite and PostgreSQL databases.
+func (s *EmbeddingStore) migratePhase2aColumns() error {
+	tableName := s.tableName()
+
+	// Columns to add
+	columns := []string{
+		"parent_scope TEXT",
+		"scope_kind TEXT",
+		"receiver_type TEXT",
+	}
+
+	for _, col := range columns {
+		var alterSQL string
+		if s.dialect.Name() == "postgres" {
+			// PostgreSQL supports IF NOT EXISTS
+			alterSQL = fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s", tableName, col)
+		} else {
+			// SQLite: Try to add column, ignore error if it already exists
+			alterSQL = fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableName, col)
+		}
+
+		if _, err := s.db.Exec(alterSQL); err != nil {
+			// For SQLite, ignore "duplicate column" errors
+			if s.dialect.Name() == "sqlite" && strings.Contains(err.Error(), "duplicate column") {
+				continue
+			}
+			return fmt.Errorf("adding column %s: %w", col, err)
+		}
 	}
 
 	return nil
@@ -416,9 +468,10 @@ func (s *EmbeddingStore) Save(chunk Chunk, embedding []float32, model string) er
 	}
 
 	// Use dialect-aware upsert with repo_root for multi-repo isolation
-	columns := []string{"repo_root", "path", "start_line", "end_line", "content_hash", "embedding", "model", "created_at"}
+	// Phase 2a: Include rich context fields
+	columns := []string{"repo_root", "path", "start_line", "end_line", "content_hash", "embedding", "model", "created_at", "parent_scope", "scope_kind", "receiver_type"}
 	conflictColumns := []string{"repo_root", "path", "start_line", "end_line", "model"}
-	updateColumns := []string{"content_hash", "embedding", "created_at"}
+	updateColumns := []string{"content_hash", "embedding", "created_at", "parent_scope", "scope_kind", "receiver_type"}
 
 	tableName := s.tableName()
 	upsertSQL := s.dialect.UpsertSQL(tableName, columns, conflictColumns, updateColumns)
@@ -426,7 +479,8 @@ func (s *EmbeddingStore) Save(chunk Chunk, embedding []float32, model string) er
 
 	_, err = s.db.Exec(upsertSQL,
 		s.repoRoot, chunk.Path, chunk.StartLine, chunk.EndLine,
-		contentHash, string(embJSON), model, time.Now().Unix())
+		contentHash, string(embJSON), model, time.Now().Unix(),
+		nullableString(chunk.ParentScope), nullableString(chunk.ScopeKind), nullableString(chunk.ReceiverType))
 
 	return err
 }
@@ -444,9 +498,10 @@ func (s *EmbeddingStore) SaveBatch(chunks []Chunk, embeddings [][]float32, model
 	defer tx.Rollback() //nolint:errcheck
 
 	// Use dialect-aware upsert with repo_root for multi-repo isolation
-	columns := []string{"repo_root", "path", "start_line", "end_line", "content_hash", "embedding", "model", "created_at"}
+	// Phase 2a: Include rich context fields
+	columns := []string{"repo_root", "path", "start_line", "end_line", "content_hash", "embedding", "model", "created_at", "parent_scope", "scope_kind", "receiver_type"}
 	conflictColumns := []string{"repo_root", "path", "start_line", "end_line", "model"}
-	updateColumns := []string{"content_hash", "embedding", "created_at"}
+	updateColumns := []string{"content_hash", "embedding", "created_at", "parent_scope", "scope_kind", "receiver_type"}
 
 	tableName := s.tableName()
 	upsertSQL := s.dialect.UpsertSQL(tableName, columns, conflictColumns, updateColumns)
@@ -468,7 +523,8 @@ func (s *EmbeddingStore) SaveBatch(chunks []Chunk, embeddings [][]float32, model
 
 		_, err = stmt.Exec(
 			s.repoRoot, chunk.Path, chunk.StartLine, chunk.EndLine,
-			contentHash, string(embJSON), model, now)
+			contentHash, string(embJSON), model, now,
+			nullableString(chunk.ParentScope), nullableString(chunk.ScopeKind), nullableString(chunk.ReceiverType))
 		if err != nil {
 			return fmt.Errorf("inserting embedding %d: %w", i, err)
 		}
@@ -481,7 +537,7 @@ func (s *EmbeddingStore) SaveBatch(chunks []Chunk, embeddings [][]float32, model
 func (s *EmbeddingStore) GetByPath(path string) ([]EmbeddingRecord, error) {
 	tableName := s.tableName()
 	query := s.schema.SubstitutePlaceholders(fmt.Sprintf(`
-		SELECT id, path, start_line, end_line, content_hash, embedding, model, created_at
+		SELECT id, path, start_line, end_line, content_hash, embedding, model, created_at, parent_scope, scope_kind, receiver_type
 		FROM %s
 		WHERE repo_root = ? AND path = ?
 		ORDER BY start_line`, tableName))
@@ -498,7 +554,7 @@ func (s *EmbeddingStore) GetByPath(path string) ([]EmbeddingRecord, error) {
 func (s *EmbeddingStore) GetAll() ([]EmbeddingRecord, error) {
 	tableName := s.tableName()
 	query := s.schema.SubstitutePlaceholders(fmt.Sprintf(`
-		SELECT id, path, start_line, end_line, content_hash, embedding, model, created_at
+		SELECT id, path, start_line, end_line, content_hash, embedding, model, created_at, parent_scope, scope_kind, receiver_type
 		FROM %s
 		WHERE repo_root = ?
 		ORDER BY path, start_line`, tableName))
@@ -523,7 +579,7 @@ func (s *EmbeddingStore) GetAllAcrossRepos(repoRoots []string) ([]EmbeddingRecor
 	if len(repoRoots) == 0 {
 		// Get all repos in this dimension group
 		query = s.schema.SubstitutePlaceholders(fmt.Sprintf(`
-			SELECT id, repo_root, path, start_line, end_line, content_hash, embedding, model, created_at
+			SELECT id, repo_root, path, start_line, end_line, content_hash, embedding, model, created_at, parent_scope, scope_kind, receiver_type
 			FROM %s
 			ORDER BY repo_root, path, start_line`, tableName))
 	} else {
@@ -534,7 +590,7 @@ func (s *EmbeddingStore) GetAllAcrossRepos(repoRoots []string) ([]EmbeddingRecor
 			args = append(args, r)
 		}
 		query = s.schema.SubstitutePlaceholders(fmt.Sprintf(`
-			SELECT id, repo_root, path, start_line, end_line, content_hash, embedding, model, created_at
+			SELECT id, repo_root, path, start_line, end_line, content_hash, embedding, model, created_at, parent_scope, scope_kind, receiver_type
 			FROM %s
 			WHERE repo_root IN (%s)
 			ORDER BY repo_root, path, start_line`, tableName, strings.Join(placeholders, ", ")))
@@ -614,10 +670,12 @@ func scanEmbeddingRecords(rows db.Rows) ([]EmbeddingRecord, error) {
 		var r EmbeddingRecord
 		var embJSON string
 		var createdAt int64
+		var parentScope, scopeKind, receiverType sql.NullString
 
 		err := rows.Scan(
 			&r.ID, &r.Path, &r.StartLine, &r.EndLine,
-			&r.ContentHash, &embJSON, &r.Model, &createdAt)
+			&r.ContentHash, &embJSON, &r.Model, &createdAt,
+			&parentScope, &scopeKind, &receiverType)
 		if err != nil {
 			return nil, err
 		}
@@ -627,6 +685,15 @@ func scanEmbeddingRecords(rows db.Rows) ([]EmbeddingRecord, error) {
 		}
 
 		r.CreatedAt = time.Unix(createdAt, 0)
+		if parentScope.Valid {
+			r.ParentScope = parentScope.String
+		}
+		if scopeKind.Valid {
+			r.ScopeKind = scopeKind.String
+		}
+		if receiverType.Valid {
+			r.ReceiverType = receiverType.String
+		}
 		records = append(records, r)
 	}
 
@@ -641,10 +708,12 @@ func scanEmbeddingRecordsWithRepo(rows db.Rows) ([]EmbeddingRecord, error) {
 		var r EmbeddingRecord
 		var embJSON string
 		var createdAt int64
+		var parentScope, scopeKind, receiverType sql.NullString
 
 		err := rows.Scan(
 			&r.ID, &r.RepoRoot, &r.Path, &r.StartLine, &r.EndLine,
-			&r.ContentHash, &embJSON, &r.Model, &createdAt)
+			&r.ContentHash, &embJSON, &r.Model, &createdAt,
+			&parentScope, &scopeKind, &receiverType)
 		if err != nil {
 			return nil, err
 		}
@@ -654,6 +723,15 @@ func scanEmbeddingRecordsWithRepo(rows db.Rows) ([]EmbeddingRecord, error) {
 		}
 
 		r.CreatedAt = time.Unix(createdAt, 0)
+		if parentScope.Valid {
+			r.ParentScope = parentScope.String
+		}
+		if scopeKind.Valid {
+			r.ScopeKind = scopeKind.String
+		}
+		if receiverType.Valid {
+			r.ReceiverType = receiverType.String
+		}
 		records = append(records, r)
 	}
 
@@ -663,4 +741,13 @@ func scanEmbeddingRecordsWithRepo(rows db.Rows) ([]EmbeddingRecord, error) {
 func hashContent(content string) string {
 	h := sha256.Sum256([]byte(content))
 	return hex.EncodeToString(h[:])
+}
+
+// nullableString converts empty strings to nil for database storage.
+// This ensures empty strings are stored as NULL rather than empty TEXT values.
+func nullableString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

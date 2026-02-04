@@ -35,10 +35,10 @@ Enable search results to include function/class/struct names and surrounding con
 
 ### Search Result Updates
 - [x] Update SearchResult struct with new fields (hybrid and keyword)
-- [ ] Implement `EnrichResults()` function
-- [ ] Update `hybrid_search_v2` to call `EnrichResults()`
-- [ ] Update `search_semantic` to call `EnrichResults()`
-- [ ] Update `search_keyword` to call `EnrichResults()`
+- [x] Implement enrichment functions (Enricher with EnrichHybridResults, EnrichKeywordResults)
+- [ ] Update `hybrid_search_v2` to call enrichment
+- [ ] Update `search_semantic` to call enrichment
+- [ ] Update `search_keyword` to call enrichment
 - [ ] Add `include_context` parameter to all MCP tool schemas
 
 ### Testing & Validation

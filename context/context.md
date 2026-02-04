@@ -20,10 +20,10 @@ Enable search results to include function/class/struct names and surrounding con
 - [ ] Test migration on existing databases
 
 ### AST Chunker Updates
-- [ ] Add scopeStack struct to track parent scopes
-- [ ] Implement `mapNodeTypeToKind()` for all supported languages
-- [ ] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
-- [ ] Update `processNode()` to populate new chunk fields
+- [x] Add scopeStack struct to track parent scopes
+- [x] Implement `mapNodeTypeToKind()` for all supported languages
+- [x] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
+- [x] Update `walkTree()` to populate new chunk fields via scope stack
 - [x] Update Chunk struct definition
 - [ ] Test scope extraction on sample files (Go, Python, TS)
 

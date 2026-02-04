@@ -28,10 +28,10 @@ Enable search results to include function/class/struct names and surrounding con
 - [ ] Test scope extraction on sample files (Go, Python, TS)
 
 ### Context Extraction
-- [ ] Create `internal/search/context.go`
-- [ ] Implement `ContextExtractor.ExtractContext()`
-- [ ] Add unit tests with sample files
-- [ ] Handle edge cases (start of file, end of file, binary files)
+- [x] Create `internal/search/context.go`
+- [x] Implement `ContextExtractor.ExtractContext()`
+- [x] Add unit tests with sample files
+- [x] Handle edge cases (start of file, end of file, nonexistent files)
 
 ### Search Result Updates
 - [ ] Update SearchResult struct with new fields

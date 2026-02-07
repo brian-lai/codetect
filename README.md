@@ -2,9 +2,9 @@
 
 A local MCP server providing fast codebase search, file retrieval, symbol navigation, and semantic search for Claude Code.
 
-## What's New in v2.0.0 🎉
+## What's New in v2.2.0 🎉
 
-codetect v2.0.0 brings **multi-repo support**, **parallel embedding**, and **improved user experience**:
+codetect v2.2.0 brings **rich context enrichment**, **ast-grep symbol indexing**, and **improved search results**:
 
 - ✨ **Dimension-grouped embedding tables** - Multiple repos can use different embedding models without conflicts
 - ⚡ **Parallel embedding** with `-j` flag - 3.3x faster embedding with configurable workers
@@ -13,7 +13,7 @@ codetect v2.0.0 brings **multi-repo support**, **parallel embedding**, and **imp
 - 🛡️ **Config preservation** - Reinstalls no longer overwrite your settings
 - 🐛 **Better error handling** - Improved ripgrep error messages and diagnostics
 
-**Upgrading from v1.x?** v2.0.0 is fully backward compatible. See [Migration Guide](docs/MIGRATION.md) for details.
+**Upgrading from v2.0.0?** v2.2.0 adds rich context and removes ctags dependency. See [CHANGELOG](CHANGELOG.md) for details.
 
 **Full changelog:** [CHANGELOG.md](CHANGELOG.md)
 
@@ -21,7 +21,7 @@ codetect v2.0.0 brings **multi-repo support**, **parallel embedding**, and **imp
 
 - **`search_keyword`** - Fast regex search powered by ripgrep
 - **`get_file`** - File reading with optional line-range slicing
-- **`find_symbol`** - Symbol lookup (functions, types, etc.) via ctags + SQLite
+- **`find_symbol`** - Symbol lookup (functions, types, etc.) via ast-grep + SQLite
 - **`list_defs_in_file`** - List all definitions in a file
 - **`search_semantic`** - Semantic code search via local embeddings (Ollama)
 - **`hybrid_search`** - Combined keyword + semantic search
@@ -37,7 +37,6 @@ cd codetect
 
 The installer will:
 - ✓ Check for required dependencies (Go, ripgrep)
-- ✓ Offer to install ctags automatically for symbol indexing
 - ✓ Guide you through Ollama setup for semantic search (with prominent warnings if missing)
 - ✓ Build and install globally to `~/.local/bin`
 - ✓ Configure your shell PATH automatically
@@ -62,10 +61,9 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 |------------|----------|---------|
 | Go 1.21+ | Yes | Building from source |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Yes | Keyword search |
-| [universal-ctags](https://github.com/universal-ctags/ctags) | No | Symbol indexing (v1 legacy mode only, v2 uses built-in tree-sitter) |
 | [Ollama](https://ollama.ai) | No | Semantic search (local embeddings) |
 
-**Note:** v2 (default) uses built-in tree-sitter parsers for symbol extraction. ctags is only needed if using `--v1` legacy mode.
+**Note:** Symbol indexing uses built-in ast-grep (no external dependencies required).
 
 ## CLI Commands
 
@@ -73,27 +71,21 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 
 ```bash
 codetect init        # Initialize in current directory (.mcp.json)
-codetect index       # Index with v2 (AST-based, incremental, 15x faster)
-codetect index --v1  # Index with v1 (ctags-based, legacy, deprecated)
+codetect index       # Index symbols (AST-based, incremental)
 codetect embed       # Generate embeddings (sequential)
 codetect embed -j 10 # Generate embeddings in parallel (10 workers, 3.3x faster)
 codetect doctor      # Check dependencies and configuration
-codetect stats       # Show v2 index statistics
-codetect stats --v1  # Show v1 index statistics (if v1 index exists)
+codetect stats       # Show index statistics
 codetect migrate     # Discover existing indexes and register them
 codetect update      # Update to latest version
 codetect help        # Show all commands
 ```
 
-**v2 features (default):**
+**Key features:**
 - ⚡ Incremental indexing with Merkle tree change detection (~2s vs ~30s)
 - 🧬 AST-based chunking preserves semantic boundaries
 - 📦 Content-addressed caching (95% cache hit rate)
 - 🔄 Parallel embedding with `-j` flag (3.3x faster)
-
-**v1 legacy mode:**
-- Use `--v1` flag for ctags-based indexing (deprecated, removed in v3.0.0)
-- See [v1 documentation](docs/v1/README.md) for details
 
 ### Daemon Commands
 
@@ -279,7 +271,7 @@ See [MCP Compatibility](docs/mcp-compatibility.md) for details and roadmap for n
 
 - [x] MCP stdio server
 - [x] Keyword search via ripgrep
-- [x] Symbol indexing via ctags
+- [x] Symbol indexing via ast-grep
 - [x] Semantic search via Ollama
 - [x] Hybrid search
 - [x] Global installation

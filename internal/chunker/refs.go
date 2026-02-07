@@ -78,6 +78,22 @@ func walkTreeForRefs(node *sitter.Node, content []byte, path string, config *Lan
 		scopeKind := mapNodeTypeToKind(nodeType, config.Name)
 		receiverType := extractReceiverType(node, content, config.Name)
 
+		// For methods, push receiver type first (if not already in stack)
+		if receiverType != "" && scopeKind == "method" {
+			// Check if receiver type is already in stack
+			alreadyInStack := false
+			for _, scope := range stack.scopes {
+				if scope.name == receiverType {
+					alreadyInStack = true
+					break
+				}
+			}
+			if !alreadyInStack {
+				stack.push(receiverType, "class", "")
+				defer stack.pop()
+			}
+		}
+
 		if nodeName != "" {
 			stack.push(nodeName, scopeKind, receiverType)
 			defer stack.pop()

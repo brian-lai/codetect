@@ -49,10 +49,10 @@ Enable navigation of code relationships without reading files. Add symbol refere
 - [x] Register tools in MCP server
 
 #### Days 9-10: Testing + Eval
-- [ ] Unit tests for reference extraction (Go)
-- [ ] Unit tests for reference extraction (TypeScript)
-- [ ] Unit tests for type relation extraction (Go embedding)
-- [ ] Unit tests for type relation extraction (TS implements/extends)
+- [x] Unit tests for reference extraction (Go)
+- [x] Unit tests for reference extraction (TypeScript)
+- [x] Unit tests for type relation extraction (Go embedding)
+- [x] Unit tests for type relation extraction (TS implements/extends)
 - [ ] Integration tests on this codebase (known call relationships)
 - [ ] Integration tests on this codebase (known interface implementations)
 - [ ] Eval test cases for Phase 2b

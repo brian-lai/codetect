@@ -133,9 +133,26 @@ func runEval(args []string) {
 These test cases will be used by codetect-eval to measure MCP search performance
 against this repository (without pre-indexing). Create JSONL files organized by
 category:
-- search.jsonl: keyword/regex searches, file pattern matching
-- navigate.jsonl: finding definitions, references, call hierarchies
-- understand.jsonl: code comprehension, architectural questions
+
+- search.jsonl: keyword/regex searches, file pattern matching, semantic search
+  Example prompts:
+  - "Find all TODO comments"
+  - "Search for error handling code"
+  - "Find files that import the database package"
+
+- navigate.jsonl: symbol lookup, call graphs, type relationships, cross-references
+  Available tools: find_symbol, list_defs_in_file, find_references, find_callers, find_implementations
+  Example prompts:
+  - "What functions call the OpenDB method?"
+  - "Find all references to the User type"
+  - "What structs implement the Handler interface?"
+  - "Show me the definition of the Index struct"
+
+- understand.jsonl: code comprehension, architectural questions, hybrid search
+  Example prompts:
+  - "How does authentication work in this codebase?"
+  - "What's the flow for processing a request?"
+  - "Find code related to database connection pooling"
 
 Each line should be a JSON object with this structure:
 {
@@ -153,7 +170,9 @@ Each line should be a JSON object with this structure:
 }
 
 Create 5-10 test cases per category based on this repository's actual code structure.
-Focus on queries that have clear, verifiable answers.`)
+Focus on queries that have clear, verifiable answers and stress test the full range
+of codetect capabilities (keyword search, semantic search, symbol navigation, call
+graphs, type relationships).`)
 		fmt.Fprintln(os.Stderr, "--------------------------------------------------------------------------------")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, strings.Repeat("=", 80))

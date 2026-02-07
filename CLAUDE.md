@@ -4,7 +4,7 @@
 
 ## About
 
-codetect is a local MCP server providing fast codebase search, file retrieval, symbol navigation, and semantic search for Claude Code. It combines keyword search (ripgrep), symbol indexing (ctags), and semantic search (Ollama embeddings) to enable natural language code exploration.
+codetect is a local MCP server providing fast codebase search, file retrieval, symbol navigation, and semantic search for Claude Code. It combines keyword search (ripgrep), symbol indexing (ast-grep), and semantic search (Ollama embeddings) to enable natural language code exploration.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ codetect is a local MCP server providing fast codebase search, file retrieval, s
 - **SQLite** - Default embedded database (modernc.org/sqlite)
 - **PostgreSQL + pgvector** - Optional high-performance vector backend
 - **ripgrep** - Fast keyword search
-- **universal-ctags** - Symbol indexing
+- **tree-sitter (via ast-grep)** - Symbol indexing
 - **Ollama** - Local embeddings for semantic search
 - **MCP (Model Context Protocol)** - LLM tool integration
 
@@ -118,16 +118,6 @@ make clean                    # Clean build artifacts
 - `CODETECT_DB_TYPE` - `sqlite` (default) or `postgres`
 - `CODETECT_DB_DSN` - PostgreSQL connection string
 
-**Project Config (`.codetect.yaml`):**
-```yaml
-db:
-  type: postgres
-  dsn: postgres://user:pass@localhost/codetect
-
-embedding:
-  provider: ollama
-  model: nomic-embed-text
-```
 
 ## MCP Tools
 

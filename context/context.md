@@ -1,55 +1,44 @@
 # Current Work Summary
 
-Phase 2a - Rich Context in Search Results: ✅ Core Implementation Complete
+Codebase Cleanup & Optimization — Comprehensive cleanup after v0 → v2.2.0 evolution.
 
-**Status:** Ready for integration testing and validation
-**Branch:** `para/phase2-critical-features-phase2a`
-**Master Plan:** context/plans/2026-02-03-phase2-critical-features.md
-**Phase Plan:** context/plans/2026-02-04-phase2a-rich-context.md
-**Summary:** context/summaries/2026-02-07-phase2a-rich-context-summary.md
+**Status:** Plan created, awaiting review
+**Master Plan:** context/plans/2026-02-07-codebase-cleanup.md
 
 ## Objective
 
-Enable search results to include function/class/struct names and surrounding context lines. This makes search results self-explanatory without requiring full file reads, reducing token usage by ~40%.
+Remove dead code, consolidate duplicated logic, update documentation to reflect current state, and improve test coverage. Make the codebase maintainable and accurate.
 
 ## To-Do List
 
-### Database Schema
-- [x] Add migration for new columns (parent_scope, scope_kind, receiver_type)
-- [x] Update SQLite schema in embeddings table
-- [x] Update PostgreSQL schema via embeddingColumnsForDialect
-- [ ] Add `GetChunkScopeInfo()` method to both adapters
-- [ ] Test migration on existing databases
+### Phase 1: Dead Code & v1 Removal
+- [ ] Remove v1 semantic tools (`search_semantic`, `hybrid_search`)
+- [ ] Rename `semantic_v2.go` → `semantic.go`, clean up V2 naming
+- [ ] Remove mattn driver stub from `internal/db/open.go`
+- [ ] Remove v1 ctags code (`internal/search/symbols/ctags.go`)
+- [ ] Delete `docs/v1/` directory
+- [ ] Clean up all dangling references
 
-### AST Chunker Updates
-- [x] Add scopeStack struct to track parent scopes
-- [x] Implement `mapNodeTypeToKind()` for all supported languages
-- [x] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
-- [x] Update `walkTree()` to populate new chunk fields via scope stack
-- [x] Update Chunk struct definition
-- [ ] Test scope extraction on sample files (Go, Python, TS)
+### Phase 2: Code Consolidation
+- [ ] Extract shared embedding store init to `internal/tools/db.go`
+- [ ] Consolidate enrichment methods (single `findScopeForLocation`)
+- [ ] Merge migration files into `internal/embedding/migration.go`
+- [ ] Standardize error handling across tool handlers
+- [ ] Replace bubble sort in BruteForceVectorDB
 
-### Context Extraction
-- [x] Create `internal/search/context.go`
-- [x] Implement `ContextExtractor.ExtractContext()`
-- [x] Add unit tests with sample files
-- [x] Handle edge cases (start of file, end of file, nonexistent files)
+### Phase 3: Documentation & Housekeeping
+- [ ] Consolidate `architecture.md` + `v2-architecture.md`
+- [ ] Update README.md for v2.2.0
+- [ ] Add v2.2.0 to CHANGELOG.md
+- [ ] Update CLAUDE.md (tech stack, tools, remove .codetect.yaml)
+- [ ] Archive completed plans to `archives/.plans/`
+- [ ] Add lint/fmt/tidy Makefile targets
 
-### Search Result Updates
-- [x] Update SearchResult struct with new fields (hybrid, keyword, fusion)
-- [x] Implement enrichment functions (Enricher with Enrich*Results methods)
-- [x] Update `hybrid_search_v2` to call enrichment
-- [x] Update `search_keyword` to call enrichment
-- [x] Add `include_context` parameter to MCP tool schemas
-- [x] Implement dependency injection via tools.Config (easily removable)
-
-### Testing & Validation
-- [ ] Write unit tests for scope extraction
-- [ ] Write unit tests for context extraction
-- [ ] Write integration tests for enriched search results
-- [ ] Test with real codebases (codetect itself, sample repos)
-- [ ] Validate token usage improvement (measure before/after)
-- [ ] Update documentation with examples
+### Phase 4: Test Coverage
+- [ ] Add tests for `internal/tools/`
+- [ ] Add tests for `internal/daemon/`
+- [ ] Improve `internal/merkle/` coverage
+- [ ] Add integration smoke test
 
 ## Progress Notes
 
@@ -60,8 +49,11 @@ _Update this section as you complete items._
 ```json
 {
   "active_context": [
-    "context/plans/2026-02-03-phase2-critical-features.md",
-    "context/plans/2026-02-04-phase2a-rich-context.md"
+    "context/plans/2026-02-07-codebase-cleanup.md",
+    "context/plans/2026-02-07-codebase-cleanup-phase-1.md",
+    "context/plans/2026-02-07-codebase-cleanup-phase-2.md",
+    "context/plans/2026-02-07-codebase-cleanup-phase-3.md",
+    "context/plans/2026-02-07-codebase-cleanup-phase-4.md"
   ],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
@@ -73,49 +65,40 @@ _Update this section as you complete items._
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
     "context/summaries/2026-02-07-phase2a-rich-context-summary.md"
   ],
-  "execution_branch": "para/phase2-critical-features-phase2a",
-  "execution_started": "2026-02-04T12:00:00Z",
   "phased_execution": {
-    "master_plan": "context/plans/2026-02-03-phase2-critical-features.md",
+    "master_plan": "context/plans/2026-02-07-codebase-cleanup.md",
     "phases": [
       {
-        "phase": "2a",
-        "name": "Rich Context in Search Results",
-        "plan": "context/plans/2026-02-04-phase2a-rich-context.md",
-        "summary": "context/summaries/2026-02-07-phase2a-rich-context-summary.md",
-        "status": "completed",
-        "completed_date": "2026-02-07",
-        "duration": "3 days (planned 1 week)",
-        "objective": "Search results include function/class names and surrounding lines"
+        "phase": 1,
+        "name": "Dead Code & v1 Removal",
+        "plan": "context/plans/2026-02-07-codebase-cleanup-phase-1.md",
+        "status": "pending",
+        "objective": "Remove v1 tools, mattn stub, v1 docs, ctags code"
       },
       {
-        "phase": "2b",
-        "name": "Symbol Graph Navigation",
-        "plan": "TBD",
+        "phase": 2,
+        "name": "Code Consolidation",
+        "plan": "context/plans/2026-02-07-codebase-cleanup-phase-2.md",
         "status": "pending",
-        "duration": "3 weeks",
-        "objective": "Navigate code structure without reading files"
+        "objective": "Extract shared logic, DRY enrichment, standardize errors"
       },
       {
-        "phase": "2c",
-        "name": "Query Expansion & Filtering",
-        "plan": "TBD",
+        "phase": 3,
+        "name": "Documentation & Housekeeping",
+        "plan": "context/plans/2026-02-07-codebase-cleanup-phase-3.md",
         "status": "pending",
-        "duration": "2 weeks",
-        "objective": "Reduce number of search rounds needed"
+        "objective": "Update docs, CHANGELOG, archive plans, Makefile targets"
       },
       {
-        "phase": "2d",
-        "name": "Dual-Model Embeddings",
-        "plan": "TBD",
+        "phase": 4,
+        "name": "Test Coverage",
+        "plan": "context/plans/2026-02-07-codebase-cleanup-phase-4.md",
         "status": "pending",
-        "duration": "2 weeks",
-        "objective": "Code-specific embeddings for better code queries"
+        "objective": "Add tests for tools/, daemon/, merkle/, integration smoke test"
       }
     ],
-    "current_phase": "2a",
-    "total_duration": "8 weeks (10 with buffer)"
+    "current_phase": null
   },
-  "last_updated": "2026-02-07T20:45:00Z"
+  "last_updated": "2026-02-07T21:00:00Z"
 }
 ```

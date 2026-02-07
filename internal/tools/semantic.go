@@ -6,36 +6,52 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"codetect/internal/config"
-	"codetect/internal/db"
+	dbpkg "codetect/internal/db"
 	"codetect/internal/embedding"
+	"codetect/internal/fusion"
+	"codetect/internal/indexer"
 	"codetect/internal/mcp"
+	"codetect/internal/rerank"
 	"codetect/internal/search/files"
-	"codetect/internal/search/hybrid"
+	"codetect/internal/search/keyword"
 )
 
-// RegisterSemanticTools registers the semantic search MCP tools
-// Phase 2a: Config parameter added for consistency, not used by v1 tools yet
-func RegisterSemanticTools(server *mcp.Server, _ *Config) {
-	registerSearchSemantic(server)
-	registerHybridSearch(server)
+// RegisterSemanticTools registers the semantic search MCP tools.
+// These tools use the retriever with RRF fusion and optional reranking.
+// Phase 2a: Now accepts Config for optional enrichment.
+func RegisterSemanticTools(server *mcp.Server, toolConfig *Config) {
+	if toolConfig == nil {
+		toolConfig = DefaultConfig()
+	}
+	registerHybridSearchV2(server, toolConfig)
 }
 
-func registerSearchSemantic(server *mcp.Server) {
+func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 	tool := mcp.Tool{
-		Name:        "search_semantic",
-		Description: "Search for code semantically similar to the query. Uses embeddings to find conceptually related code, not just keyword matches. Requires Ollama with nomic-embed-text model.",
+		Name:        "hybrid_search_v2",
+		Description: "v2 hybrid search combining keyword, semantic, and symbol search with RRF fusion. Uses AST-based chunking and content-addressed caching. Optionally applies cross-encoder reranking for higher precision.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"query": {
 					Type:        "string",
-					Description: "Natural language query describing what you're looking for",
+					Description: "Search query (used for all search signals)",
 				},
 				"limit": {
 					Type:        "number",
-					Description: "Maximum number of results (default: 10)",
+					Description: "Max results to return (default: 20)",
+				},
+				"rerank": {
+					Type:        "boolean",
+					Description: "Enable cross-encoder reranking for higher precision (default: false)",
+				},
+				"include_context": {
+					Type:        "boolean",
+					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
 				},
 			},
 			Required: []string{"query"},
@@ -48,13 +64,33 @@ func registerSearchSemantic(server *mcp.Server) {
 			return nil, fmt.Errorf("query is required")
 		}
 
-		limit := 10
+		limit := 20
 		if l, ok := args["limit"].(float64); ok {
 			limit = int(l)
 		}
 
-		// Open semantic searcher
-		searcher, err := openSemanticSearcher()
+		enableRerank := false
+		if r, ok := args["rerank"].(bool); ok {
+			enableRerank = r
+		}
+
+		// Phase 2a: Check if context enrichment requested
+		var includeContext *bool
+		if ic, ok := args["include_context"].(bool); ok {
+			includeContext = &ic
+		}
+
+		// Get current working directory as repo root
+		repoRoot, err := os.Getwd()
+		if err != nil {
+			repoRoot = "."
+		}
+
+		ctx := context.Background()
+		start := time.Now()
+
+		// Open v2 indexer for search
+		idx, err := openIndexer(repoRoot)
 		if err != nil {
 			return &mcp.ToolsCallResult{
 				Content: []mcp.Content{{
@@ -63,24 +99,103 @@ func registerSearchSemantic(server *mcp.Server) {
 				}},
 			}, nil
 		}
+		defer idx.Close()
 
-		// Check availability
-		if !searcher.Available() {
-			return &mcp.ToolsCallResult{
-				Content: []mcp.Content{{
-					Type: "text",
-					Text: `{"available": false, "error": "Ollama not available. Install Ollama and run: ollama pull nomic-embed-text"}`,
-				}},
-			}, nil
+		// Create native v2 semantic searcher
+		v2Searcher, err := createSemanticSearcher(idx, repoRoot)
+		semanticAvailable := err == nil && v2Searcher != nil && v2Searcher.Available()
+
+		// Run keyword and semantic search in parallel
+		var keywordResults, semanticResults []fusion.Result
+		var keywordErr, semanticErr error
+		var wg sync.WaitGroup
+
+		// Keyword search
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			keywordResults, keywordErr = searchKeywordV2(ctx, query, repoRoot, limit)
+		}()
+
+		// Semantic search using native v2 searcher
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if v2Searcher == nil || !v2Searcher.Available() {
+				return
+			}
+			semanticResults, semanticErr = searchSemanticV2(ctx, v2Searcher, query, repoRoot, limit)
+		}()
+
+		wg.Wait()
+
+		// Log errors but continue (graceful degradation)
+		if keywordErr != nil {
+			// Non-fatal, just won't have keyword results
+			keywordResults = nil
+		}
+		if semanticErr != nil {
+			// Non-fatal, just won't have semantic results
+			semanticResults = nil
 		}
 
-		// Perform search with snippets
-		result, err := searcher.SearchWithSnippets(context.Background(), query, limit, getSnippetFn())
-		if err != nil {
-			return nil, fmt.Errorf("semantic search: %w", err)
+		// Fuse results with RRF
+		weights := config.DefaultRetrieverConfig().Weights
+		fusedResults := fusion.WeightedRRF(weights, keywordResults, semanticResults, nil)
+
+		// Limit fused results
+		if len(fusedResults) > limit*2 {
+			fusedResults = fusedResults[:limit*2]
 		}
 
-		data, err := json.Marshal(result)
+		// Optionally apply reranking
+		if enableRerank && len(fusedResults) > 0 {
+			rerankCfg := config.DefaultRerankerConfig()
+			rerankCfg.Enabled = true
+			rerankCfg.TopK = limit
+
+			reranker := rerank.NewReranker(rerankCfg)
+
+			// Build contents map from snippets
+			contents := make(map[string]string)
+			for _, r := range fusedResults {
+				if r.Snippet != "" {
+					contents[r.ID] = r.Snippet
+				}
+			}
+
+			rerankResult, err := reranker.Rerank(ctx, query, fusedResults, contents)
+			if err == nil {
+				fusedResults = rerankResult.Results
+			}
+		}
+
+		// Apply final limit
+		if len(fusedResults) > limit {
+			fusedResults = fusedResults[:limit]
+		}
+
+		// Phase 2a: Enrich results if enricher available
+		if toolConfig.Enricher != nil {
+			if err := toolConfig.Enricher.EnrichRRFResults(fusedResults, includeContext); err != nil {
+				// Log but don't fail - enrichment is optional
+			}
+		}
+
+		// Build response
+		response := HybridSearchV2Result{
+			Query:             query,
+			Results:           fusedResults,
+			KeywordCount:      len(keywordResults),
+			SemanticCount:     len(semanticResults),
+			SymbolCount:       0, // Symbol search not implemented for v2 yet
+			SemanticAvailable: semanticAvailable,
+			SymbolAvailable:   false,
+			Reranked:          enableRerank,
+			Duration:          time.Since(start).String(),
+		}
+
+		data, err := json.Marshal(response)
 		if err != nil {
 			return nil, err
 		}
@@ -96,194 +211,160 @@ func registerSearchSemantic(server *mcp.Server) {
 	server.RegisterTool(tool, handler)
 }
 
-func registerHybridSearch(server *mcp.Server) {
-	tool := mcp.Tool{
-		Name:        "hybrid_search",
-		Description: "Search combining keyword (ripgrep) and semantic (embedding) search. Returns results from both approaches, ranked by combined score. Semantic search requires Ollama.",
-		InputSchema: mcp.InputSchema{
-			Type: "object",
-			Properties: map[string]mcp.Property{
-				"query": {
-					Type:        "string",
-					Description: "Search query (used for both keyword and semantic search)",
-				},
-				"keyword_limit": {
-					Type:        "number",
-					Description: "Max keyword results (default: 20)",
-				},
-				"semantic_limit": {
-					Type:        "number",
-					Description: "Max semantic results (default: 10)",
-				},
-			},
-			Required: []string{"query"},
-		},
-	}
-
-	handler := func(args map[string]any) (*mcp.ToolsCallResult, error) {
-		query, ok := args["query"].(string)
-		if !ok || query == "" {
-			return nil, fmt.Errorf("query is required")
-		}
-
-		config := hybrid.DefaultConfig()
-		if kl, ok := args["keyword_limit"].(float64); ok {
-			config.KeywordLimit = int(kl)
-		}
-		if sl, ok := args["semantic_limit"].(float64); ok {
-			config.SemanticLimit = int(sl)
-		}
-		config.SnippetFn = getSnippetFn()
-
-		// Try to open semantic searcher (optional)
-		var semanticSearcher *embedding.SemanticSearcher
-		if s, err := openSemanticSearcher(); err == nil && s.Available() {
-			semanticSearcher = s
-		}
-
-		// Create hybrid searcher
-		hybridSearcher := hybrid.NewSearcher(semanticSearcher)
-
-		// Get working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			cwd = "."
-		}
-
-		// Perform search
-		result, err := hybridSearcher.Search(context.Background(), query, cwd, config)
-		if err != nil {
-			return nil, fmt.Errorf("hybrid search: %w", err)
-		}
-
-		data, err := json.Marshal(result)
-		if err != nil {
-			return nil, err
-		}
-
-		return &mcp.ToolsCallResult{
-			Content: []mcp.Content{{
-				Type: "text",
-				Text: string(data),
-			}},
-		}, nil
-	}
-
-	server.RegisterTool(tool, handler)
+// HybridSearchV2Result is the response format for v2 hybrid search.
+type HybridSearchV2Result struct {
+	Query             string             `json:"query"`
+	Results           []fusion.RRFResult `json:"results"`
+	KeywordCount      int                `json:"keyword_count"`
+	SemanticCount     int                `json:"semantic_count"`
+	SymbolCount       int                `json:"symbol_count"`
+	SemanticAvailable bool               `json:"semantic_available"`
+	SymbolAvailable   bool               `json:"symbol_available"`
+	Reranked          bool               `json:"reranked"`
+	Duration          string             `json:"duration"`
 }
 
-// openSemanticSearcher creates a semantic searcher using the configured database.
-// It supports both SQLite and PostgreSQL based on environment configuration.
-// Falls back to SQLite if PostgreSQL is unavailable.
-func openSemanticSearcher() (*embedding.SemanticSearcher, error) {
+// openIndexer opens a v2 indexer for the given repository.
+func openIndexer(repoRoot string) (*indexer.Indexer, error) {
 	// Load database configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
+	embConfig := embedding.LoadConfigFromEnv()
 
-	// Try to open with configured database type
-	store, err := openEmbeddingStore(dbConfig)
-	if err != nil {
-		// If PostgreSQL fails, try falling back to SQLite
-		if dbConfig.Type == db.DatabasePostgres {
-			fmt.Fprintf(os.Stderr, "Warning: PostgreSQL unavailable (%v), falling back to SQLite\n", err)
+	// Build indexer config
+	cfg := &indexer.Config{
+		DBType:            string(dbConfig.Type),
+		Dimensions:        dbConfig.VectorDimensions,
+		EmbeddingProvider: string(embConfig.Provider),
+		EmbeddingModel:    embConfig.Model,
+		OllamaURL:         embConfig.OllamaURL,
+		LiteLLMURL:        embConfig.LiteLLMURL,
+		LiteLLMKey:        embConfig.LiteLLMKey,
+		BatchSize:         32,
+		MaxWorkers:        4,
+	}
 
-			// Fallback to SQLite
-			dbConfig.Type = db.DatabaseSQLite
-			cwd, _ := os.Getwd()
-			dbConfig.Path = filepath.Join(cwd, ".codetect", "symbols.db")
+	// Set database path/DSN
+	if dbConfig.Type == dbpkg.DatabasePostgres {
+		cfg.DSN = dbConfig.DSN
+	} else {
+		cfg.DBPath = filepath.Join(repoRoot, ".codetect", "index.db")
+	}
 
-			store, err = openEmbeddingStore(dbConfig)
-			if err != nil {
-				return nil, fmt.Errorf("failed to open database (tried PostgreSQL and SQLite): %w", err)
-			}
-		} else {
-			return nil, err
+	// Check if v2 index exists
+	if dbConfig.Type == dbpkg.DatabaseSQLite {
+		if _, err := os.Stat(cfg.DBPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("no v2 index found - run 'codetect-index index --v2' first")
 		}
 	}
 
+	return indexer.New(repoRoot, cfg)
+}
+
+// createSemanticSearcher creates a native v2 semantic searcher from indexer components.
+func createSemanticSearcher(idx *indexer.Indexer, repoRoot string) (*embedding.V2SemanticSearcher, error) {
 	// Create embedder from environment configuration
 	embedder, err := embedding.NewEmbedderFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("creating embedder: %w", err)
 	}
 
-	// Create semantic searcher
-	return embedding.NewSemanticSearcher(store, embedder), nil
+	// Check if embedder is available
+	if !embedder.Available() {
+		return nil, fmt.Errorf("embedder not available")
+	}
+
+	// Get the cache from the indexer
+	cache := idx.Cache()
+	if cache == nil {
+		return nil, fmt.Errorf("embedding cache not available")
+	}
+
+	// Get locations store
+	locations := idx.Locations()
+	if locations == nil {
+		return nil, fmt.Errorf("location store not available")
+	}
+
+	// Get vector index (may be nil, searcher will use brute-force fallback)
+	vectorIndex := idx.VectorIndex()
+
+	// Create native v2 semantic searcher
+	return embedding.NewV2SemanticSearcher(cache, locations, embedder, repoRoot, vectorIndex), nil
 }
 
-// openEmbeddingStore opens an embedding store with the given configuration.
-func openEmbeddingStore(dbConfig config.DatabaseConfig) (*embedding.EmbeddingStore, error) {
-	// Get current working directory as repo root for multi-repo isolation
-	cwd, err := os.Getwd()
+// searchKeywordV2 performs keyword search and returns results in fusion format.
+func searchKeywordV2(ctx context.Context, query, repoRoot string, limit int) ([]fusion.Result, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	results, err := keyword.Search(query, repoRoot, limit)
 	if err != nil {
-		return nil, fmt.Errorf("getting working directory: %w", err)
+		return nil, err
 	}
 
-	switch dbConfig.Type {
-	case db.DatabasePostgres:
-		// Open PostgreSQL database
-		if dbConfig.DSN == "" {
-			return nil, fmt.Errorf("PostgreSQL DSN not configured - set CODETECT_DB_DSN")
-		}
-
-		cfg := dbConfig.ToDBConfig()
-		database, err := db.Open(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("opening PostgreSQL: %w", err)
-		}
-
-		// Create embedding store with PostgreSQL dialect and repoRoot
-		dialect := db.GetDialect(db.DatabasePostgres)
-		store, err := embedding.NewEmbeddingStoreWithOptions(database, dialect, dbConfig.VectorDimensions, cwd)
-		if err != nil {
-			database.Close()
-			return nil, fmt.Errorf("creating PostgreSQL embedding store: %w", err)
-		}
-
-		return store, nil
-
-	default: // SQLite
-		// Determine database path
-		dbPath := dbConfig.Path
-		if dbPath == "" {
-			dbPath = filepath.Join(cwd, ".codetect", "symbols.db")
-		}
-
-		// For SQLite, check if database exists
-		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("no index found at %s - run 'make index' first", dbPath)
-		}
-
-		// Open the database using the existing index function
-		idx, err := openIndex()
-		if err != nil {
-			return nil, fmt.Errorf("opening SQLite index: %w", err)
-		}
-
-		// Create embedding store from index database with repoRoot
-		store, err := embedding.NewEmbeddingStoreFromSQL(idx.DB(), cwd)
-		if err != nil {
-			return nil, fmt.Errorf("creating SQLite embedding store: %w", err)
-		}
-
-		return store, nil
+	fusionResults := make([]fusion.Result, 0, len(results.Results))
+	for _, res := range results.Results {
+		fusionResults = append(fusionResults, fusion.Result{
+			ID:      fmt.Sprintf("%s:%d", res.Path, res.LineStart),
+			Path:    res.Path,
+			Line:    res.LineStart,
+			EndLine: res.LineEnd,
+			Score:   float64(res.Score),
+			Source:  "keyword",
+			Snippet: res.Snippet,
+		})
 	}
+	return fusionResults, nil
 }
 
-// getSnippetFn returns a function that reads code snippets from files
-func getSnippetFn() func(path string, start, end int) string {
-	return func(path string, start, end int) string {
-		result, err := files.GetFile(path, start, end)
+// searchSemanticV2 performs semantic search using the native v2 searcher.
+func searchSemanticV2(ctx context.Context, searcher *embedding.V2SemanticSearcher, query, repoRoot string, limit int) ([]fusion.Result, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Use SearchWithSnippets to include code snippets
+	response, err := searcher.SearchWithSnippets(ctx, query, limit, func(path string, start, end int) string {
+		result, err := files.GetFile(filepath.Join(repoRoot, path), start, end)
 		if err != nil {
 			return fmt.Sprintf("[Error reading %s: %v]", path, err)
 		}
-
 		snippet := result.Content
-
-		// Truncate if too long
 		if len(snippet) > 500 {
 			snippet = snippet[:500] + "..."
 		}
-
 		return snippet
+	})
+	if err != nil {
+		return nil, err
 	}
+
+	if !response.Available {
+		return nil, nil
+	}
+
+	fusionResults := make([]fusion.Result, 0, len(response.Results))
+	for _, res := range response.Results {
+		fusionResults = append(fusionResults, fusion.Result{
+			ID:      fmt.Sprintf("%s:%d:%d", res.Path, res.StartLine, res.EndLine),
+			Path:    res.Path,
+			Line:    res.StartLine,
+			EndLine: res.EndLine,
+			Score:   float64(res.Score),
+			Source:  "semantic",
+			Snippet: res.Snippet,
+			Metadata: map[string]interface{}{
+				"node_type": res.NodeType,
+				"node_name": res.NodeName,
+				"language":  res.Language,
+			},
+		})
+	}
+	return fusionResults, nil
 }
+

@@ -250,12 +250,7 @@ cmd_doctor() {
         error "ripgrep (rg) not found"
     fi
 
-    if command -v ctags &> /dev/null && ctags --version 2>&1 | grep -q "Universal Ctags"; then
-        CTAGS_VERSION=$(ctags --version | head -1 | cut -d',' -f1)
-        success "ctags: $CTAGS_VERSION"
-    else
-        warn "universal-ctags not found (symbol indexing will be limited)"
-    fi
+    success "Symbol indexing: built-in (ast-grep)"
     echo ""
 
     # Check embedding provider

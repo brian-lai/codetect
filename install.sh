@@ -217,88 +217,12 @@ if [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE" 2>/dev/null; then
 fi
 
 # Symbol Indexing
-print_section "Symbol Indexing (enables find_symbol, list_defs_in_file)"
+print_section "Symbol Indexing (built-in via ast-grep)"
 
-ENABLE_SYMBOLS=false
-CTAGS_AVAILABLE=false
+success "Symbol indexing uses built-in ast-grep (no external dependencies)"
+info "Supports: Go, TypeScript, JavaScript, Python, Rust, Java, C/C++, Ruby, PHP, C#, Kotlin, Swift"
 
-if command -v ctags &> /dev/null && ctags --version 2>&1 | grep -q "Universal Ctags"; then
-    CTAGS_VERSION=$(ctags --version | head -1 | cut -d',' -f1)
-    success "universal-ctags already installed: $CTAGS_VERSION"
-    CTAGS_AVAILABLE=true
-    ENABLE_SYMBOLS=true
-else
-    warn "universal-ctags is not installed"
-    echo ""
-    info "Symbol indexing allows you to search for functions, types, classes,"
-    info "and other code symbols by name. This enables fast navigation in large"
-    info "codebases."
-    echo ""
-
-    read -p "$(prompt "Enable symbol indexing? [Y/n]")" INSTALL_CTAGS
-    INSTALL_CTAGS=${INSTALL_CTAGS:-Y}
-
-    if [[ $INSTALL_CTAGS =~ ^[Yy] ]]; then
-        echo ""
-        case $PKG_MGR in
-            brew)
-                info "Installing universal-ctags via Homebrew..."
-                if brew install universal-ctags; then
-                    success "universal-ctags installed successfully"
-                    CTAGS_AVAILABLE=true
-                    ENABLE_SYMBOLS=true
-                else
-                    error "Failed to install universal-ctags"
-                    warn "Symbol indexing will be disabled"
-                fi
-                ;;
-            apt)
-                info "Installing universal-ctags..."
-                info "This requires sudo access."
-                if sudo apt-get update && sudo apt-get install -y universal-ctags; then
-                    success "universal-ctags installed successfully"
-                    CTAGS_AVAILABLE=true
-                    ENABLE_SYMBOLS=true
-                else
-                    error "Failed to install universal-ctags"
-                    warn "Symbol indexing will be disabled"
-                fi
-                ;;
-            dnf)
-                info "Installing ctags..."
-                info "This requires sudo access."
-                if sudo dnf install -y ctags; then
-                    success "ctags installed successfully"
-                    CTAGS_AVAILABLE=true
-                    ENABLE_SYMBOLS=true
-                else
-                    error "Failed to install ctags"
-                    warn "Symbol indexing will be disabled"
-                fi
-                ;;
-            pacman)
-                info "Installing ctags..."
-                info "This requires sudo access."
-                if sudo pacman -S --noconfirm ctags; then
-                    success "ctags installed successfully"
-                    CTAGS_AVAILABLE=true
-                    ENABLE_SYMBOLS=true
-                else
-                    error "Failed to install ctags"
-                    warn "Symbol indexing will be disabled"
-                fi
-                ;;
-            *)
-                warn "Automatic installation not supported on this platform"
-                info "Install manually from: ${BOLD}https://github.com/universal-ctags/ctags${NC}"
-                info "Symbol indexing will be disabled for now"
-                ;;
-        esac
-    else
-        warn "Skipping symbol indexing setup"
-        info "You can install universal-ctags later and run 'codetect index'"
-    fi
-fi
+ENABLE_SYMBOLS=true
 
 #
 # Step 3: Semantic Search Setup
@@ -1538,7 +1462,7 @@ print_box "$MAGENTA" \
     "${BOLD}Features Enabled${NC}" \
     "  Database:        ${GREEN}✓${NC}  ($DB_TYPE)" \
     "  Keyword Search:  ${GREEN}✓${NC}  (ripgrep)" \
-    "  Symbol Indexing: $(if [[ $CTAGS_AVAILABLE == true ]]; then echo "${GREEN}✓${NC}  (universal-ctags)"; else echo "${YELLOW}✗${NC}  (not installed)"; fi)" \
+    "  Symbol Indexing: ${GREEN}✓${NC}  (built-in ast-grep)" \
     "  Semantic Search: $(if [[ $EMBEDDING_PROVIDER != "off" ]]; then echo "${GREEN}✓${NC}  ($EMBEDDING_PROVIDER)"; else echo "${YELLOW}✗${NC}  (disabled)"; fi)"
 
 print_box "$BLUE" \

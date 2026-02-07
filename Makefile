@@ -84,13 +84,8 @@ doctor:
 	@command -v rg >/dev/null 2>&1 || { echo "❌ missing: ripgrep (rg)"; exit 1; }
 	@echo "✓ ripgrep: $$(rg --version | head -1)"
 	@echo ""
-	@echo "=== Optional (for symbol indexing) ==="
-	@if command -v ctags >/dev/null 2>&1 && ctags --version 2>&1 | grep -q "Universal Ctags"; then \
-		echo "✓ ctags: $$(ctags --version | head -1)"; \
-	else \
-		echo "○ ctags: not found (symbol indexing disabled)"; \
-		echo "  Install with: brew install universal-ctags"; \
-	fi
+	@echo "=== Symbol Indexing ==="
+	@echo "✓ ast-grep: built-in (no external dependency required)"
 	@echo ""
 	@echo "=== Embedding Provider ==="
 	@PROVIDER=$${CODETECT_EMBEDDING_PROVIDER:-ollama}; \

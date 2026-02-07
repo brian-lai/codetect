@@ -15,9 +15,9 @@ Enable navigation of code relationships without reading files. Add symbol refere
 ### Week 1: Reference Extraction + Storage
 
 #### Days 1-2: Schema + Infrastructure
-- [ ] Add `symbol_refs` table to schema builder (`internal/db/schema.go`)
-- [ ] Add `type_relations` table to schema builder (`internal/db/schema.go`)
-- [ ] Schema version bump (2 → 3)
+- [x] Add `symbol_refs` table to schema builder (`internal/db/schema.go`)
+- [x] Add `type_relations` table to schema builder (`internal/db/schema.go`)
+- [x] Schema version bump (2 → 3)
 - [ ] Add migration path for existing databases
 - [ ] Add database method: `InsertRefs`
 - [ ] Add database method: `DeleteRefsByFile`

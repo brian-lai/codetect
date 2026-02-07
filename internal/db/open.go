@@ -40,12 +40,6 @@ func openSQLite(cfg Config) (DB, error) {
 		// See: https://github.com/asg017/sqlite-vec-go-bindings
 		return nil, fmt.Errorf("ncruces driver not yet implemented (requires sqlite-vec integration)")
 
-	case DriverMattn:
-		// TODO: Implement mattn driver with CGO
-		// This requires CGO and a C compiler but provides full extension support.
-		// See: https://github.com/mattn/go-sqlite3
-		return nil, fmt.Errorf("mattn driver not yet implemented (requires CGO)")
-
 	default:
 		return nil, fmt.Errorf("unknown SQLite driver: %s", cfg.Driver)
 	}

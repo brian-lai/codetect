@@ -157,9 +157,6 @@ const (
 
 	// DriverNcruces uses ncruces/go-sqlite3 (WASM-based, supports extensions).
 	DriverNcruces Driver = "ncruces"
-
-	// DriverMattn uses mattn/go-sqlite3 (CGO, full extension support).
-	DriverMattn Driver = "mattn"
 )
 
 // Config holds database configuration options.

@@ -27,16 +27,16 @@ Enable navigation of code relationships without reading files. Add symbol refere
 - [x] Add database method: `QueryImplementations`
 
 #### Days 3-5: AST Reference + Type Relation Extraction
-- [ ] Extend `walkTree()` to extract `call_expression` nodes (function/method calls)
-- [ ] Extend `walkTree()` to extract type relation nodes (Go: `embedded_field`)
-- [ ] Extend `walkTree()` to extract type relation nodes (TS: `implements_clause`, `extends_clause`)
-- [ ] For Go: handle `call_expression`
-- [ ] For Go: handle `selector_expression` (method calls)
-- [ ] For Go: handle struct/interface embedding
-- [ ] For TypeScript: handle `call_expression`
-- [ ] For TypeScript: handle `member_expression`
-- [ ] For TypeScript: handle `implements`/`extends` clauses
-- [ ] Track source_scope from existing `scopeStack`
+- [x] Extend `walkTree()` to extract `call_expression` nodes (function/method calls)
+- [x] Extend `walkTree()` to extract type relation nodes (Go: `embedded_field`)
+- [x] Extend `walkTree()` to extract type relation nodes (TS: `implements_clause`, `extends_clause`)
+- [x] For Go: handle `call_expression`
+- [x] For Go: handle `selector_expression` (method calls)
+- [x] For Go: handle struct/interface embedding
+- [x] For TypeScript: handle `call_expression`
+- [x] For TypeScript: handle `member_expression`
+- [x] For TypeScript: handle `implements`/`extends` clauses
+- [x] Track source_scope from existing `scopeStack`
 - [ ] Store extracted refs via batch insert during indexing
 - [ ] Store extracted type relations via batch insert during indexing
 

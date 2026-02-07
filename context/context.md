@@ -18,13 +18,13 @@ Enable navigation of code relationships without reading files. Add symbol refere
 - [x] Add `symbol_refs` table to schema builder (`internal/db/schema.go`)
 - [x] Add `type_relations` table to schema builder (`internal/db/schema.go`)
 - [x] Schema version bump (2 → 3)
-- [ ] Add migration path for existing databases
-- [ ] Add database method: `InsertRefs`
-- [ ] Add database method: `DeleteRefsByFile`
-- [ ] Add database method: `QueryRefsByName`
-- [ ] Add database method: `InsertTypeRelations`
-- [ ] Add database method: `DeleteTypeRelationsByFile`
-- [ ] Add database method: `QueryImplementations`
+- [x] Add migration path for existing databases
+- [x] Add database method: `InsertRefs`
+- [x] Add database method: `DeleteRefsByFile`
+- [x] Add database method: `QueryRefsByName`
+- [x] Add database method: `InsertTypeRelations`
+- [x] Add database method: `DeleteTypeRelationsByFile`
+- [x] Add database method: `QueryImplementations`
 
 #### Days 3-5: AST Reference + Type Relation Extraction
 - [ ] Extend `walkTree()` to extract `call_expression` nodes (function/method calls)

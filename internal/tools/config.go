@@ -1,6 +1,14 @@
 package tools
 
-import "codetect/internal/search"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"codetect/internal/db"
+	"codetect/internal/embedding"
+	"codetect/internal/search"
+)
 
 // Config holds optional dependencies for tools.
 // Phase 2a: Enables dependency injection for search enrichment.
@@ -43,7 +51,41 @@ func DefaultConfigWithEnrichment() *Config {
 }
 
 // createDefaultEnricher attempts to create an enricher with default settings.
+// Opens the embedding store from .codetect/index.db and creates an enricher
+// with 3 lines of context before/after matches, enrichment enabled by default.
 func createDefaultEnricher() (*search.Enricher, error) {
-	// This will be implemented - for now, return nil to fix build
-	return nil, nil
+	// Get current working directory as repo root
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Build path to embedding store
+	dbPath := filepath.Join(repoRoot, ".codetect", "index.db")
+
+	// Check if database exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("index database not found at %s (run 'codetect-index index' first)", dbPath)
+	}
+
+	// Open SQLite database
+	database, err := db.Open(db.DefaultConfig(dbPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Create embedding store
+	embStore, err := embedding.NewEmbeddingStore(database, repoRoot)
+	if err != nil {
+		database.Close()
+		return nil, fmt.Errorf("failed to create embedding store: %w", err)
+	}
+
+	// Create enricher with defaults:
+	// - 3 lines before match
+	// - 3 lines after match
+	// - includeDefaults: true (enrich by default, can override with include_context=false)
+	enricher := search.NewEnricher(embStore, 3, 3, true)
+
+	return enricher, nil
 }

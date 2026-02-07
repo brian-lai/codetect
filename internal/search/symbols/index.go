@@ -221,9 +221,8 @@ func (idx *Index) Update(root string) error {
 	// Collect all symbols based on configured backend
 	var allSymbols []Symbol
 
-	// Decide which indexer(s) to use based on configuration
+	// Decide which indexer to use based on configuration
 	useAstGrep := idx.indexCfg.UseAstGrep() && AstGrepAvailable()
-	useCtags := idx.indexCfg.UseCtags() && CtagsAvailable()
 
 	// If ast-grep is required but not available, error
 	if idx.indexCfg.RequireAstGrep() && !AstGrepAvailable() {
@@ -249,46 +248,13 @@ func (idx *Index) Update(root string) error {
 		for lang, files := range filesByLang {
 			symbols, err := RunAstGrep(root, files, lang)
 			if err != nil {
-				// If ast-grep fails and ctags is allowed, fall back
-				if useCtags {
-					unsupportedFiles = append(unsupportedFiles, files...)
-					continue
-				}
 				return fmt.Errorf("ast-grep failed for %s: %w", lang, err)
 			}
 			allSymbols = append(allSymbols, symbols...)
 		}
-	} else {
-		// Not using ast-grep, mark all files as unsupported
-		for path := range filesToIndex {
-			unsupportedFiles = append(unsupportedFiles, path)
-		}
 	}
 
-	// Run ctags for unsupported files (if configured and available)
-	if len(unsupportedFiles) > 0 && useCtags {
-		// Convert relative paths to absolute for ctags
-		var absUnsupportedFiles []string
-		for _, path := range unsupportedFiles {
-			if filepath.IsAbs(path) {
-				absUnsupportedFiles = append(absUnsupportedFiles, path)
-			} else {
-				absUnsupportedFiles = append(absUnsupportedFiles, filepath.Join(root, path))
-			}
-		}
-
-		entries, err := RunCtags(root, absUnsupportedFiles)
-		if err != nil {
-			// Only error if both indexers failed and we have no symbols
-			if len(allSymbols) == 0 {
-				return fmt.Errorf("running ctags: %w", err)
-			}
-		} else {
-			for _, entry := range entries {
-				allSymbols = append(allSymbols, entry.ToSymbol())
-			}
-		}
-	}
+	// Unsupported files (no ast-grep support) are skipped - no symbols indexed for them
 
 	// Begin transaction for bulk insert
 	tx, err := idx.adapter.Begin()

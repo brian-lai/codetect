@@ -6,53 +6,10 @@ import (
 	"testing"
 )
 
-// BenchmarkIndexingCtags benchmarks indexing with ctags only
-func BenchmarkIndexingCtags(b *testing.B) {
-	if !CtagsAvailable() {
-		b.Skip("ctags not available")
-	}
-
-	// Use codetect's own codebase for benchmarking
-	cwd, _ := os.Getwd()
-	repoRoot := filepath.Join(cwd, "../../..")
-
-	// Create temp db for each iteration
-	tmpDir := b.TempDir()
-	dbPath := filepath.Join(tmpDir, "bench.db")
-
-	// Force ctags-only by temporarily unsetting CODETECT_INDEX_BACKEND
-	oldEnv := os.Getenv("CODETECT_INDEX_BACKEND")
-	os.Setenv("CODETECT_INDEX_BACKEND", "ctags")
-	defer func() {
-		if oldEnv != "" {
-			os.Setenv("CODETECT_INDEX_BACKEND", oldEnv)
-		} else {
-			os.Unsetenv("CODETECT_INDEX_BACKEND")
-		}
-	}()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		idx, err := NewIndex(dbPath)
-		if err != nil {
-			b.Fatalf("Creating index: %v", err)
-		}
-
-		if err := idx.Update(repoRoot); err != nil {
-			b.Fatalf("Indexing: %v", err)
-		}
-
-		idx.Close()
-	}
-}
-
-// BenchmarkIndexingHybrid benchmarks indexing with hybrid approach
-func BenchmarkIndexingHybrid(b *testing.B) {
-	hasAstGrep := AstGrepAvailable()
-	hasCtags := CtagsAvailable()
-
-	if !hasAstGrep && !hasCtags {
-		b.Skip("Neither ast-grep nor ctags available")
+// BenchmarkIndexingAstGrep benchmarks indexing with ast-grep
+func BenchmarkIndexingAstGrep(b *testing.B) {
+	if !AstGrepAvailable() {
+		b.Skip("ast-grep not available")
 	}
 
 	// Use codetect's own codebase for benchmarking

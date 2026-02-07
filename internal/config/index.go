@@ -9,14 +9,11 @@ import (
 type IndexBackend string
 
 const (
-	// IndexBackendAuto uses ast-grep for supported languages, ctags for others (default)
+	// IndexBackendAuto uses ast-grep (default)
 	IndexBackendAuto IndexBackend = "auto"
 
 	// IndexBackendAstGrep uses ast-grep only (errors on unsupported languages)
 	IndexBackendAstGrep IndexBackend = "ast-grep"
-
-	// IndexBackendCtags uses universal-ctags only (legacy behavior)
-	IndexBackendCtags IndexBackend = "ctags"
 )
 
 // IndexConfig holds configuration for symbol indexing
@@ -27,12 +24,12 @@ type IndexConfig struct {
 
 // LoadIndexConfigFromEnv loads indexing configuration from environment variables.
 // Supports the following variable:
-//   - CODETECT_INDEX_BACKEND: Backend to use ("auto", "ast-grep", or "ctags")
+//   - CODETECT_INDEX_BACKEND: Backend to use ("auto" or "ast-grep")
 //
-// If no environment variable is set, defaults to "auto" (hybrid approach).
+// If no environment variable is set, defaults to "auto".
 func LoadIndexConfigFromEnv() IndexConfig {
 	cfg := IndexConfig{
-		Backend: IndexBackendAuto, // Default to hybrid
+		Backend: IndexBackendAuto,
 	}
 
 	if backend := os.Getenv("CODETECT_INDEX_BACKEND"); backend != "" {
@@ -41,8 +38,6 @@ func LoadIndexConfigFromEnv() IndexConfig {
 			cfg.Backend = IndexBackendAuto
 		case "ast-grep", "astgrep", "sg":
 			cfg.Backend = IndexBackendAstGrep
-		case "ctags", "universal-ctags":
-			cfg.Backend = IndexBackendCtags
 		default:
 			// Unknown backend, use default
 			cfg.Backend = IndexBackendAuto
@@ -57,11 +52,6 @@ func (c IndexConfig) UseAstGrep() bool {
 	return c.Backend == IndexBackendAuto || c.Backend == IndexBackendAstGrep
 }
 
-// UseCtags returns true if ctags should be used for indexing
-func (c IndexConfig) UseCtags() bool {
-	return c.Backend == IndexBackendAuto || c.Backend == IndexBackendCtags
-}
-
 // RequireAstGrep returns true if ast-grep is required (not optional)
 func (c IndexConfig) RequireAstGrep() bool {
 	return c.Backend == IndexBackendAstGrep
@@ -72,9 +62,7 @@ func (c IndexConfig) String() string {
 	switch c.Backend {
 	case IndexBackendAstGrep:
 		return "ast-grep only"
-	case IndexBackendCtags:
-		return "universal-ctags only"
 	default:
-		return "auto (ast-grep + ctags fallback)"
+		return "ast-grep (auto)"
 	}
 }

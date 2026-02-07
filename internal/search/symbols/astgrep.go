@@ -375,3 +375,32 @@ func deduplicateSymbols(symbols []Symbol) []Symbol {
 
 	return unique
 }
+
+// normalizeKind normalizes symbol kind names to consistent values
+func normalizeKind(kind string) string {
+	// Map common kind names to normalized names
+	switch strings.ToLower(kind) {
+	case "f", "func", "function", "method":
+		return "function"
+	case "c", "class":
+		return "class"
+	case "s", "struct":
+		return "struct"
+	case "i", "interface":
+		return "interface"
+	case "t", "type", "typedef":
+		return "type"
+	case "v", "var", "variable":
+		return "variable"
+	case "const", "constant":
+		return "constant"
+	case "p", "package":
+		return "package"
+	case "m", "member", "field":
+		return "field"
+	case "e", "enum", "enumerator":
+		return "enum"
+	default:
+		return kind
+	}
+}

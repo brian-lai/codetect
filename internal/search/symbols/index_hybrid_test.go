@@ -13,12 +13,9 @@ func TestHybridIndexing(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	// Skip if neither ast-grep nor ctags available
-	hasAstGrep := AstGrepAvailable()
-	hasCtags := CtagsAvailable()
-
-	if !hasAstGrep && !hasCtags {
-		t.Skip("Neither ast-grep nor ctags available")
+	// Skip if ast-grep not available
+	if !AstGrepAvailable() {
+		t.Skip("ast-grep not available")
 	}
 
 	// Create temporary test directory
@@ -138,8 +135,6 @@ func TestBackendConfiguration(t *testing.T) {
 		{"hybrid", "hybrid", config.IndexBackendAuto},
 		{"ast-grep", "ast-grep", config.IndexBackendAstGrep},
 		{"astgrep", "astgrep", config.IndexBackendAstGrep},
-		{"ctags", "ctags", config.IndexBackendCtags},
-		{"universal-ctags", "universal-ctags", config.IndexBackendCtags},
 		{"unknown", "invalid", config.IndexBackendAuto}, // Falls back to auto
 	}
 
@@ -162,14 +157,12 @@ func TestBackendConfiguration(t *testing.T) {
 
 func TestIndexConfigMethods(t *testing.T) {
 	tests := []struct {
-		backend          config.IndexBackend
-		wantUseAstGrep   bool
-		wantUseCtags     bool
+		backend            config.IndexBackend
+		wantUseAstGrep     bool
 		wantRequireAstGrep bool
 	}{
-		{config.IndexBackendAuto, true, true, false},
-		{config.IndexBackendAstGrep, true, false, true},
-		{config.IndexBackendCtags, false, true, false},
+		{config.IndexBackendAuto, true, false},
+		{config.IndexBackendAstGrep, true, true},
 	}
 
 	for _, tt := range tests {
@@ -180,9 +173,6 @@ func TestIndexConfigMethods(t *testing.T) {
 				t.Errorf("UseAstGrep() = %v, want %v", got, tt.wantUseAstGrep)
 			}
 
-			if got := cfg.UseCtags(); got != tt.wantUseCtags {
-				t.Errorf("UseCtags() = %v, want %v", got, tt.wantUseCtags)
-			}
 
 			if got := cfg.RequireAstGrep(); got != tt.wantRequireAstGrep {
 				t.Errorf("RequireAstGrep() = %v, want %v", got, tt.wantRequireAstGrep)

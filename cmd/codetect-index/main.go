@@ -62,7 +62,6 @@ func runIndex(args []string) {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	force := fs.Bool("force", false, "Force full reindex")
 	fs.BoolVar(force, "f", false, "Short for --force")
-	useV1 := fs.Bool("v1", false, "Use legacy v1 indexer (ctags-based, deprecated)")
 	verbose := fs.Bool("verbose", false, "Enable verbose output")
 	fs.BoolVar(verbose, "v", false, "Short for --verbose")
 	jsonOutput := fs.Bool("json", false, "Output results as JSON")
@@ -80,82 +79,10 @@ func runIndex(args []string) {
 		os.Exit(1)
 	}
 
-	// Default to v2 indexer (AST-based)
-	if !*useV1 {
-		runIndexV2(absPath, *force, *verbose, *jsonOutput)
-		return
-	}
-
-	// V1 path: legacy ctags-based symbol indexing (deprecated)
-	logger.Warn("⚠️  Using legacy v1 indexer (deprecated)")
-	logger.Warn("    v1 indexer will be removed in v3.0.0")
-	logger.Warn("    Remove --v1 flag to use v2 indexer with AST-based chunking")
-
-	// Check if ctags is available
-	if !symbols.CtagsAvailable() {
-		logger.Warn("universal-ctags not found, symbol indexing will be skipped",
-			"install", "brew install universal-ctags (macOS)")
-		os.Exit(0)
-	}
-
-	// Load database configuration from environment
-	dbConfig := config.LoadDatabaseConfigFromEnv()
-
-	// For SQLite, ensure .codetect directory exists and set path relative to target
-	if dbConfig.Type == db.DatabaseSQLite {
-		indexDir := filepath.Join(absPath, ".codetect")
-		if err := os.MkdirAll(indexDir, 0755); err != nil {
-			logger.Error("creating index directory failed", "error", err)
-			os.Exit(1)
-		}
-		// Override path for SQLite to be relative to indexed directory
-		dbConfig.Path = filepath.Join(indexDir, "symbols.db")
-	}
-
-	// Convert to db.Config
-	cfg := dbConfig.ToDBConfig()
-
-	logger.Info("indexing", "path", absPath, "database", dbConfig.String())
-
-	start := time.Now()
-
-	// Open or create index using config-aware constructor with repoRoot for multi-repo isolation
-	idx, err := symbols.NewIndexWithConfig(cfg, absPath)
-	if err != nil {
-		logger.Error("opening index failed", "error", err)
-		os.Exit(1)
-	}
-	defer idx.Close()
-
-	// Run indexing
-	if *force {
-		logger.Info("running full reindex")
-		if err := idx.FullReindex(absPath); err != nil {
-			logger.Error("indexing failed", "error", err)
-			os.Exit(1)
-		}
-	} else {
-		logger.Info("running incremental index")
-		if err := idx.Update(absPath); err != nil {
-			logger.Error("indexing failed", "error", err)
-			os.Exit(1)
-		}
-	}
-
-	// Print stats
-	symbolCount, fileCount, err := idx.Stats()
-	if err != nil {
-		logger.Warn("could not get stats", "error", err)
-	} else {
-		elapsed := time.Since(start)
-		logger.Info("indexing complete",
-			"symbols", symbolCount,
-			"files", fileCount,
-			"duration", elapsed.Round(time.Millisecond))
-	}
+	runIndexV2(absPath, *force, *verbose, *jsonOutput)
 }
 
-// runIndexV2 uses the new v2 indexer with Merkle tree change detection,
+// runIndexV2 uses the v2 indexer with Merkle tree change detection,
 // AST-based chunking, and content-addressed embedding cache.
 func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
 	// Load configuration from environment
@@ -648,7 +575,6 @@ func isComment(line string) bool {
 
 func runStats(args []string) {
 	fs := flag.NewFlagSet("stats", flag.ExitOnError)
-	useV1 := fs.Bool("v1", false, "Show v1 index stats (deprecated)")
 	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
 	fs.Parse(args)
 
@@ -663,65 +589,10 @@ func runStats(args []string) {
 		os.Exit(1)
 	}
 
-	// Default to v2 stats
-	if !*useV1 {
-		runStatsV2(absPath, *jsonOutput)
-		return
-	}
-
-	// V1 stats path (deprecated)
-	logger.Warn("⚠️  Showing v1 index stats (deprecated)")
-
-	// Load database configuration from environment
-	dbConfig := config.LoadDatabaseConfigFromEnv()
-
-	// For SQLite, verify index exists and set path relative to target
-	if dbConfig.Type == db.DatabaseSQLite {
-		dbPath := filepath.Join(absPath, ".codetect", "symbols.db")
-		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			logger.Error("no index found, run 'index' first")
-			os.Exit(1)
-		}
-		dbConfig.Path = dbPath
-	}
-
-	// Convert to db.Config
-	dbCfg := dbConfig.ToDBConfig()
-
-	// Open index using config-aware constructor with repoRoot for multi-repo isolation
-	idx, err := symbols.NewIndexWithConfig(dbCfg, absPath)
-	if err != nil {
-		logger.Error("opening index failed", "error", err)
-		os.Exit(1)
-	}
-	defer idx.Close()
-
-	symbolCount, fileCount, err := idx.Stats()
-	if err != nil {
-		logger.Error("getting stats failed", "error", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Database: %s\n", dbConfig.String())
-	fmt.Printf("Symbols: %d\n", symbolCount)
-	fmt.Printf("Files: %d\n", fileCount)
-
-	// Try to get embedding stats using dialect-aware constructor with repoRoot
-	store, err := embedding.NewEmbeddingStoreWithOptions(
-		idx.DBAdapter(),
-		idx.Dialect(),
-		dbConfig.VectorDimensions,
-		absPath,
-	)
-	if err == nil {
-		embCount, embFileCount, err := store.Stats()
-		if err == nil && embCount > 0 {
-			fmt.Printf("Embeddings: %d chunks from %d files\n", embCount, embFileCount)
-		}
-	}
+	runStatsV2(absPath, *jsonOutput)
 }
 
-// runStatsV2 shows statistics from the v2 indexer.
+// runStatsV2 shows statistics from the indexer.
 func runStatsV2(absPath string, jsonOutput bool) {
 	// Load configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
@@ -877,12 +748,10 @@ Usage:
 
 Index Options:
   --force, -f    Force full reindex (default: incremental)
-  --v1           Use legacy v1 indexer (ctags-based, deprecated)
   --verbose, -v  Enable verbose output
   --json         Output results as JSON
 
 Stats Options:
-  --v1           Show v1 index statistics (deprecated)
   --json         Output stats as JSON
 
 Embed Options:
@@ -924,20 +793,13 @@ Database:
 Requirements:
   - Ollama OR LiteLLM (optional, for semantic search)
   - PostgreSQL + pgvector (optional, for production deployments)
-  - universal-ctags (only needed for legacy --v1 mode)
 
 Install:
   Ollama:  https://ollama.ai then 'ollama pull nomic-embed-text'
-  macOS:   brew install universal-ctags (only for --v1 mode)
-  Ubuntu:  apt install universal-ctags (only for --v1 mode)
 
 Examples:
-  # v2 indexing (AST-based, default)
+  # Index and embed current directory
   codetect-index index .
   codetect-index embed -j 10
-  codetect-index stats
-
-  # Legacy v1 indexing (deprecated)
-  codetect-index index --v1 .
-  codetect-index stats --v1`)
+  codetect-index stats`)
 }

@@ -41,7 +41,6 @@ Welcome to the codetect documentation! This index helps you find the information
 | Document | Description |
 |----------|-------------|
 | **[Architecture](architecture.md)** | Internal design, data flow, and components |
-| **[v2 Architecture](v2-architecture.md)** | Deep dive into v2 AST-based indexing |
 | **[MCP Compatibility](mcp-compatibility.md)** | Supported tools and integration guide |
 
 ## Version-Specific Documentation
@@ -111,9 +110,8 @@ Welcome to the codetect documentation! This index helps you find the information
 ```
 
 **Key files:**
-- [architecture.md](architecture.md) - Component design
+- [architecture.md](architecture.md) - Component design and v2 technical details
 - [mcp-compatibility.md](mcp-compatibility.md) - MCP client support
-- [v2-architecture.md](v2-architecture.md) - v2 technical deep-dive
 
 ## Common Tasks
 
@@ -165,8 +163,6 @@ Found an error or want to improve the docs? Contributions welcome!
 2. Edit the documentation
 3. Submit a pull request
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
-
 ## Support
 
 - **Issues:** Report bugs at https://github.com/brian-lai/codetect/issues
@@ -204,15 +200,6 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 | File | Topic | Audience |
 |------|-------|----------|
 | [mcp-compatibility.md](mcp-compatibility.md) | Tool support | Integrators |
-| [v2-architecture.md](v2-architecture.md) | Technical details | Contributors |
-
-### Legacy Documentation (Deprecated)
-
-| File | Topic | Status |
-|------|-------|--------|
-| [v1/README.md](v1/README.md) | v1 overview | Deprecated, removed in v3.0 |
-| [v1/architecture.md](v1/architecture.md) | v1 design | Deprecated, removed in v3.0 |
-| [v1/commands.md](v1/commands.md) | v1 reference | Deprecated, removed in v3.0 |
 
 ---
 

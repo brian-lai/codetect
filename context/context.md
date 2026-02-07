@@ -62,7 +62,24 @@ Enable navigation of code relationships without reading files. Add symbol refere
 
 ## Progress Notes
 
-_Update this section as you complete items._
+### Week 1 Complete ✅
+- Schema version bumped to 3 with new tables (`symbol_refs`, `type_relations`)
+- Reference extraction working via tree-sitter AST walker for Go and TypeScript
+- Integrated into symbol indexing pipeline (`Index.Update()`)
+- Database methods implemented and tested
+
+### Week 2 In Progress
+- MCP tools implemented (`find_references`, `find_callers`, `find_implementations`)
+- Tested on codetect codebase:
+  - 8,662 symbol references extracted
+  - Sample queries working correctly
+  - `Errorf` has 1,068 references across the codebase
+
+### Next Steps
+- Write unit tests for reference extraction
+- Write integration tests with known call relationships
+- Test TypeScript extraction (currently tested on Go only)
+- Measure token reduction vs baseline
 
 ---
 

@@ -43,10 +43,10 @@ Enable navigation of code relationships without reading files. Add symbol refere
 ### Week 2: MCP Tools + Testing
 
 #### Days 6-8: MCP Tools
-- [ ] Implement `find_references` tool
-- [ ] Implement `find_callers` tool
-- [ ] Implement `find_implementations` tool
-- [ ] Register tools in MCP server
+- [x] Implement `find_references` tool
+- [x] Implement `find_callers` tool
+- [x] Implement `find_implementations` tool
+- [x] Register tools in MCP server
 
 #### Days 9-10: Testing + Eval
 - [ ] Unit tests for reference extraction (Go)

@@ -12,7 +12,7 @@ func TestMetricToOpClass(t *testing.T) {
 		{"cosine", "vector_cosine_ops"},
 		{"euclidean", "vector_l2_ops"},
 		{"dot_product", "vector_ip_ops"},
-		{"", "vector_cosine_ops"},      // Default
+		{"", "vector_cosine_ops"},        // Default
 		{"unknown", "vector_cosine_ops"}, // Default for unknown
 	}
 

@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	DefaultOllamaURL   = "http://localhost:11434"
-	DefaultModel       = "nomic-embed-text"
-	DefaultTimeout     = 30 * time.Second
-	DefaultBatchSize   = 32
-	DefaultDimensions  = 768 // nomic-embed-text dimensions
+	DefaultOllamaURL  = "http://localhost:11434"
+	DefaultModel      = "nomic-embed-text"
+	DefaultTimeout    = 30 * time.Second
+	DefaultBatchSize  = 32
+	DefaultDimensions = 768 // nomic-embed-text dimensions
 )
 
 // OllamaClient provides access to the Ollama embedding API

@@ -372,9 +372,9 @@ type CrossRepoSearchResult struct {
 
 // CrossRepoSearchResponse is the response from cross-repo search
 type CrossRepoSearchResponse struct {
-	Available bool                   `json:"available"`
+	Available bool                    `json:"available"`
 	Results   []CrossRepoSearchResult `json:"results"`
-	Error     string                 `json:"error,omitempty"`
+	Error     string                  `json:"error,omitempty"`
 }
 
 // SearchAcrossRepos performs semantic search across all repositories in the same dimension group.

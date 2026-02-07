@@ -20,13 +20,13 @@ func TestCodetectIgnoreIntegration(t *testing.T) {
 	files := map[string]string{
 		"main.go":                 "package main",
 		"app.js":                  "console.log('app')",
-		"app.min.js":              "console.log('minified')",        // excluded by *.min.js
-		"generated.generated.go":  "package generated",               // excluded by *.generated.go
-		"dist/bundle.js":          "console.log('bundle')",           // excluded by dist/
+		"app.min.js":              "console.log('minified')", // excluded by *.min.js
+		"generated.generated.go":  "package generated",       // excluded by *.generated.go
+		"dist/bundle.js":          "console.log('bundle')",   // excluded by dist/
 		"src/component.ts":        "export class Component {}",
-		"vendor/lib.go":           "package lib",                     // excluded by vendor/
-		"vendor/important/api.go": "package api",                     // included by !vendor/important/
-		"fixtures/data.json":      `{"test": "data"}`,                // excluded by fixtures/
+		"vendor/lib.go":           "package lib",      // excluded by vendor/
+		"vendor/important/api.go": "package api",      // included by !vendor/important/
+		"fixtures/data.json":      `{"test": "data"}`, // excluded by fixtures/
 	}
 
 	for path, content := range files {
@@ -113,8 +113,8 @@ func TestCodetectIgnoreEmpty(t *testing.T) {
 
 	// Create some files
 	files := map[string]string{
-		"main.go":      "package main",
-		"app.min.js":   "console.log('minified')",
+		"main.go":       "package main",
+		"app.min.js":    "console.log('minified')",
 		"vendor/lib.go": "package lib",
 	}
 

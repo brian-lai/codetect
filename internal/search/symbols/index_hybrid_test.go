@@ -173,7 +173,6 @@ func TestIndexConfigMethods(t *testing.T) {
 				t.Errorf("UseAstGrep() = %v, want %v", got, tt.wantUseAstGrep)
 			}
 
-
 			if got := cfg.RequireAstGrep(); got != tt.wantRequireAstGrep {
 				t.Errorf("RequireAstGrep() = %v, want %v", got, tt.wantRequireAstGrep)
 			}

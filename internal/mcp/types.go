@@ -40,8 +40,8 @@ type InitializeParams struct {
 }
 
 type Capabilities struct {
-	Roots   *RootsCapability `json:"roots,omitempty"`
-	Sampling interface{}     `json:"sampling,omitempty"`
+	Roots    *RootsCapability `json:"roots,omitempty"`
+	Sampling interface{}      `json:"sampling,omitempty"`
 }
 
 type RootsCapability struct {

@@ -190,9 +190,9 @@ func TestBruteForceVectorIndex_SearchOrdering(t *testing.T) {
 
 	// Insert vectors at various distances from the query
 	err := idx.InsertBatch(ctx, map[string][]float32{
-		"far":    {-1.0, 0.0},  // Opposite direction
-		"close":  {0.9, 0.1},   // Close to query
-		"medium": {0.5, 0.5},   // 45 degrees
+		"far":    {-1.0, 0.0}, // Opposite direction
+		"close":  {0.9, 0.1},  // Close to query
+		"medium": {0.5, 0.5},  // 45 degrees
 	})
 	if err != nil {
 		t.Fatalf("InsertBatch failed: %v", err)

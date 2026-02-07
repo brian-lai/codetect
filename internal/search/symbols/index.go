@@ -17,12 +17,12 @@ import (
 // Uses the adapter pattern to support multiple database backends (SQLite, PostgreSQL).
 // All database operations go through the adapter interface for database portability.
 type Index struct {
-	sqlDB      *sql.DB           // Raw SQL connection (deprecated, for legacy compatibility only)
-	adapter    db.DB             // Adapter interface - use this for all database operations
-	dialect    db.Dialect        // SQL dialect for database-specific syntax (placeholders, etc.)
-	dbPath     string
-	root       string
-	indexCfg   config.IndexConfig // Indexing backend configuration
+	sqlDB    *sql.DB    // Raw SQL connection (deprecated, for legacy compatibility only)
+	adapter  db.DB      // Adapter interface - use this for all database operations
+	dialect  db.Dialect // SQL dialect for database-specific syntax (placeholders, etc.)
+	dbPath   string
+	root     string
+	indexCfg config.IndexConfig // Indexing backend configuration
 }
 
 // NewIndex creates or opens a symbol index at the given path.

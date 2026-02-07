@@ -240,7 +240,7 @@ func TestEmbedChunksSkipsEmpty(t *testing.T) {
 
 	chunks := []Chunk{
 		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: ""},              // Empty
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: ""}, // Empty
 		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},
 	}
 
@@ -601,7 +601,7 @@ func BenchmarkEmbedChunks(b *testing.B) {
 			Path:      "file.go",
 			StartLine: i * 10,
 			EndLine:   i*10 + 9,
-			Content:   string(rune(i%26 + 'a')) + string(rune(i)),
+			Content:   string(rune(i%26+'a')) + string(rune(i)),
 		}
 	}
 

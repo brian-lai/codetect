@@ -22,11 +22,11 @@ type Result struct {
 	MatchColumn int     `json:"match_column,omitempty"`
 
 	// Phase 2a: Rich context fields
-	ParentScope   string   `json:"parent_scope,omitempty"`    // Fully qualified name of containing scope
-	ScopeKind     string   `json:"scope_kind,omitempty"`      // Type of containing scope (function, method, class, etc.)
-	ReceiverType  string   `json:"receiver_type,omitempty"`   // For methods: struct/class name
-	ContextBefore []string `json:"context_before,omitempty"`  // Lines before the match
-	ContextAfter  []string `json:"context_after,omitempty"`   // Lines after the match
+	ParentScope   string   `json:"parent_scope,omitempty"`   // Fully qualified name of containing scope
+	ScopeKind     string   `json:"scope_kind,omitempty"`     // Type of containing scope (function, method, class, etc.)
+	ReceiverType  string   `json:"receiver_type,omitempty"`  // For methods: struct/class name
+	ContextBefore []string `json:"context_before,omitempty"` // Lines before the match
+	ContextAfter  []string `json:"context_after,omitempty"`  // Lines after the match
 }
 
 // SearchResult is the full result of a hybrid search
@@ -51,11 +51,11 @@ func NewSearcher(semantic *embedding.SemanticSearcher) *Searcher {
 
 // Config configures hybrid search behavior
 type Config struct {
-	KeywordLimit    int     // Max keyword results (default 20)
-	SemanticLimit   int     // Max semantic results (default 10)
-	KeywordWeight   float32 // Weight for keyword results (default 0.6)
-	SemanticWeight  float32 // Weight for semantic results (default 0.4)
-	SnippetFn       func(path string, start, end int) string
+	KeywordLimit   int     // Max keyword results (default 20)
+	SemanticLimit  int     // Max semantic results (default 10)
+	KeywordWeight  float32 // Weight for keyword results (default 0.6)
+	SemanticWeight float32 // Weight for semantic results (default 0.4)
+	SnippetFn      func(path string, start, end int) string
 }
 
 // DefaultConfig returns the default hybrid search configuration

@@ -50,9 +50,9 @@ func TestLanguageFromExtension(t *testing.T) {
 
 func TestGetLanguagePatterns(t *testing.T) {
 	tests := []struct {
-		language     string
-		shouldExist  bool
-		minPatterns  int
+		language    string
+		shouldExist bool
+		minPatterns int
 	}{
 		{"go", true, 4},
 		{"typescript", true, 5},

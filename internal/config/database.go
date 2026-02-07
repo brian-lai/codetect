@@ -34,7 +34,7 @@ type DatabaseConfig struct {
 func LoadDatabaseConfigFromEnv() DatabaseConfig {
 	cfg := DatabaseConfig{
 		Type:             db.DatabaseSQLite, // Default to SQLite
-		VectorDimensions: 768,                // Default for nomic-embed-text
+		VectorDimensions: 768,               // Default for nomic-embed-text
 	}
 
 	// Check for explicit database type

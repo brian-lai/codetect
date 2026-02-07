@@ -11,16 +11,16 @@ import (
 
 // EmbedResult contains statistics from an embedding operation.
 type EmbedResult struct {
-	Total       int           `json:"total"`        // Total chunks processed
-	CacheHits   int           `json:"cache_hits"`   // Embeddings found in cache
-	Embedded    int           `json:"embedded"`     // New embeddings generated
-	Skipped     int           `json:"skipped"`      // Chunks skipped (e.g., empty)
-	Errors      int           `json:"errors"`       // Chunks that failed
-	Duration    time.Duration `json:"duration"`     // Total processing time
-	EmbedTime   time.Duration `json:"embed_time"`   // Time spent on embedding API
-	CacheTime   time.Duration `json:"cache_time"`   // Time spent on cache operations
-	HitRate     float64       `json:"hit_rate"`     // Cache hit percentage
-	ChunksPerSec float64      `json:"chunks_per_sec"` // Throughput
+	Total        int           `json:"total"`          // Total chunks processed
+	CacheHits    int           `json:"cache_hits"`     // Embeddings found in cache
+	Embedded     int           `json:"embedded"`       // New embeddings generated
+	Skipped      int           `json:"skipped"`        // Chunks skipped (e.g., empty)
+	Errors       int           `json:"errors"`         // Chunks that failed
+	Duration     time.Duration `json:"duration"`       // Total processing time
+	EmbedTime    time.Duration `json:"embed_time"`     // Time spent on embedding API
+	CacheTime    time.Duration `json:"cache_time"`     // Time spent on cache operations
+	HitRate      float64       `json:"hit_rate"`       // Cache hit percentage
+	ChunksPerSec float64       `json:"chunks_per_sec"` // Throughput
 }
 
 // Pipeline provides a cache-aware embedding pipeline.
@@ -31,7 +31,7 @@ type Pipeline struct {
 	embedder  Embedder
 
 	// Configuration
-	batchSize int
+	batchSize  int
 	maxWorkers int
 }
 

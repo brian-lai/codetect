@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/mattn/go-isatty"
-	"github.com/schollz/progressbar/v3"
 	ignore "github.com/sabhiram/go-gitignore"
+	"github.com/schollz/progressbar/v3"
 
 	"codetect/internal/config"
 	"codetect/internal/db"

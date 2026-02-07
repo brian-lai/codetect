@@ -277,7 +277,7 @@ func BenchmarkRRFFusion(b *testing.B) {
 				id = j + i*50
 			}
 			lists[i][j] = Result{
-				ID:     string(rune('a' + id%26)) + string(rune('0'+id/26)),
+				ID:     string(rune('a'+id%26)) + string(rune('0'+id/26)),
 				Source: []string{"keyword", "semantic", "symbol"}[i],
 				Score:  float64(100 - j),
 			}

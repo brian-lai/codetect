@@ -248,9 +248,9 @@ func (c *ASTChunker) mapNodeTypeToKind(nodeType string, language string) string 
 	// Define mappings for each language
 	mappings := map[string]map[string]string{
 		"go": {
-			"function_declaration": "function",
-			"method_declaration":   "method",
-			"type_declaration":     "struct", // Simplified; could be interface too
+			"function_declaration":  "function",
+			"method_declaration":    "method",
+			"type_declaration":      "struct", // Simplified; could be interface too
 			"interface_declaration": "interface",
 		},
 		"python": {
@@ -258,9 +258,9 @@ func (c *ASTChunker) mapNodeTypeToKind(nodeType string, language string) string 
 			"class_definition":    "class",
 		},
 		"typescript": {
-			"function_declaration": "function",
-			"method_definition":    "method",
-			"class_declaration":    "class",
+			"function_declaration":  "function",
+			"method_definition":     "method",
+			"class_declaration":     "class",
 			"interface_declaration": "interface",
 		},
 		"javascript": {
@@ -509,12 +509,12 @@ func sortChunks(chunks []Chunk) {
 
 // ChunkFileWithOptions allows customization of chunking behavior.
 type ChunkOptions struct {
-	MaxChunkSize     int  // Override default max chunk size
-	IncludeGaps      bool // Include gap chunks for uncovered regions
-	FallbackEnabled  bool // Enable fallback for unsupported languages
-	ComputeHashes    bool // Compute content hashes
-	FallbackChunkSize int // Lines per chunk in fallback mode
-	FallbackOverlap   int // Overlap lines in fallback mode
+	MaxChunkSize      int  // Override default max chunk size
+	IncludeGaps       bool // Include gap chunks for uncovered regions
+	FallbackEnabled   bool // Enable fallback for unsupported languages
+	ComputeHashes     bool // Compute content hashes
+	FallbackChunkSize int  // Lines per chunk in fallback mode
+	FallbackOverlap   int  // Overlap lines in fallback mode
 }
 
 // DefaultChunkOptions returns the default chunking options.

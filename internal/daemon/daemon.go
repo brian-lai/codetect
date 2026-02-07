@@ -412,11 +412,11 @@ func isIgnoredDir(name string) bool {
 		"Pods":         true,
 
 		// Python
-		"__pycache__": true,
-		".venv":       true,
-		"venv":        true,
-		"env":         true,
-		".tox":        true,
+		"__pycache__":   true,
+		".venv":         true,
+		"venv":          true,
+		"env":           true,
+		".tox":          true,
 		".pytest_cache": true,
 
 		// Ruby/Rails
@@ -426,11 +426,11 @@ func isIgnoredDir(name string) bool {
 		"sorbet":   true,
 
 		// Generated/Cache
-		".cache":       true,
-		".codetect": true,
-		".next":        true,
-		".nuxt":        true,
-		".turbo":       true,
+		".cache":        true,
+		".codetect":     true,
+		".next":         true,
+		".nuxt":         true,
+		".turbo":        true,
 		".parcel-cache": true,
 
 		// Assets (often generated)

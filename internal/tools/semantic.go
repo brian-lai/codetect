@@ -367,4 +367,3 @@ func searchSemanticV2(ctx context.Context, searcher *embedding.V2SemanticSearche
 	}
 	return fusionResults, nil
 }
-

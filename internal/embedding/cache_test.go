@@ -163,7 +163,7 @@ func TestBatchLookupEfficiency(t *testing.T) {
 	// Store 100 embeddings
 	embeddings := make(map[string][]float32)
 	for i := 0; i < 100; i++ {
-		hash := HashContent(string(rune('a' + i%26)) + string(rune(i)))
+		hash := HashContent(string(rune('a'+i%26)) + string(rune(i)))
 		embeddings[hash] = randomEmbedding(768)
 	}
 

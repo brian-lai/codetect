@@ -42,11 +42,11 @@ type Result struct {
 	Metadata map[string]interface{}
 
 	// Phase 2a: Rich context fields
-	ParentScope   string   `json:"parent_scope,omitempty"`    // Fully qualified name of containing scope
-	ScopeKind     string   `json:"scope_kind,omitempty"`      // Type of containing scope (function, method, class, etc.)
-	ReceiverType  string   `json:"receiver_type,omitempty"`   // For methods: struct/class name
-	ContextBefore []string `json:"context_before,omitempty"`  // Lines before the match
-	ContextAfter  []string `json:"context_after,omitempty"`   // Lines after the match
+	ParentScope   string   `json:"parent_scope,omitempty"`   // Fully qualified name of containing scope
+	ScopeKind     string   `json:"scope_kind,omitempty"`     // Type of containing scope (function, method, class, etc.)
+	ReceiverType  string   `json:"receiver_type,omitempty"`  // For methods: struct/class name
+	ContextBefore []string `json:"context_before,omitempty"` // Lines before the match
+	ContextAfter  []string `json:"context_after,omitempty"`  // Lines after the match
 }
 
 // RRFResult is a fused result with combined RRF score.

@@ -39,13 +39,13 @@ type CacheEntry struct {
 
 // CacheStats provides cache statistics.
 type CacheStats struct {
-	TotalEntries    int     `json:"total_entries"`
-	TotalSize       int64   `json:"total_size_bytes"`
-	AvgAccessCount  float64 `json:"avg_access_count"`
-	OldestEntry     time.Time
-	NewestEntry     time.Time
-	MostAccessed    int
-	LeastAccessed   int
+	TotalEntries   int     `json:"total_entries"`
+	TotalSize      int64   `json:"total_size_bytes"`
+	AvgAccessCount float64 `json:"avg_access_count"`
+	OldestEntry    time.Time
+	NewestEntry    time.Time
+	MostAccessed   int
+	LeastAccessed  int
 }
 
 // NewEmbeddingCache creates a new content-addressed embedding cache.

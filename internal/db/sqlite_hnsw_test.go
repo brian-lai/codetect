@@ -8,8 +8,8 @@ import (
 
 func TestFloat32SliceToBlob(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  []float32
+		name    string
+		input   []float32
 		wantLen int
 	}{
 		{

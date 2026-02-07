@@ -199,10 +199,10 @@ func TestEuclideanDistance(t *testing.T) {
 func TestTopKByCosineSimilarity(t *testing.T) {
 	query := []float32{1, 0, 0}
 	vectors := [][]float32{
-		{1, 0, 0},   // similarity = 1.0
-		{0, 1, 0},   // similarity = 0.0
+		{1, 0, 0},     // similarity = 1.0
+		{0, 1, 0},     // similarity = 0.0
 		{0.7, 0.7, 0}, // similarity ~ 0.7
-		{-1, 0, 0},  // similarity = -1.0
+		{-1, 0, 0},    // similarity = -1.0
 	}
 
 	t.Run("returns k results", func(t *testing.T) {

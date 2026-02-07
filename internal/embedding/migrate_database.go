@@ -34,11 +34,11 @@ func DefaultMigrationOptions() MigrationOptions {
 
 // MigrationProgress tracks the progress of a database migration.
 type MigrationProgress struct {
-	TotalEmbeddings   int
+	TotalEmbeddings    int
 	MigratedEmbeddings int
-	SkippedEmbeddings int
-	FailedEmbeddings  int
-	CurrentFile       string
+	SkippedEmbeddings  int
+	FailedEmbeddings   int
+	CurrentFile        string
 }
 
 // MigrationCallback is called periodically during migration to report progress.

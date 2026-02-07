@@ -153,8 +153,8 @@ func TestParseBool(t *testing.T) {
 		{"no", true, false},
 		{"off", true, false},
 		{"disabled", true, false},
-		{"", true, true},     // Empty returns default
-		{"invalid", true, true}, // Invalid returns default
+		{"", true, true},          // Empty returns default
+		{"invalid", true, true},   // Invalid returns default
 		{"  true  ", false, true}, // Whitespace trimmed
 	}
 

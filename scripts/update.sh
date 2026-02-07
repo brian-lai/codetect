@@ -1,20 +1,35 @@
 #!/bin/bash
 #
 # codetect update script
-# Updates codetect to the latest version from GitHub
+# Updates codetect to the latest stable version from GitHub
 #
 # Usage:
-#   codetect update         # Update to latest version
-#   codetect update --force # Force rebuild even if already on latest
+#   codetect update              # Update to latest stable version
+#   codetect update --force      # Force rebuild even if already on latest
+#   codetect update --pre        # Include pre-release versions (beta, rc, etc.)
+#   codetect update --pre --force # Force rebuild of latest pre-release
 #
 
 set -e
 
 # Parse flags
 FORCE_REBUILD=false
-if [[ "$1" == "--force" || "$1" == "-f" ]]; then
-    FORCE_REBUILD=true
-fi
+INCLUDE_PRERELEASE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force|-f)
+            FORCE_REBUILD=true
+            shift
+            ;;
+        --pre|--prerelease)
+            INCLUDE_PRERELEASE=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 # Colors
 RED='\033[0;31m'
@@ -75,11 +90,19 @@ OLD_COMMIT=$(git rev-parse --short HEAD)
 echo "Fetching latest changes..."
 git fetch origin --tags
 
-# Find latest version tag
-LATEST_VERSION=$(git tag -l 'v*' | sort -V | tail -n1)
+# Find latest version tag (exclude pre-releases unless --pre flag is set)
+if [[ "$INCLUDE_PRERELEASE" == "true" ]]; then
+    LATEST_VERSION=$(git tag -l 'v*' | sort -V | tail -n1)
+else
+    # Filter out pre-release tags (containing -alpha, -beta, -rc, -pre, etc.)
+    LATEST_VERSION=$(git tag -l 'v*' | grep -v '\-alpha\|\-beta\|\-rc\|\-pre' | sort -V | tail -n1)
+fi
 
 if [[ -z "$LATEST_VERSION" ]]; then
     error "No version tags found"
+    if [[ "$INCLUDE_PRERELEASE" != "true" ]]; then
+        info "Try 'codetect update --pre' to include pre-release versions"
+    fi
     exit 1
 fi
 
@@ -97,7 +120,11 @@ if [[ "$CURRENT_TAG" == "$LATEST_VERSION" ]]; then
     NEW_COMMIT="$OLD_COMMIT"
 else
     # Checkout latest version tag
-    echo "Updating to $LATEST_VERSION..."
+    if [[ "$LATEST_VERSION" =~ -(alpha|beta|rc|pre) ]]; then
+        echo "Updating to $LATEST_VERSION (pre-release)..."
+    else
+        echo "Updating to $LATEST_VERSION..."
+    fi
     git checkout "$LATEST_VERSION"
     NEW_COMMIT=$(git rev-parse --short HEAD)
 

@@ -37,8 +37,8 @@ Enable navigation of code relationships without reading files. Add symbol refere
 - [x] For TypeScript: handle `member_expression`
 - [x] For TypeScript: handle `implements`/`extends` clauses
 - [x] Track source_scope from existing `scopeStack`
-- [ ] Store extracted refs via batch insert during indexing
-- [ ] Store extracted type relations via batch insert during indexing
+- [x] Store extracted refs via batch insert during indexing
+- [x] Store extracted type relations via batch insert during indexing
 
 ### Week 2: MCP Tools + Testing
 

@@ -1,6 +1,7 @@
 package symbols
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"codetect/internal/chunker"
 	"codetect/internal/config"
 	"codetect/internal/db"
 )
@@ -332,6 +334,11 @@ func (idx *Index) Update(root string) error {
 		}
 	}
 
+	// Phase 2b: Extract references and type relations for changed files
+	if err := idx.extractAndStoreRefs(tx, root, filesToIndex); err != nil {
+		return fmt.Errorf("extracting references: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing transaction: %w", err)
 	}
@@ -541,4 +548,158 @@ func (idx *Index) Stats() (symbolCount int, fileCount int, err error) {
 		return 0, 0, err
 	}
 	return symbolCount, fileCount, nil
+}
+
+// extractAndStoreRefs extracts symbol references and type relations for the given files.
+// Phase 2b: Called during indexing to build the symbol reference graph.
+func (idx *Index) extractAndStoreRefs(tx db.Tx, root string, files map[string]fileInfo) error {
+	// Import chunker package for reference extraction
+	// We'll need to add this import at the top
+	var allRefs []SymbolRef
+	var allRels []TypeRelation
+
+	for path := range files {
+		absPath := filepath.Join(root, path)
+
+		// Read file content
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			// Skip files that can't be read
+			continue
+		}
+
+		// Extract references and type relations using AST walker
+		refs, rels, err := extractFileRefs(absPath, content)
+		if err != nil {
+			// Skip files with parsing errors
+			continue
+		}
+
+		// Add repo_root to all refs and rels
+		for i := range refs {
+			refs[i].RepoRoot = idx.root
+			refs[i].SourcePath = path // Use relative path
+		}
+		for i := range rels {
+			rels[i].RepoRoot = idx.root
+			rels[i].Path = path // Use relative path
+		}
+
+		allRefs = append(allRefs, refs...)
+		allRels = append(allRels, rels...)
+	}
+
+	// Delete old refs and rels for these files
+	deleteRefsSQL := fmt.Sprintf("DELETE FROM symbol_refs WHERE repo_root = %s AND source_path = %s",
+		idx.dialect.Placeholder(1), idx.dialect.Placeholder(2))
+	deleteRelsSQL := fmt.Sprintf("DELETE FROM type_relations WHERE repo_root = %s AND path = %s",
+		idx.dialect.Placeholder(1), idx.dialect.Placeholder(2))
+
+	for path := range files {
+		if _, err := tx.Exec(deleteRefsSQL, idx.root, path); err != nil {
+			return fmt.Errorf("deleting old refs for %s: %w", path, err)
+		}
+		if _, err := tx.Exec(deleteRelsSQL, idx.root, path); err != nil {
+			return fmt.Errorf("deleting old type relations for %s: %w", path, err)
+		}
+	}
+
+	// Insert new refs
+	if len(allRefs) > 0 {
+		refsUpsertSQL := idx.dialect.UpsertSQL(
+			"symbol_refs",
+			[]string{"repo_root", "name", "qualified_name", "kind", "source_path", "source_line", "source_scope"},
+			[]string{"repo_root", "source_path", "source_line", "name"},
+			[]string{"qualified_name", "kind", "source_scope"},
+		)
+		stmt, err := tx.Prepare(refsUpsertSQL)
+		if err != nil {
+			return fmt.Errorf("preparing refs insert: %w", err)
+		}
+		defer stmt.Close()
+
+		for _, ref := range allRefs {
+			_, err := stmt.Exec(
+				ref.RepoRoot,
+				ref.Name,
+				nullString(ref.QualifiedName),
+				ref.Kind,
+				ref.SourcePath,
+				ref.SourceLine,
+				nullString(ref.SourceScope),
+			)
+			if err != nil {
+				return fmt.Errorf("inserting ref %s: %w", ref.Name, err)
+			}
+		}
+	}
+
+	// Insert new type relations
+	if len(allRels) > 0 {
+		relsUpsertSQL := idx.dialect.UpsertSQL(
+			"type_relations",
+			[]string{"repo_root", "child_type", "parent_type", "relation", "path", "line"},
+			[]string{"repo_root", "child_type", "parent_type", "path"},
+			[]string{"relation", "line"},
+		)
+		stmt, err := tx.Prepare(relsUpsertSQL)
+		if err != nil {
+			return fmt.Errorf("preparing type relations insert: %w", err)
+		}
+		defer stmt.Close()
+
+		for _, rel := range allRels {
+			_, err := stmt.Exec(
+				rel.RepoRoot,
+				rel.ChildType,
+				rel.ParentType,
+				rel.Relation,
+				rel.Path,
+				rel.Line,
+			)
+			if err != nil {
+				return fmt.Errorf("inserting type relation %s %s %s: %w", rel.ChildType, rel.Relation, rel.ParentType, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// extractFileRefs is a wrapper that calls the chunker's ExtractReferences function
+// and converts the result to the symbols package types.
+func extractFileRefs(path string, content []byte) ([]SymbolRef, []TypeRelation, error) {
+	ctx := context.Background()
+
+	// Call chunker's reference extraction
+	chunkRefs, chunkRels, err := chunker.ExtractReferences(ctx, path, content)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Convert chunker types to symbols types
+	refs := make([]SymbolRef, len(chunkRefs))
+	for i, cr := range chunkRefs {
+		refs[i] = SymbolRef{
+			Name:          cr.Name,
+			QualifiedName: cr.QualifiedName,
+			Kind:          cr.Kind,
+			SourcePath:    cr.SourcePath,
+			SourceLine:    cr.SourceLine,
+			SourceScope:   cr.SourceScope,
+		}
+	}
+
+	rels := make([]TypeRelation, len(chunkRels))
+	for i, cr := range chunkRels {
+		rels[i] = TypeRelation{
+			ChildType:  cr.ChildType,
+			ParentType: cr.ParentType,
+			Relation:   cr.Relation,
+			Path:       cr.Path,
+			Line:       cr.Line,
+		}
+	}
+
+	return refs, rels, nil
 }

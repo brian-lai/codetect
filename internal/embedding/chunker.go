@@ -21,6 +21,11 @@ type Chunk struct {
 	EndLine   int    `json:"end_line"`
 	Content   string `json:"content"`
 	Kind      string `json:"kind"` // "function", "class", "type", "block", "fixed"
+
+	// Phase 2a: Rich context fields
+	ParentScope  string `json:"parent_scope,omitempty"`  // Fully qualified name of containing scope
+	ScopeKind    string `json:"scope_kind,omitempty"`    // Type of containing scope (function, method, class, etc.)
+	ReceiverType string `json:"receiver_type,omitempty"` // For methods: struct/class name
 }
 
 // ChunkerConfig configures the chunking behavior

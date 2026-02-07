@@ -20,6 +20,63 @@ const DefaultFallbackOverlap = 10
 // MinGapLines is the minimum number of uncovered lines to create a gap chunk.
 const MinGapLines = 3
 
+// Phase 2a: scopeStack tracks parent scopes during AST traversal for rich context.
+type scopeStack struct {
+	scopes []scopeInfo
+}
+
+type scopeInfo struct {
+	name         string // Symbol name (function/class name)
+	kind         string // Language-agnostic kind (function, method, class, etc.)
+	receiverType string // For methods: struct/class name
+}
+
+func (s *scopeStack) push(name, kind, receiverType string) {
+	s.scopes = append(s.scopes, scopeInfo{
+		name:         name,
+		kind:         kind,
+		receiverType: receiverType,
+	})
+}
+
+func (s *scopeStack) pop() {
+	if len(s.scopes) > 0 {
+		s.scopes = s.scopes[:len(s.scopes)-1]
+	}
+}
+
+// current returns the fully qualified parent scope name.
+// For methods: "ClassName.methodName", for functions: "functionName"
+func (s *scopeStack) current() string {
+	if len(s.scopes) == 0 {
+		return ""
+	}
+	// Build qualified name from stack
+	parts := make([]string, 0, len(s.scopes))
+	for _, scope := range s.scopes {
+		if scope.name != "" {
+			parts = append(parts, scope.name)
+		}
+	}
+	return strings.Join(parts, ".")
+}
+
+// currentKind returns the scope kind of the immediate parent.
+func (s *scopeStack) currentKind() string {
+	if len(s.scopes) == 0 {
+		return ""
+	}
+	return s.scopes[len(s.scopes)-1].kind
+}
+
+// currentReceiverType returns the receiver type of the immediate parent.
+func (s *scopeStack) currentReceiverType() string {
+	if len(s.scopes) == 0 {
+		return ""
+	}
+	return s.scopes[len(s.scopes)-1].receiverType
+}
+
 // ASTChunker creates semantic chunks from source code using tree-sitter parsing.
 // It splits code at natural AST boundaries (functions, classes, methods) to
 // produce more semantically coherent chunks for embedding.
@@ -66,8 +123,11 @@ func (c *ASTChunker) ChunkFile(ctx context.Context, path string, content []byte)
 	var chunks []Chunk
 	covered := make(map[int]bool)
 
+	// Phase 2a: Initialize scope stack for tracking parent scopes
+	stack := &scopeStack{}
+
 	// Walk tree and create chunks from split nodes
-	c.walkTree(root, content, path, config, splitNodeSet, &chunks, covered)
+	c.walkTree(root, content, path, config, splitNodeSet, &chunks, covered, stack)
 
 	// Create chunks for uncovered regions (imports, top-level code, etc.)
 	c.fillGaps(content, path, config, covered, &chunks)
@@ -84,11 +144,24 @@ func (c *ASTChunker) ChunkFile(ctx context.Context, path string, content []byte)
 }
 
 // walkTree recursively traverses the AST and creates chunks for split nodes.
-func (c *ASTChunker) walkTree(node *sitter.Node, content []byte, path string, config *LanguageConfig, splitNodes map[string]bool, chunks *[]Chunk, covered map[int]bool) {
+// Phase 2a: Now tracks parent scopes via scopeStack for rich context.
+func (c *ASTChunker) walkTree(node *sitter.Node, content []byte, path string, config *LanguageConfig, splitNodes map[string]bool, chunks *[]Chunk, covered map[int]bool, stack *scopeStack) {
 	nodeType := node.Type()
 
 	if splitNodes[nodeType] {
-		chunk := c.nodeToChunk(node, content, path, config)
+		// Extract node name and scope info before creating chunk
+		nodeName := c.extractNodeName(node, content, config)
+		scopeKind := c.mapNodeTypeToKind(nodeType, config.Name)
+		receiverType := c.extractReceiverType(node, content, config.Name)
+
+		// Push this scope onto the stack (for children)
+		if nodeName != "" {
+			stack.push(nodeName, scopeKind, receiverType)
+			defer stack.pop()
+		}
+
+		// Create chunk with parent scope from stack
+		chunk := c.nodeToChunk(node, content, path, config, stack)
 		if chunk.LineCount() > 0 {
 			*chunks = append(*chunks, chunk)
 
@@ -103,7 +176,7 @@ func (c *ASTChunker) walkTree(node *sitter.Node, content []byte, path string, co
 		if len(chunk.Content) > config.MaxChunkSize {
 			for i := 0; i < int(node.ChildCount()); i++ {
 				child := node.Child(i)
-				c.walkTree(child, content, path, config, splitNodes, chunks, covered)
+				c.walkTree(child, content, path, config, splitNodes, chunks, covered, stack)
 			}
 		}
 		return
@@ -112,12 +185,13 @@ func (c *ASTChunker) walkTree(node *sitter.Node, content []byte, path string, co
 	// Recurse into children for non-split nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		c.walkTree(child, content, path, config, splitNodes, chunks, covered)
+		c.walkTree(child, content, path, config, splitNodes, chunks, covered, stack)
 	}
 }
 
 // nodeToChunk converts an AST node to a Chunk.
-func (c *ASTChunker) nodeToChunk(node *sitter.Node, content []byte, path string, config *LanguageConfig) Chunk {
+// Phase 2a: Now includes rich context from scope stack.
+func (c *ASTChunker) nodeToChunk(node *sitter.Node, content []byte, path string, config *LanguageConfig, stack *scopeStack) Chunk {
 	startLine := int(node.StartPoint().Row) + 1 // Convert to 1-indexed
 	endLine := int(node.EndPoint().Row) + 1
 
@@ -139,6 +213,11 @@ func (c *ASTChunker) nodeToChunk(node *sitter.Node, content []byte, path string,
 		NodeType:  node.Type(),
 		NodeName:  nodeName,
 		Language:  config.Name,
+
+		// Phase 2a: Rich context fields from scope stack
+		ParentScope:  stack.current(),
+		ScopeKind:    stack.currentKind(),
+		ReceiverType: stack.currentReceiverType(),
 	}
 }
 
@@ -157,6 +236,129 @@ func (c *ASTChunker) extractNodeName(node *sitter.Node, content []byte, config *
 		child := node.Child(i)
 		if child.Type() == "identifier" || child.Type() == "property_identifier" {
 			return string(content[child.StartByte():child.EndByte()])
+		}
+	}
+
+	return ""
+}
+
+// mapNodeTypeToKind maps tree-sitter node types to language-agnostic scope kinds.
+// Phase 2a: Enables consistent scope kind across all supported languages.
+func (c *ASTChunker) mapNodeTypeToKind(nodeType string, language string) string {
+	// Define mappings for each language
+	mappings := map[string]map[string]string{
+		"go": {
+			"function_declaration": "function",
+			"method_declaration":   "method",
+			"type_declaration":     "struct", // Simplified; could be interface too
+			"interface_declaration": "interface",
+		},
+		"python": {
+			"function_definition": "function",
+			"class_definition":    "class",
+		},
+		"typescript": {
+			"function_declaration": "function",
+			"method_definition":    "method",
+			"class_declaration":    "class",
+			"interface_declaration": "interface",
+		},
+		"javascript": {
+			"function_declaration": "function",
+			"method_definition":    "method",
+			"class_declaration":    "class",
+		},
+		"rust": {
+			"function_item": "function",
+			"impl_item":     "impl", // Implementation block
+			"struct_item":   "struct",
+			"trait_item":    "trait",
+		},
+		"java": {
+			"method_declaration":    "method",
+			"class_declaration":     "class",
+			"interface_declaration": "interface",
+		},
+		"c": {
+			"function_definition": "function",
+		},
+		"cpp": {
+			"function_definition": "function",
+			"class_specifier":     "class",
+		},
+	}
+
+	if langMap, ok := mappings[language]; ok {
+		if kind, ok := langMap[nodeType]; ok {
+			return kind
+		}
+	}
+
+	// Default: use node type as-is if no mapping
+	return nodeType
+}
+
+// extractReceiverType extracts the receiver/class type for methods.
+// For Go methods: extracts struct name from receiver.
+// For Python/TypeScript/JavaScript: finds parent class.
+// For Rust: finds impl block type.
+// Phase 2a: Enables "Class.method" naming in search results.
+func (c *ASTChunker) extractReceiverType(node *sitter.Node, content []byte, language string) string {
+	switch language {
+	case "go":
+		// For method_declaration, look for receiver parameter
+		// Pattern: func (r *ReceiverType) MethodName(...)
+		if receiver := node.ChildByFieldName("receiver"); receiver != nil {
+			// Receiver is a parameter_list, find the type inside
+			for i := 0; i < int(receiver.ChildCount()); i++ {
+				param := receiver.Child(i)
+				if param.Type() == "parameter_declaration" {
+					// Look for type inside parameter
+					if typeNode := param.ChildByFieldName("type"); typeNode != nil {
+						typeStr := string(content[typeNode.StartByte():typeNode.EndByte()])
+						// Strip pointer (*) if present
+						typeStr = strings.TrimPrefix(typeStr, "*")
+						return typeStr
+					}
+				}
+			}
+		}
+
+	case "python", "typescript", "javascript":
+		// Look for parent class_definition/class_declaration
+		parent := node.Parent()
+		for parent != nil {
+			parentType := parent.Type()
+			if parentType == "class_definition" || parentType == "class_declaration" {
+				// Extract class name
+				for _, fieldName := range []string{"name", "identifier"} {
+					if nameNode := parent.ChildByFieldName(fieldName); nameNode != nil {
+						return string(content[nameNode.StartByte():nameNode.EndByte()])
+					}
+				}
+				// Fallback: find identifier child
+				for i := 0; i < int(parent.ChildCount()); i++ {
+					child := parent.Child(i)
+					if child.Type() == "identifier" {
+						return string(content[child.StartByte():child.EndByte()])
+					}
+				}
+			}
+			parent = parent.Parent()
+		}
+
+	case "rust":
+		// Look for impl block
+		// Pattern: impl SomeType { fn method(...) }
+		parent := node.Parent()
+		for parent != nil {
+			if parent.Type() == "impl_item" {
+				// Find the type being implemented
+				if typeNode := parent.ChildByFieldName("type"); typeNode != nil {
+					return string(content[typeNode.StartByte():typeNode.EndByte()])
+				}
+			}
+			parent = parent.Parent()
 		}
 	}
 
@@ -364,7 +566,10 @@ func (c *ASTChunker) ChunkFileWithOptions(ctx context.Context, path string, cont
 	var chunks []Chunk
 	covered := make(map[int]bool)
 
-	c.walkTree(root, content, path, &effectiveConfig, splitNodeSet, &chunks, covered)
+	// Phase 2a: Initialize scope stack
+	stack := &scopeStack{}
+
+	c.walkTree(root, content, path, &effectiveConfig, splitNodeSet, &chunks, covered, stack)
 
 	if opts.IncludeGaps {
 		c.fillGaps(content, path, &effectiveConfig, covered, &chunks)

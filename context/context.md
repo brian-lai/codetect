@@ -1,107 +1,65 @@
 # Current Work Summary
 
-Executing: Phase 1 Implementation - Phase 1d (.codetectignore Support)
+Executing: Phase 2a - Rich Context in Search Results
 
-**Branch:** `para/phase1-implementation-phase1d`
-**Master Plan:** context/plans/2026-02-02-phase1-implementation-roadmap.md
-**Phase Plan:** context/plans/2026-02-03-phase1d-codetectignore-support.md
+**Branch:** `para/phase2-critical-features-phase2a`
+**Master Plan:** context/plans/2026-02-03-phase2-critical-features.md
+**Phase Plan:** context/plans/2026-02-04-phase2a-rich-context.md
 
-## Phase 1d Objective
+## Objective
 
-Implement `.codetectignore` file support for fine-grained indexing control, independent of `.gitignore`.
-
-**Success Criteria:**
-- .codetectignore works with standard .gitignore patterns
-- Users can exclude paths independently of .gitignore
-- Hierarchical loading (project + global)
-- No performance regression on large repos
+Enable search results to include function/class/struct names and surrounding context lines. This makes search results self-explanatory without requiring full file reads, reducing token usage by ~40%.
 
 ## To-Do List
 
-### Step 1: Add Dependencies & Core Infrastructure
-- [x] Add `github.com/sabhiram/go-gitignore` dependency
-- [x] Create `internal/indexer/ignore.go`
-- [x] Implement `LoadCodetectIgnore(repoRoot string)` function
-- [x] Implement `LoadCodetectIgnoreHierarchy(repoRoot string)` function
-- [x] Support loading from project root `.codetectignore`
-- [x] Support loading from global `~/.codetectignore`
-- [x] Merge patterns from both files (OR logic)
+### Database Schema
+- [x] Add migration for new columns (parent_scope, scope_kind, receiver_type)
+- [x] Update SQLite schema in embeddings table
+- [x] Update PostgreSQL schema via embeddingColumnsForDialect
+- [ ] Add `GetChunkScopeInfo()` method to both adapters
+- [ ] Test migration on existing databases
 
-### Step 2: Integrate with File Scanning
-- [x] Add `Ignore *ignore.GitIgnore` field to `IndexOptions` struct (actually added to Builder)
-- [x] Update `scanFiles()` to check ignore patterns (in merkle.Builder.buildNode())
-- [x] Skip entire directories when pattern matches
-- [x] Skip individual files when pattern matches
-- [x] Use relative paths for pattern matching
+### AST Chunker Updates
+- [x] Add scopeStack struct to track parent scopes
+- [x] Implement `mapNodeTypeToKind()` for all supported languages
+- [x] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
+- [x] Update `walkTree()` to populate new chunk fields via scope stack
+- [x] Update Chunk struct definition
+- [ ] Test scope extraction on sample files (Go, Python, TS)
 
-### Step 3: Update CLI Commands
-- [x] Add `--ignore-file <path>` flag (SKIPPED - not needed for MVP)
-- [x] Add `--no-ignore` flag (SKIPPED - not needed for MVP)
-- [x] Load .codetectignore by default if it exists (DONE automatically)
-- [x] Pass ignore patterns to indexer options (DONE automatically)
-- [x] Add verbose logging (DEFERRED - can add later if needed)
+### Context Extraction
+- [x] Create `internal/search/context.go`
+- [x] Implement `ContextExtractor.ExtractContext()`
+- [x] Add unit tests with sample files
+- [x] Handle edge cases (start of file, end of file, nonexistent files)
 
-### Step 4: Add Configuration Support
-- [x] Add `Indexing` section to config struct (SKIPPED - works with defaults)
-- [x] Add `ignore_file` field (SKIPPED - uses .codetectignore by convention)
-- [x] Add `use_global_ignore` field (DONE - always loads global)
-- [x] Load from `.codetect.yaml` if exists (SKIPPED - not needed for MVP)
+### Search Result Updates
+- [x] Update SearchResult struct with new fields (hybrid, keyword, fusion)
+- [x] Implement enrichment functions (Enricher with Enrich*Results methods)
+- [x] Update `hybrid_search_v2` to call enrichment
+- [x] Update `search_keyword` to call enrichment
+- [x] Add `include_context` parameter to MCP tool schemas
+- [x] Implement dependency injection via tools.Config (easily removable)
 
-### Step 5: Testing
-- [x] Create `internal/indexer/ignore_test.go`
-- [x] Test pattern matching (*.min.js, dist/, vendor/)
-- [x] Test negation patterns (!vendor/important/) - limited support noted
-- [x] Test directory vs file patterns
-- [x] Test wildcard behavior (* vs **)
-- [x] Test empty/missing .codetectignore
-- [x] Integration tests for full indexing flow
-- [x] Edge case tests
-
-### Step 6: Documentation
-- [x] Create `docs/codetectignore.md` guide
-- [x] Document syntax and common use cases
-- [x] Update README.md with .codetectignore section
-- [x] Update docs/installation.md (skipped - not critical)
-
-### Step 7: Validate Common Use Cases
-- [x] Test: Exclude generated code (integration test)
-- [x] Test: Exclude minified files (integration test)
-- [x] Test: Exclude test fixtures (integration test)
-- [x] Test: Exclude vendor with exceptions (known limitation)
-- [x] Test: Exclude large data files (integration test)
-- [x] Measure performance impact (tested, no regression)
+### Testing & Validation
+- [ ] Write unit tests for scope extraction
+- [ ] Write unit tests for context extraction
+- [ ] Write integration tests for enriched search results
+- [ ] Test with real codebases (codetect itself, sample repos)
+- [ ] Validate token usage improvement (measure before/after)
+- [ ] Update documentation with examples
 
 ## Progress Notes
 
-### Phase 1d Started
-
-**Prerequisites Complete:**
-- ✅ Phase 1a research complete
-- ✅ .codetectignore specification complete (context/data/2026-02-03-codetectignore-spec.md)
-- ✅ Phase 1c merged to main (reranking implementation)
-
-**Key Technical Decisions:**
-- Use `github.com/sabhiram/go-gitignore` library (mature, fast, well-tested)
-- .gitignore-compatible syntax (no learning curve)
-- Independent of .gitignore (4 scenarios supported)
-- Hierarchical loading (project + global)
-
-**Integration Strategy:**
-- Integrate at file scanning stage (`scanFiles()` in indexer)
-- Skip entire directories for performance (filepath.SkipDir)
-- Compile patterns once, reuse for all files
-- Optional feature (no default .codetectignore)
-
-**Next:** Start Step 1 (Add dependencies and core infrastructure)
+_Update this section as you complete items._
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-02-02-phase1-implementation-roadmap.md",
-    "context/plans/2026-02-03-phase1d-codetectignore-support.md",
-    "context/data/2026-02-03-codetectignore-spec.md"
+    "context/plans/2026-02-03-phase2-critical-features.md",
+    "context/plans/2026-02-04-phase2a-rich-context.md"
   ],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
@@ -109,40 +67,50 @@ Implement `.codetectignore` file support for fine-grained indexing control, inde
     "context/summaries/2026-02-01-update-v2-documentation-summary.md",
     "context/summaries/2026-02-02-cursor-feature-gap-analysis.md",
     "context/summaries/2026-02-02-progress-bar-summary.md",
-    "context/summaries/2026-02-03-phase1c-cross-encoder-reranking-summary.md"
+    "context/summaries/2026-02-03-phase1c-cross-encoder-reranking-summary.md",
+    "context/summaries/2026-02-03-phase1d-codetectignore-summary.md"
   ],
-  "execution_branch": "para/phase1-implementation-phase1d",
-  "execution_started": "2026-02-03T14:00:00Z",
+  "execution_branch": "para/phase2-critical-features-phase2a",
+  "execution_started": "2026-02-04T12:00:00Z",
   "phased_execution": {
-    "master_plan": "context/plans/2026-02-02-phase1-implementation-roadmap.md",
+    "master_plan": "context/plans/2026-02-03-phase2-critical-features.md",
     "phases": [
       {
-        "phase": "1a",
-        "name": "Research & Design",
-        "plan": "context/plans/2026-02-02-phase1a-research-and-design.md",
-        "status": "completed"
+        "phase": "2a",
+        "name": "Rich Context in Search Results",
+        "plan": "context/plans/2026-02-04-phase2a-rich-context.md",
+        "status": "in_progress",
+        "duration": "1 week",
+        "objective": "Search results include function/class names and surrounding lines"
       },
       {
-        "phase": "1c",
-        "name": "Cross-Encoder Reranking",
-        "plan": "context/plans/2026-02-03-phase1c-cross-encoder-reranking.md",
-        "status": "completed"
-      },
-      {
-        "phase": "1d",
-        "name": ".codetectignore Support",
-        "plan": "context/plans/2026-02-03-phase1d-codetectignore-support.md",
-        "status": "in_progress"
-      },
-      {
-        "phase": "1e",
-        "name": "HTTP API",
+        "phase": "2b",
+        "name": "Symbol Graph Navigation",
         "plan": "TBD",
-        "status": "pending"
+        "status": "pending",
+        "duration": "3 weeks",
+        "objective": "Navigate code structure without reading files"
+      },
+      {
+        "phase": "2c",
+        "name": "Query Expansion & Filtering",
+        "plan": "TBD",
+        "status": "pending",
+        "duration": "2 weeks",
+        "objective": "Reduce number of search rounds needed"
+      },
+      {
+        "phase": "2d",
+        "name": "Dual-Model Embeddings",
+        "plan": "TBD",
+        "status": "pending",
+        "duration": "2 weeks",
+        "objective": "Code-specific embeddings for better code queries"
       }
     ],
-    "current_phase": "1d"
+    "current_phase": "2a",
+    "total_duration": "8 weeks (10 with buffer)"
   },
-  "last_updated": "2026-02-03T14:00:00Z"
+  "last_updated": "2026-02-04T12:00:00Z"
 }
 ```

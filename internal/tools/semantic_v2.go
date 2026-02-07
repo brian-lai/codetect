@@ -22,11 +22,15 @@ import (
 
 // RegisterV2SemanticTools registers the v2 semantic search MCP tools.
 // These tools use the new retriever with RRF fusion and optional reranking.
-func RegisterV2SemanticTools(server *mcp.Server) {
-	registerHybridSearchV2(server)
+// Phase 2a: Now accepts Config for optional enrichment.
+func RegisterV2SemanticTools(server *mcp.Server, toolConfig *Config) {
+	if toolConfig == nil {
+		toolConfig = DefaultConfig()
+	}
+	registerHybridSearchV2(server, toolConfig)
 }
 
-func registerHybridSearchV2(server *mcp.Server) {
+func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 	tool := mcp.Tool{
 		Name:        "hybrid_search_v2",
 		Description: "v2 hybrid search combining keyword, semantic, and symbol search with RRF fusion. Uses AST-based chunking and content-addressed caching. Optionally applies cross-encoder reranking for higher precision.",
@@ -44,6 +48,10 @@ func registerHybridSearchV2(server *mcp.Server) {
 				"rerank": {
 					Type:        "boolean",
 					Description: "Enable cross-encoder reranking for higher precision (default: false)",
+				},
+				"include_context": {
+					Type:        "boolean",
+					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
 				},
 			},
 			Required: []string{"query"},
@@ -64,6 +72,12 @@ func registerHybridSearchV2(server *mcp.Server) {
 		enableRerank := false
 		if r, ok := args["rerank"].(bool); ok {
 			enableRerank = r
+		}
+
+		// Phase 2a: Check if context enrichment requested
+		var includeContext *bool
+		if ic, ok := args["include_context"].(bool); ok {
+			includeContext = &ic
 		}
 
 		// Get current working directory as repo root
@@ -159,6 +173,13 @@ func registerHybridSearchV2(server *mcp.Server) {
 		// Apply final limit
 		if len(fusedResults) > limit {
 			fusedResults = fusedResults[:limit]
+		}
+
+		// Phase 2a: Enrich results if enricher available
+		if toolConfig.Enricher != nil {
+			if err := toolConfig.Enricher.EnrichRRFResults(fusedResults, includeContext); err != nil {
+				// Log but don't fail - enrichment is optional
+			}
 		}
 
 		// Build response

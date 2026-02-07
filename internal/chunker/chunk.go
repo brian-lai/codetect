@@ -19,6 +19,11 @@ type Chunk struct {
 	NodeType    string `json:"node_type"`    // AST node type (e.g., "function_declaration")
 	NodeName    string `json:"node_name"`    // Symbol name if applicable (e.g., function name)
 	Language    string `json:"language"`     // Language identifier
+
+	// Rich context fields (Phase 2a)
+	ParentScope  string `json:"parent_scope,omitempty"`  // Fully qualified name of containing scope (e.g., "AuthService.GenerateToken")
+	ScopeKind    string `json:"scope_kind,omitempty"`    // Type of containing scope (function, method, class, struct, interface)
+	ReceiverType string `json:"receiver_type,omitempty"` // For methods: struct/class name; for functions: empty
 }
 
 // ComputeHash calculates and sets the content hash using SHA-256.

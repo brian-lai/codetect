@@ -19,7 +19,9 @@ func main() {
 	server := mcp.NewServer(serverName, serverVersion)
 
 	// Register all tools
-	tools.RegisterAll(server)
+	// Phase 2a: Pass nil for backward compatibility (no enrichment by default)
+	// To enable enrichment, create tools.Config with an Enricher and pass it here
+	tools.RegisterAll(server, nil)
 
 	logger.Info("starting MCP server", "name", serverName, "version", serverVersion)
 

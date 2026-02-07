@@ -11,15 +11,20 @@ import (
 )
 
 // RegisterAll registers all available tools on the MCP server
-func RegisterAll(server *mcp.Server) {
-	registerSearchKeyword(server)
+// Phase 2a: Now accepts optional Config for dependency injection (e.g., Enricher).
+// Pass nil for config to use defaults (no enrichment, backward compatible).
+func RegisterAll(server *mcp.Server, config *Config) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+	registerSearchKeyword(server, config)
 	registerGetFile(server)
 	RegisterSymbolTools(server)
-	RegisterSemanticTools(server)
-	RegisterV2SemanticTools(server) // v2 tools with RRF fusion
+	RegisterSemanticTools(server, config)
+	RegisterV2SemanticTools(server, config) // v2 tools with RRF fusion
 }
 
-func registerSearchKeyword(server *mcp.Server) {
+func registerSearchKeyword(server *mcp.Server, config *Config) {
 	tool := mcp.Tool{
 		Name:        "search_keyword",
 		Description: "Search for a keyword/pattern in the codebase using ripgrep. Returns matching files with line numbers and snippets.",
@@ -33,6 +38,10 @@ func registerSearchKeyword(server *mcp.Server) {
 				"top_k": {
 					Type:        "number",
 					Description: "Maximum number of results to return (default: 20)",
+				},
+				"include_context": {
+					Type:        "boolean",
+					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
 				},
 			},
 			Required: []string{"query"},
@@ -50,6 +59,12 @@ func registerSearchKeyword(server *mcp.Server) {
 			topK = int(tk)
 		}
 
+		// Phase 2a: Check if context enrichment requested
+		var includeContext *bool
+		if ic, ok := args["include_context"].(bool); ok {
+			includeContext = &ic
+		}
+
 		// Get current working directory as root
 		root, err := os.Getwd()
 		if err != nil {
@@ -59,6 +74,13 @@ func registerSearchKeyword(server *mcp.Server) {
 		result, err := keyword.Search(query, root, topK)
 		if err != nil {
 			return nil, err
+		}
+
+		// Phase 2a: Enrich results if enricher available
+		if config.Enricher != nil {
+			if err := config.Enricher.EnrichKeywordResults(result.Results, includeContext); err != nil {
+				// Log but don't fail - enrichment is optional
+			}
 		}
 
 		// Serialize results to JSON

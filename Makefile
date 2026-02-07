@@ -199,3 +199,16 @@ eval-list: build
 # Show latest evaluation report
 eval-report: build
 	@./$(EVAL) report
+
+# Code quality targets
+lint:
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not installed. Install from: https://golangci-lint.run/usage/install/"; exit 1; }
+	golangci-lint run ./...
+
+fmt:
+	gofmt -s -w .
+	@command -v goimports >/dev/null 2>&1 && goimports -w . || echo "Note: goimports not found, skipping import formatting"
+
+tidy:
+	go mod tidy
+	go mod verify

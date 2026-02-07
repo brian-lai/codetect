@@ -53,11 +53,11 @@ Enable navigation of code relationships without reading files. Add symbol refere
 - [x] Unit tests for reference extraction (TypeScript)
 - [x] Unit tests for type relation extraction (Go embedding)
 - [x] Unit tests for type relation extraction (TS implements/extends)
-- [ ] Integration tests on this codebase (known call relationships)
-- [ ] Integration tests on this codebase (known interface implementations)
+- [x] Integration tests on this codebase (known call relationships)
+- [x] Integration tests on this codebase (known interface implementations)
 - [ ] Eval test cases for Phase 2b
-- [ ] Test incremental indexing (file change → refs updated)
-- [ ] Test incremental indexing (file change → type relations updated)
+- [x] Test incremental indexing (file change → refs updated)
+- [x] Test incremental indexing (file change → type relations updated)
 - [ ] Measure token reduction on representative queries
 
 ## Progress Notes

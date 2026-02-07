@@ -460,16 +460,6 @@ codetect index
 
 All MCP tools except `search_semantic` and `hybrid_search` will work.
 
-## v1 Documentation
-
-If you're staying on v1 or need v1-specific documentation:
-
-- **[v1 Overview](v1/README.md)** - v1 features, limitations, and migration path
-- **[v1 Architecture](v1/architecture.md)** - ctags-based indexing technical details
-- **[v1 Commands](v1/commands.md)** - Complete v1 command reference
-
-**Note:** v1 is deprecated and will be removed in v3.0.0. We recommend migrating to v2 for better performance.
-
 ## Need Help?
 
 - **Documentation:** See [Installation Guide](installation.md) and [Architecture](architecture.md)

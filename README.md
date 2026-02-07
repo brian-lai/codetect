@@ -91,10 +91,6 @@ codetect help        # Show all commands
 - 📦 Content-addressed caching (95% cache hit rate)
 - 🔄 Parallel embedding with `-j` flag (3.3x faster)
 
-**v1 legacy mode:**
-- Use `--v1` flag for ctags-based indexing (deprecated, removed in v3.0.0)
-- See [v1 documentation](docs/v1/README.md) for details
-
 ### Daemon Commands
 
 ```bash

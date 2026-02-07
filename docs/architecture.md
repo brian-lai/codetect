@@ -1,11 +1,10 @@
 # codetect Architecture
 
-> **Version:** v2.0.0+
-> **For v1 architecture:** See [v1 Architecture](v1/architecture.md) (deprecated)
+> **Version:** v2.2.0+
 
 ---
 
-This document describes the technical architecture of codetect v2.0.0+.
+This document describes the technical architecture of codetect v2.2.0+.
 
 ## Table of Contents
 
@@ -566,11 +565,10 @@ Commands:
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [Reciprocal Rank Fusion Paper](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)
 - [HNSW Algorithm](https://arxiv.org/abs/1603.09320)
-- [v1 Architecture](v1/architecture.md) (deprecated)
 - [Migration Guide](MIGRATION.md)
 
 ---
 
-**Document Version:** 2.0
-**Last Updated:** 2026-02-01
-**codetect Version:** 2.0.0+
+**Document Version:** 2.2
+**Last Updated:** 2026-02-07
+**codetect Version:** 2.2.0+

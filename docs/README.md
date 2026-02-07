@@ -52,13 +52,6 @@ Welcome to the codetect documentation! This index helps you find the information
 - **[Migration Guide](MIGRATION.md)** - Upgrade from v1 to v2
 
 ### v1 (Legacy, Deprecated)
-
-> ⚠️ **Deprecated**: v1 will be removed in v3.0.0. Migrate to v2 for better performance.
-
-- **[v1 Overview](v1/README.md)** - v1 features and limitations
-- **[v1 Architecture](v1/architecture.md)** - ctags-based indexing details
-- **[v1 Commands](v1/commands.md)** - Complete v1 command reference
-
 ## By Topic
 
 ### Installation & Setup
@@ -146,16 +139,12 @@ Welcome to the codetect documentation! This index helps you find the information
 **Integrate with my tool:**
 → [MCP Compatibility](mcp-compatibility.md)
 
-**Use v1 (legacy):**
-→ [v1 Documentation](v1/README.md)
-
 ## Document Versions
 
-All documentation reflects **codetect v2.0.0+** unless noted otherwise.
+All documentation reflects **codetect v2.2.0+**.
 
-- **Current version:** v2.0.0+
-- **Last updated:** 2026-02-01
-- **v1 docs:** Available in [v1/](v1/) directory (deprecated)
+- **Current version:** v2.2.0+
+- **Last updated:** 2026-02-07
 
 ## Contribution
 
@@ -208,16 +197,10 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ### Legacy Documentation (Deprecated)
 
-| File | Topic | Status |
-|------|-------|--------|
-| [v1/README.md](v1/README.md) | v1 overview | Deprecated, removed in v3.0 |
-| [v1/architecture.md](v1/architecture.md) | v1 design | Deprecated, removed in v3.0 |
-| [v1/commands.md](v1/commands.md) | v1 reference | Deprecated, removed in v3.0 |
-
 ---
 
 **Need help finding something?** Open an issue: https://github.com/brian-lai/codetect/issues
 
-**Documentation Version:** 1.0
-**Last Updated:** 2026-02-01
-**codetect Version:** 2.0.0+
+**Documentation Version:** 2.0
+**Last Updated:** 2026-02-07
+**codetect Version:** 2.2.0+

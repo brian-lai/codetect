@@ -4,10 +4,11 @@
 # Updates codetect to the latest stable version from GitHub
 #
 # Usage:
-#   codetect update              # Update to latest stable version
-#   codetect update --force      # Force rebuild even if already on latest
-#   codetect update --pre        # Include pre-release versions (beta, rc, etc.)
-#   codetect update --pre --force # Force rebuild of latest pre-release
+#   codetect update                   # Update to latest stable version
+#   codetect update --force           # Force rebuild even if already on latest
+#   codetect update --pre             # Include pre-release versions (beta, rc, etc.)
+#   codetect update --version v2.2.2  # Install specific version
+#   codetect update --pre --force     # Force rebuild of latest pre-release
 #
 
 set -e
@@ -15,6 +16,7 @@ set -e
 # Parse flags
 FORCE_REBUILD=false
 INCLUDE_PRERELEASE=false
+SPECIFIC_VERSION=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force|-f)
@@ -24,6 +26,10 @@ while [[ $# -gt 0 ]]; do
         --pre|--prerelease)
             INCLUDE_PRERELEASE=true
             shift
+            ;;
+        --version|-v)
+            SPECIFIC_VERSION="$2"
+            shift 2
             ;;
         *)
             shift
@@ -90,20 +96,34 @@ OLD_COMMIT=$(git rev-parse --short HEAD)
 echo "Fetching latest changes..."
 git fetch origin --tags
 
-# Find latest version tag (exclude pre-releases unless --pre flag is set)
-if [[ "$INCLUDE_PRERELEASE" == "true" ]]; then
-    LATEST_VERSION=$(git tag -l 'v*' | sort -V | tail -n1)
-else
-    # Filter out pre-release tags (containing -alpha, -beta, -rc, -pre, etc.)
-    LATEST_VERSION=$(git tag -l 'v*' | grep -v '\-alpha\|\-beta\|\-rc\|\-pre' | sort -V | tail -n1)
-fi
+# Determine target version
+if [[ -n "$SPECIFIC_VERSION" ]]; then
+    # Use specific version if provided
+    LATEST_VERSION="$SPECIFIC_VERSION"
 
-if [[ -z "$LATEST_VERSION" ]]; then
-    error "No version tags found"
-    if [[ "$INCLUDE_PRERELEASE" != "true" ]]; then
-        info "Try 'codetect update --pre' to include pre-release versions"
+    # Verify the tag exists
+    if ! git tag -l "$LATEST_VERSION" | grep -q "^${LATEST_VERSION}$"; then
+        error "Version tag not found: $LATEST_VERSION"
+        info "Available versions:"
+        git tag -l 'v*' | sort -V | tail -10 | sed 's/^/  /'
+        exit 1
     fi
-    exit 1
+else
+    # Find latest version tag (exclude pre-releases unless --pre flag is set)
+    if [[ "$INCLUDE_PRERELEASE" == "true" ]]; then
+        LATEST_VERSION=$(git tag -l 'v*' | sort -V | tail -n1)
+    else
+        # Filter out pre-release tags (containing -alpha, -beta, -rc, -pre, etc.)
+        LATEST_VERSION=$(git tag -l 'v*' | grep -v '\-alpha\|\-beta\|\-rc\|\-pre' | sort -V | tail -n1)
+    fi
+
+    if [[ -z "$LATEST_VERSION" ]]; then
+        error "No version tags found"
+        if [[ "$INCLUDE_PRERELEASE" != "true" ]]; then
+            info "Try 'codetect update --pre' to include pre-release versions"
+        fi
+        exit 1
+    fi
 fi
 
 # Check if we're already on the latest version

@@ -2,8 +2,9 @@
 
 Codebase Cleanup & Optimization — Comprehensive cleanup after v0 → v2.2.0 evolution.
 
-**Status:** Plan created, awaiting review
+**Status:** Phase 1 Complete ✅ — PR #52 created
 **Master Plan:** context/plans/2026-02-07-codebase-cleanup.md
+**Current Phase:** Phase 1 Complete, ready for Phase 2
 
 ## Objective
 
@@ -11,13 +12,14 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
 
 ## To-Do List
 
-### Phase 1: Dead Code & v1 Removal
-- [ ] Remove v1 semantic tools (`search_semantic`, `hybrid_search`)
-- [ ] Rename `semantic_v2.go` → `semantic.go`, clean up V2 naming
-- [ ] Remove mattn driver stub from `internal/db/open.go`
-- [ ] Remove v1 ctags code (`internal/search/symbols/ctags.go`)
-- [ ] Delete `docs/v1/` directory
-- [ ] Clean up all dangling references
+### Phase 1: Dead Code & v1 Removal ✅ COMPLETE
+- [x] Remove v1 semantic tools (`search_semantic`, `hybrid_search`)
+- [x] Rename `semantic_v2.go` → `semantic.go`, clean up V2 naming
+- [x] Remove mattn driver stub from `internal/db/open.go`
+- [x] Remove v1 ctags code (`internal/search/symbols/ctags.go`)
+- [x] Delete `docs/v1/` directory
+- [x] Clean up all dangling references
+- [x] PR #52 created: para/cleanup-phase-1 → para/codebase-cleanup
 
 ### Phase 2: Code Consolidation
 - [ ] Extract shared embedding store init to `internal/tools/db.go`
@@ -42,7 +44,13 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
 
 ## Progress Notes
 
-_Update this section as you complete items._
+### 2026-02-07 - Phase 1 Complete ✅
+- Removed all v1 semantic tools, ctags code, mattn driver
+- Deleted docs/v1/ directory
+- Updated all documentation to v2.2.0
+- Code formatted and verified
+- PR #52 created and ready for review
+- Summary: context/summaries/2026-02-07-codebase-cleanup-phase-1-summary.md
 
 ---
 
@@ -63,7 +71,8 @@ _Update this section as you complete items._
     "context/summaries/2026-02-02-progress-bar-summary.md",
     "context/summaries/2026-02-03-phase1c-cross-encoder-reranking-summary.md",
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
-    "context/summaries/2026-02-07-phase2a-rich-context-summary.md"
+    "context/summaries/2026-02-07-phase2a-rich-context-summary.md",
+    "context/summaries/2026-02-07-codebase-cleanup-phase-1-summary.md"
   ],
   "phased_execution": {
     "master_plan": "context/plans/2026-02-07-codebase-cleanup.md",
@@ -72,7 +81,9 @@ _Update this section as you complete items._
         "phase": 1,
         "name": "Dead Code & v1 Removal",
         "plan": "context/plans/2026-02-07-codebase-cleanup-phase-1.md",
-        "status": "pending",
+        "status": "complete",
+        "pr": "https://github.com/brian-lai/codetect/pull/52",
+        "summary": "context/summaries/2026-02-07-codebase-cleanup-phase-1-summary.md",
         "objective": "Remove v1 tools, mattn stub, v1 docs, ctags code"
       },
       {
@@ -97,8 +108,10 @@ _Update this section as you complete items._
         "objective": "Add tests for tools/, daemon/, merkle/, integration smoke test"
       }
     ],
-    "current_phase": null
+    "current_phase": 1,
+    "phase_1_complete": true,
+    "phase_1_pr": "https://github.com/brian-lai/codetect/pull/52"
   },
-  "last_updated": "2026-02-07T21:00:00Z"
+  "last_updated": "2026-02-07T22:30:00Z"
 }
 ```

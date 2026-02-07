@@ -1,21 +1,23 @@
 # codetect
 
-A local MCP server providing fast codebase search, file retrieval, symbol navigation, and semantic search for Claude Code.
+**Fast, token-efficient codebase search for every LLM.**
 
-## What's New in v2.0.0 🎉
+A local MCP server that brings Cursor-like performance to Claude Code and any LLM tool through intelligent codebase indexing.
 
-codetect v2.0.0 brings **multi-repo support**, **parallel embedding**, and **improved user experience**:
+## Why codetect?
 
-- ✨ **Dimension-grouped embedding tables** - Multiple repos can use different embedding models without conflicts
-- ⚡ **Parallel embedding** with `-j` flag - 3.3x faster embedding with configurable workers
-- 🎯 **Model selection in eval runner** - Choose `sonnet`, `haiku`, or `opus` with cost-aware defaults
-- 🔧 **Short flag aliases** - Use `-f` for `--force` and `-j` for `--parallel` (Unix-style)
-- 🛡️ **Config preservation** - Reinstalls no longer overwrite your settings
-- 🐛 **Better error handling** - Improved ripgrep error messages and diagnostics
+LLM coding assistants face two core problems: every question requires multiple slow searches and file reads, and complex queries burn through token limits, killing sessions mid-task.
 
-**Upgrading from v1.x?** v2.0.0 is fully backward compatible. See [Migration Guide](docs/MIGRATION.md) for details.
+Cursor solves this through upfront codebase indexing—their speed and token efficiency comes from knowing code structure before answering questions. That capability has been locked to their platform.
 
-**Full changelog:** [CHANGELOG.md](CHANGELOG.md)
+codetect brings the same approach to any LLM through intelligent codebase indexing. By building symbol graphs, embeddings, and call relationships, it enables:
+
+- ~40% faster responses (1 tool call instead of 4-8)
+- ~25% fewer tokens (direct answers without reading multiple files)
+- Smarter context (function names, scopes, relationships in search results)
+- Works with any LLM (Claude, OpenAI, local models via MCP protocol)
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and [Migration Guide](docs/MIGRATION.md) for upgrade instructions.
 
 ## Features
 

@@ -1,55 +1,64 @@
 # Current Work Summary
 
-Phase 2a - Rich Context in Search Results: ✅ Core Implementation Complete
+Executing: Phase 2 Critical Features - Phase 2b: Symbol Graph Navigation
 
-**Status:** Ready for integration testing and validation
-**Branch:** `para/phase2-critical-features-phase2a`
+**Branch:** `para/phase2-critical-features-phase2b`
 **Master Plan:** context/plans/2026-02-03-phase2-critical-features.md
-**Phase Plan:** context/plans/2026-02-04-phase2a-rich-context.md
-**Summary:** context/summaries/2026-02-07-phase2a-rich-context-summary.md
+**Phase Plan:** context/plans/2026-02-07-phase2b-symbol-graph-navigation.md
 
 ## Objective
 
-Enable search results to include function/class/struct names and surrounding context lines. This makes search results self-explanatory without requiring full file reads, reducing token usage by ~40%.
+Enable navigation of code relationships without reading files. Add symbol reference tracking so "who calls this function?" and "what implements this interface?" can be answered in one tool call, reducing token usage by ~20-25%.
 
 ## To-Do List
 
-### Database Schema
-- [x] Add migration for new columns (parent_scope, scope_kind, receiver_type)
-- [x] Update SQLite schema in embeddings table
-- [x] Update PostgreSQL schema via embeddingColumnsForDialect
-- [ ] Add `GetChunkScopeInfo()` method to both adapters
-- [ ] Test migration on existing databases
+### Week 1: Reference Extraction + Storage
 
-### AST Chunker Updates
-- [x] Add scopeStack struct to track parent scopes
-- [x] Implement `mapNodeTypeToKind()` for all supported languages
-- [x] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
-- [x] Update `walkTree()` to populate new chunk fields via scope stack
-- [x] Update Chunk struct definition
-- [ ] Test scope extraction on sample files (Go, Python, TS)
+#### Days 1-2: Schema + Infrastructure
+- [ ] Add `symbol_refs` table to schema builder (`internal/db/schema.go`)
+- [ ] Add `type_relations` table to schema builder (`internal/db/schema.go`)
+- [ ] Schema version bump (2 → 3)
+- [ ] Add migration path for existing databases
+- [ ] Add database method: `InsertRefs`
+- [ ] Add database method: `DeleteRefsByFile`
+- [ ] Add database method: `QueryRefsByName`
+- [ ] Add database method: `InsertTypeRelations`
+- [ ] Add database method: `DeleteTypeRelationsByFile`
+- [ ] Add database method: `QueryImplementations`
 
-### Context Extraction
-- [x] Create `internal/search/context.go`
-- [x] Implement `ContextExtractor.ExtractContext()`
-- [x] Add unit tests with sample files
-- [x] Handle edge cases (start of file, end of file, nonexistent files)
+#### Days 3-5: AST Reference + Type Relation Extraction
+- [ ] Extend `walkTree()` to extract `call_expression` nodes (function/method calls)
+- [ ] Extend `walkTree()` to extract type relation nodes (Go: `embedded_field`)
+- [ ] Extend `walkTree()` to extract type relation nodes (TS: `implements_clause`, `extends_clause`)
+- [ ] For Go: handle `call_expression`
+- [ ] For Go: handle `selector_expression` (method calls)
+- [ ] For Go: handle struct/interface embedding
+- [ ] For TypeScript: handle `call_expression`
+- [ ] For TypeScript: handle `member_expression`
+- [ ] For TypeScript: handle `implements`/`extends` clauses
+- [ ] Track source_scope from existing `scopeStack`
+- [ ] Store extracted refs via batch insert during indexing
+- [ ] Store extracted type relations via batch insert during indexing
 
-### Search Result Updates
-- [x] Update SearchResult struct with new fields (hybrid, keyword, fusion)
-- [x] Implement enrichment functions (Enricher with Enrich*Results methods)
-- [x] Update `hybrid_search_v2` to call enrichment
-- [x] Update `search_keyword` to call enrichment
-- [x] Add `include_context` parameter to MCP tool schemas
-- [x] Implement dependency injection via tools.Config (easily removable)
+### Week 2: MCP Tools + Testing
 
-### Testing & Validation
-- [ ] Write unit tests for scope extraction
-- [ ] Write unit tests for context extraction
-- [ ] Write integration tests for enriched search results
-- [ ] Test with real codebases (codetect itself, sample repos)
-- [ ] Validate token usage improvement (measure before/after)
-- [ ] Update documentation with examples
+#### Days 6-8: MCP Tools
+- [ ] Implement `find_references` tool
+- [ ] Implement `find_callers` tool
+- [ ] Implement `find_implementations` tool
+- [ ] Register tools in MCP server
+
+#### Days 9-10: Testing + Eval
+- [ ] Unit tests for reference extraction (Go)
+- [ ] Unit tests for reference extraction (TypeScript)
+- [ ] Unit tests for type relation extraction (Go embedding)
+- [ ] Unit tests for type relation extraction (TS implements/extends)
+- [ ] Integration tests on this codebase (known call relationships)
+- [ ] Integration tests on this codebase (known interface implementations)
+- [ ] Eval test cases for Phase 2b
+- [ ] Test incremental indexing (file change → refs updated)
+- [ ] Test incremental indexing (file change → type relations updated)
+- [ ] Measure token reduction on representative queries
 
 ## Progress Notes
 
@@ -61,7 +70,7 @@ _Update this section as you complete items._
 {
   "active_context": [
     "context/plans/2026-02-03-phase2-critical-features.md",
-    "context/plans/2026-02-04-phase2a-rich-context.md"
+    "context/plans/2026-02-07-phase2b-symbol-graph-navigation.md"
   ],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
@@ -73,8 +82,8 @@ _Update this section as you complete items._
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
     "context/summaries/2026-02-07-phase2a-rich-context-summary.md"
   ],
-  "execution_branch": "para/phase2-critical-features-phase2a",
-  "execution_started": "2026-02-04T12:00:00Z",
+  "execution_branch": "para/phase2-critical-features-phase2b",
+  "execution_started": "2026-02-07T21:00:00Z",
   "phased_execution": {
     "master_plan": "context/plans/2026-02-03-phase2-critical-features.md",
     "phases": [
@@ -91,10 +100,11 @@ _Update this section as you complete items._
       {
         "phase": "2b",
         "name": "Symbol Graph Navigation",
-        "plan": "TBD",
-        "status": "pending",
-        "duration": "3 weeks",
-        "objective": "Navigate code structure without reading files"
+        "plan": "context/plans/2026-02-07-phase2b-symbol-graph-navigation.md",
+        "status": "in_progress",
+        "started_date": "2026-02-07",
+        "duration": "2 weeks (planned)",
+        "objective": "Navigate code structure without reading files (find_references, find_callers, find_implementations)"
       },
       {
         "phase": "2c",
@@ -113,9 +123,9 @@ _Update this section as you complete items._
         "objective": "Code-specific embeddings for better code queries"
       }
     ],
-    "current_phase": "2a",
+    "current_phase": "2b",
     "total_duration": "8 weeks (10 with buffer)"
   },
-  "last_updated": "2026-02-07T20:45:00Z"
+  "last_updated": "2026-02-07T21:00:00Z"
 }
 ```

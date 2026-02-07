@@ -55,7 +55,7 @@ Enable navigation of code relationships without reading files. Add symbol refere
 - [x] Unit tests for type relation extraction (TS implements/extends)
 - [x] Integration tests on this codebase (known call relationships)
 - [x] Integration tests on this codebase (known interface implementations)
-- [ ] Eval test cases for Phase 2b
+- [x] Eval test cases for Phase 2b
 - [x] Test incremental indexing (file change → refs updated)
 - [x] Test incremental indexing (file change → type relations updated)
 - [ ] Measure token reduction on representative queries

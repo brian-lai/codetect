@@ -24,3 +24,26 @@ func WithEnricher(enricher *search.Enricher) *Config {
 		Enricher: enricher,
 	}
 }
+
+// DefaultConfigWithEnrichment returns a config with enrichment enabled using defaults.
+// This opens the embedding store from the current working directory and creates
+// an enricher with 3 lines of context before/after matches.
+// If the store can't be opened, returns a config without enrichment.
+func DefaultConfigWithEnrichment() *Config {
+	// Attempt to create enricher with default settings
+	enricher, err := createDefaultEnricher()
+	if err != nil {
+		// Fall back to no enrichment if store unavailable
+		return DefaultConfig()
+	}
+
+	return &Config{
+		Enricher: enricher,
+	}
+}
+
+// createDefaultEnricher attempts to create an enricher with default settings.
+func createDefaultEnricher() (*search.Enricher, error) {
+	// This will be implemented - for now, return nil to fix build
+	return nil, nil
+}

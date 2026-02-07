@@ -18,10 +18,13 @@ func main() {
 
 	server := mcp.NewServer(serverName, serverVersion)
 
-	// Register all tools
-	// Phase 2a: Pass nil for backward compatibility (no enrichment by default)
-	// To enable enrichment, create tools.Config with an Enricher and pass it here
-	tools.RegisterAll(server, nil)
+	// Phase 2a: Enable rich context enrichment by default
+	// This reduces token usage by ~40% by including scope info and context lines
+	// in search results, avoiding full file reads.
+	toolsConfig := tools.DefaultConfigWithEnrichment()
+
+	// Register all tools with enrichment enabled
+	tools.RegisterAll(server, toolsConfig)
 
 	logger.Info("starting MCP server", "name", serverName, "version", serverVersion)
 

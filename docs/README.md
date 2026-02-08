@@ -41,7 +41,6 @@ Welcome to the codetect documentation! This index helps you find the information
 | Document | Description |
 |----------|-------------|
 | **[Architecture](architecture.md)** | Internal design, data flow, and components |
-| **[v2 Architecture](v2-architecture.md)** | Deep dive into v2 AST-based indexing |
 | **[MCP Compatibility](mcp-compatibility.md)** | Supported tools and integration guide |
 
 ## Version-Specific Documentation
@@ -52,6 +51,13 @@ Welcome to the codetect documentation! This index helps you find the information
 - **[Migration Guide](MIGRATION.md)** - Upgrade from v1 to v2
 
 ### v1 (Legacy, Deprecated)
+
+> ⚠️ **Deprecated**: v1 will be removed in v3.0.0. Migrate to v2 for better performance.
+
+- **[v1 Overview](v1/README.md)** - v1 features and limitations
+- **[v1 Architecture](v1/architecture.md)** - ctags-based indexing details
+- **[v1 Commands](v1/commands.md)** - Complete v1 command reference
+
 ## By Topic
 
 ### Installation & Setup
@@ -104,9 +110,8 @@ Welcome to the codetect documentation! This index helps you find the information
 ```
 
 **Key files:**
-- [architecture.md](architecture.md) - Component design
+- [architecture.md](architecture.md) - Component design and v2 technical details
 - [mcp-compatibility.md](mcp-compatibility.md) - MCP client support
-- [v2-architecture.md](v2-architecture.md) - v2 technical deep-dive
 
 ## Common Tasks
 
@@ -139,12 +144,16 @@ Welcome to the codetect documentation! This index helps you find the information
 **Integrate with my tool:**
 → [MCP Compatibility](mcp-compatibility.md)
 
+**Use v1 (legacy):**
+→ [v1 Documentation](v1/README.md)
+
 ## Document Versions
 
-All documentation reflects **codetect v2.2.0+**.
+All documentation reflects **codetect v2.0.0+** unless noted otherwise.
 
-- **Current version:** v2.2.0+
-- **Last updated:** 2026-02-07
+- **Current version:** v2.0.0+
+- **Last updated:** 2026-02-01
+- **v1 docs:** Available in [v1/](v1/) directory (deprecated)
 
 ## Contribution
 
@@ -153,8 +162,6 @@ Found an error or want to improve the docs? Contributions welcome!
 1. Fork the repository
 2. Edit the documentation
 3. Submit a pull request
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ## Support
 
@@ -193,14 +200,11 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 | File | Topic | Audience |
 |------|-------|----------|
 | [mcp-compatibility.md](mcp-compatibility.md) | Tool support | Integrators |
-| [v2-architecture.md](v2-architecture.md) | Technical details | Contributors |
-
-### Legacy Documentation (Deprecated)
 
 ---
 
 **Need help finding something?** Open an issue: https://github.com/brian-lai/codetect/issues
 
-**Documentation Version:** 2.0
-**Last Updated:** 2026-02-07
-**codetect Version:** 2.2.0+
+**Documentation Version:** 1.0
+**Last Updated:** 2026-02-01
+**codetect Version:** 2.0.0+

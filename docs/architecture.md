@@ -4,7 +4,7 @@
 
 ---
 
-This document describes the technical architecture of codetect v2.2.0+.
+This document describes the technical architecture of codetect v2.2.0+ with ast-grep-based symbol indexing and rich context enrichment.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ This document describes the technical architecture of codetect v2.2.0+.
 codetect is an MCP (Model Context Protocol) server that provides fast codebase search capabilities for Claude Code and other LLM tools.
 
 **Architecture Principles:**
-- **Hybrid Search:** Combine keyword (ripgrep), symbol (ctags), and semantic (embeddings) search
+- **Hybrid Search:** Combine keyword (ripgrep), symbol (ast-grep), and semantic (embeddings) search
 - **Local-First:** All processing happens locally (no cloud dependencies)
 - **Database-Agnostic:** Support both SQLite (default) and PostgreSQL (production)
 - **Multi-Repo Isolation:** Dimension-grouped tables isolate repos using different embedding models
@@ -39,7 +39,7 @@ codetect is an MCP (Model Context Protocol) server that provides fast codebase s
                ├─► Keyword Search (ripgrep)
                │   internal/search/keyword.go
                │
-               ├─► Symbol Search (ctags + SQLite/PostgreSQL)
+               ├─► Symbol Search (ast-grep + SQLite/PostgreSQL)
                │   internal/search/symbols/
                │   internal/db/
                │
@@ -52,7 +52,7 @@ codetect is an MCP (Model Context Protocol) server that provides fast codebase s
 - `internal/mcp/server.go` - MCP protocol implementation
 - `internal/tools/registry.go` - Tool registration (search_keyword, get_file, etc.)
 - `internal/search/keyword.go` - Ripgrep integration
-- `internal/search/symbols/index.go` - Symbol indexing with ctags
+- `internal/search/symbols/index.go` - Symbol indexing with ast-grep
 - `internal/embedding/searcher.go` - Semantic search implementation
 
 ### 2. Indexing Pipeline
@@ -161,9 +161,9 @@ const (
    ├─ Respect .gitignore patterns
    └─ Filter by extension (code files only)
 
-3. Run ctags on each file
+3. Run ast-grep on each file
    ├─ Extract symbols (functions, classes, types)
-   ├─ Parse ctags output (JSON format)
+   ├─ Parse ast-grep output (JSON format)
    └─ Store in database (symbols table)
 
 4. User runs: codetect embed (optional)
@@ -243,7 +243,7 @@ CREATE TABLE symbols (
     kind TEXT NOT NULL,        -- function, class, type, variable, etc.
     file_path TEXT NOT NULL,
     line INTEGER NOT NULL,
-    pattern TEXT,              -- ctags pattern (for verification)
+    pattern TEXT,              -- ast-grep pattern (for verification)
     language TEXT,             -- go, python, javascript, etc.
     repo_root TEXT NOT NULL,   -- /path/to/repo (for multi-repo isolation)
     indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -328,16 +328,11 @@ CODETECT_LOG_LEVEL=info              # debug, info, warn, error
 CODETECT_LOG_FORMAT=text             # text (default), json
 ```
 
-### Project Config (`.codetect.yaml`)
-
-Planned for future releases. Currently all config via environment variables.
-
 ### Config Precedence
 
 1. **Environment variables** (highest priority)
-2. **Project config** (`.codetect.yaml`, planned)
-3. **Global config** (`~/.config/codetect/config.json`, partial support)
-4. **Defaults** (lowest priority)
+2. **Global config** (`~/.config/codetect/config.json`, partial support)
+3. **Defaults** (lowest priority)
 
 ## Performance Optimizations
 
@@ -469,7 +464,7 @@ codetect is designed to work with partial dependencies:
 | Dependency | If Missing |
 |------------|------------|
 | ripgrep | `search_keyword` fails (required) |
-| ctags | `find_symbol`, `list_defs_in_file` unavailable |
+| ast-grep | `find_symbol`, `list_defs_in_file` unavailable |
 | Ollama/LiteLLM | `search_semantic`, `hybrid_search` return `available: false` |
 
 The MCP server always starts; tools report availability in their responses.
@@ -546,14 +541,13 @@ Commands:
 - [ ] **Multi-language AST chunking** - Expand beyond Go/Python/JavaScript
 - [ ] **Reranking models** - Post-filter results with cross-encoder
 - [ ] **Query expansion** - Automatic synonym expansion for semantic search
-- [ ] **Configuration file** - Project-level `.codetect.yaml`
 - [ ] **HTTP API** - Alternative to MCP for non-MCP tools
 - [ ] **CLI query mode** - `codetect search "query"` for terminal use
 
 ### Considered for v3.0
 
 - [ ] **Merkle trees** - Sub-second change detection for large repos
-- [ ] **AST-aware indexing** - Parse syntax trees directly (no ctags)
+- [ ] **AST-aware indexing** - Parse syntax trees directly (no ast-grep)
 - [ ] **Hybrid ranking** - Machine-learned fusion of keyword + semantic scores
 - [ ] **Graph-based navigation** - Call graphs, type hierarchies, dependency trees
 - [ ] **LSP integration** - Real-time indexing via Language Server Protocol
@@ -565,10 +559,11 @@ Commands:
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [Reciprocal Rank Fusion Paper](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)
 - [HNSW Algorithm](https://arxiv.org/abs/1603.09320)
+- [v1 Architecture](v1/architecture.md) (deprecated)
 - [Migration Guide](MIGRATION.md)
 
 ---
 
-**Document Version:** 2.2
-**Last Updated:** 2026-02-07
-**codetect Version:** 2.2.0+
+**Document Version:** 2.0
+**Last Updated:** 2026-02-01
+**codetect Version:** 2.0.0+

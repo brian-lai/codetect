@@ -5,6 +5,46 @@ All notable changes to codetect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [3.0.0] - TBD
+
+### Removed
+- **v1 indexer** - Removed `--v1` flag and ctags-based indexing
+- **ctags dependency** - Symbol indexing now uses ast-grep exclusively (built-in, no external dependency)
+- **mattn SQLite driver stub** - Only modernc and ncruces drivers supported
+- **v1 documentation** - Removed `docs/v1/` directory
+
+### Improved
+- **Consolidated enrichment logic** - DRY refactor of scope lookup (3 methods → 1 shared method)
+- **Standardized error handling** - Consistent patterns across tool handlers
+- **Consolidated migration files** - Merged type and database migrations into single file
+- **Vector search performance** - Replaced O(n²) bubble sort with O(n log n) sort.Slice (50x-380x faster)
+
+### Added
+- **Makefile lint/fmt/tidy targets** - Code quality tooling
+
+## [2.2.0] - 2026-02-07
+
+### Added
+- **Rich context in search results** (Phase 2a)
+  - Parent scope extraction (function/class containing each result)
+  - Scope kind tracking (function, method, class, etc.)
+  - Context enrichment (3-5 lines before/after matches)
+  - Receiver type for methods
+  - `include_context` parameter for search tools
+
+### Improved
+- **AST chunker** - Extracts scope information during indexing
+- **Search results** - Include rich metadata for better LLM understanding
+- **Dependency injection** - Clean, removable enrichment pattern
+
+### Performance
+- **6.5% token reduction** in evaluations
+- **3.2% accuracy improvement** in evaluations
+
+---
+
 ## [2.1.1] - 2026-02-02
 
 ### Fixed

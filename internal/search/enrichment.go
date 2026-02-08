@@ -1,8 +1,6 @@
 package search
 
 import (
-	"fmt"
-
 	"codetect/internal/embedding"
 	"codetect/internal/fusion"
 	"codetect/internal/search/hybrid"
@@ -75,30 +73,48 @@ func (e *Enricher) EnrichHybridResults(results []hybrid.Result, includeContext *
 	return nil
 }
 
-// enrichWithScopeInfo populates scope fields from embedding store.
-func (e *Enricher) enrichWithScopeInfo(result *hybrid.Result) error {
+// scopeInfo holds scope metadata extracted from embeddings.
+type scopeInfo struct {
+	parentScope  string
+	scopeKind    string
+	receiverType string
+}
+
+// findScopeForLocation queries the embedding store for scope information
+// at the given file path and line number. Returns empty scopeInfo if not found.
+func (e *Enricher) findScopeForLocation(path string, line int) scopeInfo {
 	if e.store == nil {
-		return fmt.Errorf("embedding store not available")
+		return scopeInfo{}
 	}
 
 	// Query embeddings for this file location
-	embeddings, err := e.store.GetByPath(result.Path)
+	embeddings, err := e.store.GetByPath(path)
 	if err != nil {
-		return err
+		return scopeInfo{}
 	}
 
-	// Find embedding that overlaps with this result
+	// Find embedding that overlaps with this line
 	for _, emb := range embeddings {
-		if result.StartLine >= emb.StartLine && result.StartLine <= emb.EndLine {
+		if line >= emb.StartLine && line <= emb.EndLine {
 			// Found matching embedding
-			result.ParentScope = emb.ParentScope
-			result.ScopeKind = emb.ScopeKind
-			result.ReceiverType = emb.ReceiverType
-			return nil
+			return scopeInfo{
+				parentScope:  emb.ParentScope,
+				scopeKind:    emb.ScopeKind,
+				receiverType: emb.ReceiverType,
+			}
 		}
 	}
 
-	return nil // No matching embedding found
+	return scopeInfo{} // No matching embedding found
+}
+
+// enrichWithScopeInfo populates scope fields from embedding store.
+func (e *Enricher) enrichWithScopeInfo(result *hybrid.Result) error {
+	scope := e.findScopeForLocation(result.Path, result.StartLine)
+	result.ParentScope = scope.parentScope
+	result.ScopeKind = scope.scopeKind
+	result.ReceiverType = scope.receiverType
+	return nil
 }
 
 // EnrichKeywordResults enriches keyword search results with scope info and context lines.
@@ -140,28 +156,11 @@ func (e *Enricher) EnrichKeywordResults(results []keyword.Result, includeContext
 
 // enrichKeywordWithScope populates scope fields from embedding store for keyword results.
 func (e *Enricher) enrichKeywordWithScope(result *keyword.Result) error {
-	if e.store == nil {
-		return fmt.Errorf("embedding store not available")
-	}
-
-	// Query embeddings for this file location
-	embeddings, err := e.store.GetByPath(result.Path)
-	if err != nil {
-		return err
-	}
-
-	// Find embedding that overlaps with this result
-	for _, emb := range embeddings {
-		if result.LineStart >= emb.StartLine && result.LineStart <= emb.EndLine {
-			// Found matching embedding
-			result.ParentScope = emb.ParentScope
-			result.ScopeKind = emb.ScopeKind
-			result.ReceiverType = emb.ReceiverType
-			return nil
-		}
-	}
-
-	return nil // No matching embedding found
+	scope := e.findScopeForLocation(result.Path, result.LineStart)
+	result.ParentScope = scope.parentScope
+	result.ScopeKind = scope.scopeKind
+	result.ReceiverType = scope.receiverType
+	return nil
 }
 
 // EnrichRRFResults enriches fusion.RRFResult slices (used by v2 hybrid search).
@@ -204,26 +203,9 @@ func (e *Enricher) EnrichRRFResults(results []fusion.RRFResult, includeContext *
 
 // enrichFusionWithScope populates scope fields from embedding store for fusion results.
 func (e *Enricher) enrichFusionWithScope(result *fusion.Result) error {
-	if e.store == nil {
-		return fmt.Errorf("embedding store not available")
-	}
-
-	// Query embeddings for this file location
-	embeddings, err := e.store.GetByPath(result.Path)
-	if err != nil {
-		return err
-	}
-
-	// Find embedding that overlaps with this result
-	for _, emb := range embeddings {
-		if result.Line >= emb.StartLine && result.Line <= emb.EndLine {
-			// Found matching embedding
-			result.ParentScope = emb.ParentScope
-			result.ScopeKind = emb.ScopeKind
-			result.ReceiverType = emb.ReceiverType
-			return nil
-		}
-	}
-
-	return nil // No matching embedding found
+	scope := e.findScopeForLocation(result.Path, result.Line)
+	result.ParentScope = scope.parentScope
+	result.ScopeKind = scope.scopeKind
+	result.ReceiverType = scope.receiverType
+	return nil
 }

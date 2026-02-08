@@ -1,6 +1,9 @@
 package db
 
-import "context"
+import (
+	"context"
+	"sort"
+)
 
 // VectorDB provides an interface for vector similarity search operations.
 // This abstraction allows switching between different vector search backends:
@@ -148,14 +151,10 @@ func (b *BruteForceVectorDB) SearchKNN(_ context.Context, index string, query []
 		pairs = append(pairs, distPair{id, dist})
 	}
 
-	// Sort by distance ascending (simple bubble sort for small k)
-	for i := range len(pairs) - 1 {
-		for j := i + 1; j < len(pairs); j++ {
-			if pairs[j].dist < pairs[i].dist {
-				pairs[i], pairs[j] = pairs[j], pairs[i]
-			}
-		}
-	}
+	// Sort by distance ascending
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].dist < pairs[j].dist
+	})
 
 	// Take top k
 	if k > len(pairs) {

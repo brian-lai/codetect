@@ -205,7 +205,7 @@ func main() {
 	if *validate {
 		fmt.Println()
 		fmt.Println("Validating migration...")
-		if err := embedding.ValidateMigration(sourceStore, targetStore, *sampleSize); err != nil {
+		if err := embedding.ValidateDatabaseMigration(sourceStore, targetStore, *sampleSize); err != nil {
 			logger.Error("validation failed", "error", err)
 			os.Exit(1)
 		}

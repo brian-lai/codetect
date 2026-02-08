@@ -163,7 +163,7 @@ func TestMigrateDatabase(t *testing.T) {
 	})
 }
 
-func TestValidateMigration(t *testing.T) {
+func TestValidateDatabaseMigration(t *testing.T) {
 	// Test repo root for multi-repo isolation
 	testRepoRoot := "/test/repo"
 
@@ -215,7 +215,7 @@ func TestValidateMigration(t *testing.T) {
 		}
 
 		// Validate
-		err = ValidateMigration(sourceStore, targetStore, 10)
+		err = ValidateDatabaseMigration(sourceStore, targetStore, 10)
 		if err != nil {
 			t.Errorf("Validation failed: %v", err)
 		}
@@ -225,7 +225,7 @@ func TestValidateMigration(t *testing.T) {
 		// Delete one embedding from target
 		targetStore.DeleteByPath("file2.go")
 
-		err := ValidateMigration(sourceStore, targetStore, 10)
+		err := ValidateDatabaseMigration(sourceStore, targetStore, 10)
 		if err == nil {
 			t.Error("Expected validation to fail with count mismatch")
 		}
@@ -250,7 +250,7 @@ func TestValidateMigration(t *testing.T) {
 
 		emptyTarget, _ := NewEmbeddingStore(emptyTargetDB, testRepoRoot)
 
-		err = ValidateMigration(emptySource, emptyTarget, 10)
+		err = ValidateDatabaseMigration(emptySource, emptyTarget, 10)
 		if err != nil {
 			t.Errorf("Empty database validation should succeed: %v", err)
 		}

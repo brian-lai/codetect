@@ -2,9 +2,9 @@
 
 Codebase Cleanup & Optimization — Comprehensive cleanup after v0 → v2.2.0 evolution.
 
-**Status:** Phase 1 Complete ✅ — PR #52 created
+**Status:** Phase 2 Complete ✅ — PR #53 created
 **Master Plan:** context/plans/2026-02-07-codebase-cleanup.md
-**Current Phase:** Phase 1 Complete, ready for Phase 2
+**Current Phase:** Phase 2 Complete, ready for Phase 3
 
 ## Objective
 
@@ -21,12 +21,13 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
 - [x] Clean up all dangling references
 - [x] PR #52 created: para/cleanup-phase-1 → para/codebase-cleanup
 
-### Phase 2: Code Consolidation
-- [ ] Extract shared embedding store init to `internal/tools/db.go`
-- [ ] Consolidate enrichment methods (single `findScopeForLocation`)
-- [ ] Merge migration files into `internal/embedding/migration.go`
-- [ ] Standardize error handling across tool handlers
-- [ ] Replace bubble sort in BruteForceVectorDB
+### Phase 2: Code Consolidation ✅ COMPLETE
+- [x] Extract shared embedding store init (already existed)
+- [x] Consolidate enrichment methods (single `findScopeForLocation`)
+- [x] Merge migration files into `internal/embedding/migration.go`
+- [x] Standardize error handling (already standardized)
+- [x] Replace bubble sort in BruteForceVectorDB
+- [x] PR #53 created: para/cleanup-phase-2 → para/codebase-cleanup
 
 ### Phase 3: Documentation & Housekeeping
 - [ ] Consolidate `architecture.md` + `v2-architecture.md`
@@ -43,6 +44,14 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
 - [ ] Add integration smoke test
 
 ## Progress Notes
+
+### 2026-02-07 - Phase 2 Complete ✅
+- Consolidated enrichment methods (3 → 1 shared method)
+- Merged migration files (2 → 1 with clear sections)
+- Replaced bubble sort with quicksort (O(n²) → O(n log n))
+- Removed ~85 lines of duplicated code
+- PR #53 created and ready for review
+- Summary: context/summaries/2026-02-07-codebase-cleanup-phase-2-summary.md
 
 ### 2026-02-07 - Phase 1 Complete ✅
 - Removed all v1 semantic tools, ctags code, mattn driver
@@ -72,7 +81,8 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
     "context/summaries/2026-02-03-phase1c-cross-encoder-reranking-summary.md",
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
     "context/summaries/2026-02-07-phase2a-rich-context-summary.md",
-    "context/summaries/2026-02-07-codebase-cleanup-phase-1-summary.md"
+    "context/summaries/2026-02-07-codebase-cleanup-phase-1-summary.md",
+    "context/summaries/2026-02-07-codebase-cleanup-phase-2-summary.md"
   ],
   "phased_execution": {
     "master_plan": "context/plans/2026-02-07-codebase-cleanup.md",
@@ -90,7 +100,9 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
         "phase": 2,
         "name": "Code Consolidation",
         "plan": "context/plans/2026-02-07-codebase-cleanup-phase-2.md",
-        "status": "pending",
+        "status": "complete",
+        "pr": "https://github.com/brian-lai/codetect/pull/53",
+        "summary": "context/summaries/2026-02-07-codebase-cleanup-phase-2-summary.md",
         "objective": "Extract shared logic, DRY enrichment, standardize errors"
       },
       {
@@ -108,10 +120,10 @@ Remove dead code, consolidate duplicated logic, update documentation to reflect 
         "objective": "Add tests for tools/, daemon/, merkle/, integration smoke test"
       }
     ],
-    "current_phase": 1,
-    "phase_1_complete": true,
-    "phase_1_pr": "https://github.com/brian-lai/codetect/pull/52"
+    "current_phase": 2,
+    "phase_2_complete": true,
+    "phase_2_pr": "https://github.com/brian-lai/codetect/pull/53"
   },
-  "last_updated": "2026-02-07T22:30:00Z"
+  "last_updated": "2026-02-07T23:15:00Z"
 }
 ```

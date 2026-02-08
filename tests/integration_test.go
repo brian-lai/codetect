@@ -79,8 +79,16 @@ func Helper(input string) string {
 	}
 
 	// Step 1: Build the indexer binary
+	// Get the repository root (parent of tests/ directory)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	repoRoot := filepath.Dir(cwd) // Go up from tests/ to repo root
+
 	indexerBin := filepath.Join(tmpDir, "codetect-index")
 	buildCmd := exec.Command("go", "build", "-o", indexerBin, "./cmd/codetect-index")
+	buildCmd.Dir = repoRoot
 	if output, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build indexer: %v\nOutput: %s", err, output)
 	}
@@ -101,6 +109,7 @@ func Helper(input string) string {
 	// Step 3: Build the MCP server binary
 	mcpBin := filepath.Join(tmpDir, "codetect-mcp")
 	buildMcpCmd := exec.Command("go", "build", "-o", mcpBin, "./cmd/codetect")
+	buildMcpCmd.Dir = repoRoot
 	if output, err := buildMcpCmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build MCP server: %v\nOutput: %s", err, output)
 	}

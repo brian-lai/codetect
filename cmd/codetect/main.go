@@ -5,30 +5,39 @@ import (
 
 	"codetect/internal/logging"
 	"codetect/internal/mcp"
+	"codetect/internal/server"
 	"codetect/internal/tools"
 )
 
 const (
 	serverName    = "codetect"
-	serverVersion = "2.2.3"
+	serverVersion = "4.0.0-dev"
 )
 
 func main() {
 	logger := logging.Default("codetect")
 
-	server := mcp.NewServer(serverName, serverVersion)
+	// Initialize session-scoped components once at startup
+	ctx, err := server.NewContext()
+	if err != nil {
+		logger.Error("failed to initialize", "error", err)
+		os.Exit(1)
+	}
+	defer ctx.Close()
 
-	// Phase 2a: Enable rich context enrichment by default
-	// This reduces token usage by ~40% by including scope info and context lines
-	// in search results, avoiding full file reads.
-	toolsConfig := tools.DefaultConfigWithEnrichment()
+	srv := mcp.NewServer(serverName, serverVersion)
 
-	// Register all tools with enrichment enabled
-	tools.RegisterAll(server, toolsConfig)
+	// Register v4 tools: search + get_file
+	tools.RegisterAll(srv, ctx)
 
-	logger.Info("starting MCP server", "name", serverName, "version", serverVersion)
+	logger.Info("starting MCP server",
+		"name", serverName,
+		"version", serverVersion,
+		"semantic", ctx.SemanticOK,
+		"symbols", ctx.SymbolsOK,
+	)
 
-	if err := server.Run(); err != nil {
+	if err := srv.Run(); err != nil {
 		logger.Error("server error", "error", err)
 		os.Exit(1)
 	}

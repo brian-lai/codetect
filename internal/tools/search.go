@@ -175,12 +175,10 @@ func doSemanticSearch(ctx context.Context, sctx *server.Context, query string, l
 		if err != nil {
 			return fmt.Sprintf("[Error reading %s: %v]", path, err)
 		}
-		snippet := result.Content
-		// TODO (Phase 2): Remove this truncation — return full chunk content
-		if len(snippet) > 500 {
-			snippet = snippet[:500] + "..."
-		}
-		return snippet
+		// Phase 2 (v4): Return full chunk content — no truncation.
+		// Chunks now include ±10 lines of context from AST boundaries,
+		// providing self-contained results that eliminate follow-up get_file calls.
+		return result.Content
 	})
 	if err != nil {
 		return nil, err

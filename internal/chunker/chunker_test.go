@@ -789,9 +789,36 @@ func TestContentHashDeterministic(t *testing.T) {
 }
 
 func TestContentHashUnique(t *testing.T) {
-	content := `func foo() {}
+	// Phase 2 (v4): Functions need to be >20 lines apart to avoid overlapping
+	// context windows (±10 lines). Adjacent functions will have identical content
+	// after context expansion, which is expected behavior for content-addressed caching.
+	content := `func foo() {
+	// Line 2
+	// Line 3
+	// Line 4
+	// Line 5
+	// Line 6
+	// Line 7
+	// Line 8
+	// Line 9
+	// Line 10
+}
 
-func bar() {}
+// Spacer to separate functions by >20 lines
+// Line 14
+// Line 15
+// Line 16
+// Line 17
+// Line 18
+// Line 19
+// Line 20
+// Line 21
+// Line 22
+// Line 23
+
+func bar() {
+	// Different function
+}
 `
 	chunker := NewASTChunker()
 	chunks, err := chunker.ChunkFile(context.Background(), "test.go", []byte(content))

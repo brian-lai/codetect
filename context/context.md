@@ -1,23 +1,31 @@
 # Current Work Summary
 
-Executing: codetect v4 Phase 1 — Session Init + Tool Consolidation
+Phase 1 complete: v4.0.0-beta.1 tagged
 
-**Status:** In progress
-**Branch:** `para/v4-phase-1-session-init` (from `v4`)
+**Status:** Ready for eval gate
+**Branch:** `v4`
+**Tag:** `v4.0.0-beta.1`
 **Plan:** context/plans/2026-02-08-codetect-v4-architecture.md
 
-## To-Do List
+## Phase 1 Summary
 
-- [x] Create `internal/server/context.go` — ServerContext struct with session-scoped components
-- [x] Update `cmd/codetect/main.go` — initialize all components once at startup, pass to tools
-- [x] Create `internal/tools/search.go` — unified `search` tool combining keyword + semantic + symbol
-- [x] Update `internal/tools/tools.go` — RegisterAll only registers `search` and `get_file`
-- [x] Delete v1 semantic tool registrations from `internal/tools/semantic.go`
-- [x] Remove individual tool registrations from `internal/tools/symbols.go` (keep internal logic)
-- [x] Remove `hybrid_search_v2` tool registration from `internal/tools/semantic_v2.go` (keep search logic)
-- [x] Verify build compiles — all 4 binaries pass
-- [x] Run tests — all pass except pre-existing failure in internal/search (context_test.go)
-- [x] Manual smoke test: verified only `search` and `get_file` exposed
+Completed session-scoped initialization and 2-tool consolidation:
+- Created `ServerContext` — DB, cache, embedder, vector index initialized once at startup
+- Consolidated 7 MCP tools → 2: `search` and `get_file`
+- Net: -621 lines
+
+## Next Steps
+
+**Eval gate for Phase 1:**
+```bash
+codetect-eval run --repo ./
+# Compare against v2.2.3 baseline
+# Pass criteria: Token usage ≤ v2.2.3
+```
+
+If eval gate passes:
+- Dogfood beta.1 for at least 1 session
+- Proceed to Phase 2: Context-Windowed AST Chunks
 
 ---
 
@@ -36,8 +44,10 @@ Executing: codetect v4 Phase 1 — Session Init + Tool Consolidation
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
     "context/summaries/2026-02-07-phase2a-rich-context-summary.md"
   ],
-  "execution_branch": "para/v4-phase-1-session-init",
+  "execution_branch": "v4",
   "execution_started": "2026-02-08T12:30:00Z",
-  "last_updated": "2026-02-08T12:30:00Z"
+  "last_updated": "2026-02-08T14:00:00Z",
+  "current_phase": "phase-1-complete",
+  "current_tag": "v4.0.0-beta.1"
 }
 ```

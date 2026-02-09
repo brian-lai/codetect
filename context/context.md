@@ -1,30 +1,30 @@
 # Current Work Summary
 
-Executing: codetect v4 Phase 2 — Context-Windowed AST Chunks
+Executing: codetect v4 Phase 3 — Search Fusion Fix
 
 **Status:** In progress
-**Branch:** `para/v4-phase-2-chunking` (from `v4`)
+**Branch:** `para/v4-phase-3-fusion-fix` (from `v4`)
 **Plan:** context/plans/2026-02-08-codetect-v4-architecture.md
 
 ## Objective
 
-Restore cross-boundary context by expanding AST chunks with configurable context windows (default ±10 lines). Return full chunk content instead of truncated snippets to eliminate follow-up `get_file` calls.
+Fix RRF fusion by normalizing keyword results to chunk-level IDs. Map line-level ripgrep hits to their containing AST chunks so keyword and semantic results share the same ID space, enabling actual fusion.
 
 ## To-Do List
 
-- [x] Add context window constants to `internal/chunker/ast.go` (DefaultContextWindowLines=10, MaxChunkContentSize=4000)
-- [x] Update `ASTChunker.ChunkFile()` to expand chunks by ±N lines after AST splitting
-- [x] Handle overlapping context windows between adjacent chunks (intentional, improves recall)
-- [x] Add chunk size cap: if context-windowed chunk > 4000 chars, return AST-bounded content only
-- [x] Remove snippet truncation from `internal/tools/search.go` (the `[:500] + "..."` logic)
-- [x] Verify `internal/embedding/pipeline.go` embeds context-windowed content (already uses chunk.Content)
-- [x] Fix `TestContentHashUnique` test (spaced functions >20 lines apart to avoid overlapping context)
-- [x] Verify build: `go build ./...`
-- [x] Run tests: `go test ./internal/chunker/` - all pass
-- [ ] Commit Phase 2 changes to feature branch
+- [x] Load chunk location index from LocationStore at session init in `internal/server/context.go`
+- [x] Add chunk lookup method: `FindChunkAt(path, lineNum)` with binary search
+- [x] Implement chunk normalization in `doKeywordSearch()` in `internal/tools/search.go`
+- [x] Map ripgrep line hits to chunk IDs: `path:startLine:endLine`
+- [x] Aggregate multiple keyword hits within same chunk (boost score by hit count)
+- [x] Add fusion rate logging to search tool for eval measurement
+- [x] Verify RRF fusion logic (IDs now match between keyword and semantic)
+- [x] Run tests: `go test ./internal/...` - all pass (1 pre-existing failure unrelated to Phase 3)
+- [ ] Commit Phase 3 changes to feature branch
 - [ ] Squash merge to `v4` branch
-- [ ] Tag `v4.0.0-beta.2`
-- [ ] Run eval gate: compare get_file call reduction vs beta.1
+- [ ] Tag `v4.0.0-beta.3`
+- [ ] Run eval gate: check fusion rate >30%, token efficiency improvement
+- [ ] Test RRF weights: {kw:0.5, sem:0.5}, {kw:0.3, sem:0.7}, {kw:0.7, sem:0.3} (based on eval results)
 
 ---
 

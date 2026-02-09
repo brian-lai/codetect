@@ -30,6 +30,10 @@ type Context struct {
 	// V1 symbol index (for find_symbol / list_defs_in_file, used internally by search)
 	SymbolIndex *symbols.Index
 	SymbolsOK   bool
+
+	// Phase 3 (v4): Chunk location index for keyword → chunk mapping
+	ChunkLocations map[string][]embedding.ChunkLocation // path -> sorted chunks by line
+	ChunksOK       bool
 }
 
 // NewContext initializes all session-scoped components.
@@ -57,10 +61,14 @@ func NewContext() (*Context, error) {
 	// Initialize symbol index
 	ctx.initSymbolIndex()
 
+	// Phase 3 (v4): Load chunk locations for keyword → chunk mapping
+	ctx.initChunkLocations()
+
 	logger.Info("session initialized",
 		"repo", repoRoot,
 		"semantic", ctx.SemanticOK,
 		"symbols", ctx.SymbolsOK,
+		"chunks", ctx.ChunksOK,
 	)
 
 	return ctx, nil
@@ -176,4 +184,85 @@ func (c *Context) initSymbolIndex() {
 	}
 	c.SymbolIndex = idx
 	c.SymbolsOK = true
+}
+
+func (c *Context) initChunkLocations() {
+	if c.Indexer == nil {
+		return
+	}
+
+	locations := c.Indexer.Locations()
+	if locations == nil {
+		c.Logger.Info("location store unavailable, chunk normalization disabled")
+		return
+	}
+
+	// Load all chunk locations for this repo
+	locs, err := locations.GetByRepo(c.RepoRoot)
+	if err != nil {
+		c.Logger.Warn("failed to load chunk locations", "error", err)
+		return
+	}
+
+	if len(locs) == 0 {
+		c.Logger.Info("no chunk locations found (run codetect index + codetect embed)")
+		return
+	}
+
+	// Group by path and sort by line number for binary search
+	c.ChunkLocations = make(map[string][]embedding.ChunkLocation)
+	for _, loc := range locs {
+		c.ChunkLocations[loc.Path] = append(c.ChunkLocations[loc.Path], loc)
+	}
+
+	// Sort each path's chunks by StartLine for binary search
+	for path := range c.ChunkLocations {
+		chunks := c.ChunkLocations[path]
+		// Simple bubble sort since chunks are typically already sorted
+		for i := 0; i < len(chunks); i++ {
+			for j := i + 1; j < len(chunks); j++ {
+				if chunks[j].StartLine < chunks[i].StartLine {
+					chunks[i], chunks[j] = chunks[j], chunks[i]
+				}
+			}
+		}
+	}
+
+	c.ChunksOK = true
+	c.Logger.Info("chunk location index loaded",
+		"files", len(c.ChunkLocations),
+		"chunks", len(locs),
+	)
+}
+
+// FindChunkAt returns the chunk containing the given line number in the specified file.
+// Returns nil if no chunk contains that line or if chunk locations aren't available.
+// Phase 3 (v4): Used to normalize keyword search hits to chunk-level IDs for RRF fusion.
+func (c *Context) FindChunkAt(path string, lineNum int) *embedding.ChunkLocation {
+	if !c.ChunksOK {
+		return nil
+	}
+
+	chunks, ok := c.ChunkLocations[path]
+	if !ok {
+		return nil
+	}
+
+	// Binary search for the containing chunk
+	left, right := 0, len(chunks)-1
+	for left <= right {
+		mid := (left + right) / 2
+		chunk := &chunks[mid]
+
+		if lineNum < chunk.StartLine {
+			right = mid - 1
+		} else if lineNum > chunk.EndLine {
+			left = mid + 1
+		} else {
+			// Found: StartLine <= lineNum <= EndLine
+			return chunk
+		}
+	}
+
+	return nil
 }

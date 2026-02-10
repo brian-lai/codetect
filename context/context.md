@@ -1,30 +1,30 @@
 # Current Work Summary
 
-Executing: codetect v4 Phase 3 — Search Fusion Fix
+Executing: codetect v4 Phase 5 — Cleanup and Final Measurement
 
 **Status:** In progress
-**Branch:** `para/v4-phase-3-fusion-fix` (from `v4`)
+**Branch:** `v4` (skipped Phase 4, cleanup on main branch)
 **Plan:** context/plans/2026-02-08-codetect-v4-architecture.md
+
+## Phase 4 Status: SKIPPED
+
+CodeRankEmbed not available on Ollama (requires GGUF conversion). Given mixed Phase 3 results (accuracy +5.9pp but tokens +11.4%), deferring embedding model changes until v4 baseline is established.
 
 ## Objective
 
-Fix RRF fusion by normalizing keyword results to chunk-level IDs. Map line-level ripgrep hits to their containing AST chunks so keyword and semantic results share the same ID space, enabling actual fusion.
+Remove dead code from v2, measure final v4 performance, document improvements.
 
 ## To-Do List
 
-- [x] Load chunk location index from LocationStore at session init in `internal/server/context.go`
-- [x] Add chunk lookup method: `FindChunkAt(path, lineNum)` with binary search
-- [x] Implement chunk normalization in `doKeywordSearch()` in `internal/tools/search.go`
-- [x] Map ripgrep line hits to chunk IDs: `path:startLine:endLine`
-- [x] Aggregate multiple keyword hits within same chunk (boost score by hit count)
-- [x] Add fusion rate logging to search tool for eval measurement
-- [x] Verify RRF fusion logic (IDs now match between keyword and semantic)
-- [x] Run tests: `go test ./internal/...` - all pass (1 pre-existing failure unrelated to Phase 3)
-- [ ] Commit Phase 3 changes to feature branch
-- [ ] Squash merge to `v4` branch
-- [ ] Tag `v4.0.0-beta.3`
-- [ ] Run eval gate: check fusion rate >30%, token efficiency improvement
-- [ ] Test RRF weights: {kw:0.5, sem:0.5}, {kw:0.3, sem:0.7}, {kw:0.7, sem:0.3} (based on eval results)
+- [ ] Delete v1 EmbeddingStore and references (if any remain)
+- [ ] Remove unused rerank code (if any)
+- [ ] Remove dead v2 tool code (semantic.go, semantic_v2.go already deleted in Phase 1)
+- [ ] Run final cleanup: unused imports, comments
+- [ ] Update version to v4.0.0 in relevant files
+- [ ] Run final eval: compare v4.0.0-beta.3 vs v2.2.3 baseline
+- [ ] Document results: token efficiency, accuracy, architectural improvements
+- [ ] Commit cleanup changes
+- [ ] Tag v4.0.0 (release candidate or final based on results)
 
 ---
 

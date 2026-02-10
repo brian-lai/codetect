@@ -11,7 +11,7 @@ import (
 
 const (
 	serverName    = "codetect"
-	serverVersion = "4.0.0-dev"
+	serverVersion = "4.0.0"
 )
 
 func main() {

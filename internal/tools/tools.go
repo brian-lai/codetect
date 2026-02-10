@@ -3,104 +3,22 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"codetect/internal/mcp"
 	"codetect/internal/search/files"
-	"codetect/internal/search/keyword"
+	"codetect/internal/server"
 )
 
-// RegisterAll registers all available tools on the MCP server
-// Phase 2a: Now accepts optional Config for dependency injection (e.g., Enricher).
-// Pass nil for config to use defaults (no enrichment, backward compatible).
-func RegisterAll(server *mcp.Server, config *Config) {
-	if config == nil {
-		config = DefaultConfig()
-	}
-	registerSearchKeyword(server, config)
-	registerGetFile(server)
-	RegisterSymbolTools(server)
-	RegisterSemanticTools(server, config)
-	RegisterV2SemanticTools(server, config) // v2 tools with RRF fusion
+// RegisterAll registers the v4 tool set: search + get_file.
+// All other tools (search_keyword, search_semantic, hybrid_search,
+// hybrid_search_v2, find_symbol, list_defs_in_file) are removed.
+// Their functionality is subsumed by the unified search tool.
+func RegisterAll(srv *mcp.Server, ctx *server.Context) {
+	RegisterSearch(srv, ctx)
+	registerGetFile(srv)
 }
 
-func registerSearchKeyword(server *mcp.Server, config *Config) {
-	tool := mcp.Tool{
-		Name:        "search_keyword",
-		Description: "Search for a keyword/pattern in the codebase using ripgrep. Returns matching files with line numbers and snippets.",
-		InputSchema: mcp.InputSchema{
-			Type: "object",
-			Properties: map[string]mcp.Property{
-				"query": {
-					Type:        "string",
-					Description: "The search query (supports regex)",
-				},
-				"top_k": {
-					Type:        "number",
-					Description: "Maximum number of results to return (default: 20)",
-				},
-				"include_context": {
-					Type:        "boolean",
-					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
-				},
-			},
-			Required: []string{"query"},
-		},
-	}
-
-	handler := func(args map[string]any) (*mcp.ToolsCallResult, error) {
-		query, ok := args["query"].(string)
-		if !ok || query == "" {
-			return nil, fmt.Errorf("query is required")
-		}
-
-		topK := 20
-		if tk, ok := args["top_k"].(float64); ok {
-			topK = int(tk)
-		}
-
-		// Phase 2a: Check if context enrichment requested
-		var includeContext *bool
-		if ic, ok := args["include_context"].(bool); ok {
-			includeContext = &ic
-		}
-
-		// Get current working directory as root
-		root, err := os.Getwd()
-		if err != nil {
-			root = "."
-		}
-
-		result, err := keyword.Search(query, root, topK)
-		if err != nil {
-			return nil, err
-		}
-
-		// Phase 2a: Enrich results if enricher available
-		if config.Enricher != nil {
-			if err := config.Enricher.EnrichKeywordResults(result.Results, includeContext); err != nil {
-				// Log but don't fail - enrichment is optional
-			}
-		}
-
-		// Serialize results to JSON
-		data, err := json.Marshal(result)
-		if err != nil {
-			return nil, err
-		}
-
-		return &mcp.ToolsCallResult{
-			Content: []mcp.Content{{
-				Type: "text",
-				Text: string(data),
-			}},
-		}, nil
-	}
-
-	server.RegisterTool(tool, handler)
-}
-
-func registerGetFile(server *mcp.Server) {
+func registerGetFile(srv *mcp.Server) {
 	tool := mcp.Tool{
 		Name:        "get_file",
 		Description: "Read the contents of a file, optionally specifying a line range.",
@@ -145,7 +63,6 @@ func registerGetFile(server *mcp.Server) {
 			return nil, err
 		}
 
-		// Serialize results to JSON
 		data, err := json.Marshal(result)
 		if err != nil {
 			return nil, err
@@ -159,5 +76,5 @@ func registerGetFile(server *mcp.Server) {
 		}, nil
 	}
 
-	server.RegisterTool(tool, handler)
+	srv.RegisterTool(tool, handler)
 }

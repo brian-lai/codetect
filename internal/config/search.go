@@ -6,11 +6,10 @@ import (
 	"strings"
 )
 
-// SearchConfig holds the complete search configuration including
-// retrieval and reranking settings.
+// SearchConfig holds the complete search configuration.
+// Phase 5 (v4): Removed reranking (dead code, never used in v4).
 type SearchConfig struct {
 	Retrieval RetrieverConfig `yaml:"retrieval"`
-	Reranking RerankerConfig  `yaml:"reranking"`
 }
 
 // RetrieverConfig configures multi-signal retrieval behavior.
@@ -39,38 +38,10 @@ type RetrieverConfig struct {
 	TimeoutMs int `yaml:"timeout_ms"`
 }
 
-// RerankerConfig configures cross-encoder reranking behavior.
-type RerankerConfig struct {
-	// Enabled determines whether reranking is performed.
-	// Default: false (reranking adds latency)
-	Enabled bool `yaml:"enabled"`
-
-	// Model is the reranking model to use (e.g., "bge-reranker-v2-m3").
-	Model string `yaml:"model"`
-
-	// Provider specifies the reranking backend ("ollama" or "litellm").
-	Provider string `yaml:"provider"`
-
-	// TopK is the number of candidates to rerank.
-	// Only the top K results from retrieval are sent to the reranker.
-	// Default: 20
-	TopK int `yaml:"top_k"`
-
-	// Threshold is the minimum reranker score to include in results.
-	// Results below this score are filtered out.
-	// Default: 0.0 (include all)
-	Threshold float64 `yaml:"threshold"`
-
-	// BaseURL is the base URL for the reranking service.
-	// Default: "http://localhost:11434" for Ollama
-	BaseURL string `yaml:"base_url"`
-}
-
 // DefaultSearchConfig returns sensible default values for search configuration.
 func DefaultSearchConfig() SearchConfig {
 	return SearchConfig{
 		Retrieval: DefaultRetrieverConfig(),
-		Reranking: DefaultRerankerConfig(),
 	}
 }
 
@@ -92,19 +63,6 @@ func DefaultRetrieverConfig() RetrieverConfig {
 	}
 }
 
-// DefaultRerankerConfig returns the default reranker configuration.
-// Reranking is disabled by default to minimize latency.
-func DefaultRerankerConfig() RerankerConfig {
-	return RerankerConfig{
-		Enabled:   false, // Off by default for latency
-		Model:     "bge-reranker-v2-m3",
-		Provider:  "ollama",
-		TopK:      20,
-		Threshold: 0.0,
-		BaseURL:   "http://localhost:11434",
-	}
-}
-
 // LoadSearchConfigFromEnv loads search configuration from environment variables.
 // Supports the following variables:
 //
@@ -117,14 +75,6 @@ func DefaultRerankerConfig() RerankerConfig {
 //   - CODETECT_SEARCH_WEIGHT_KEYWORD: Keyword signal weight (default: 0.3)
 //   - CODETECT_SEARCH_WEIGHT_SEMANTIC: Semantic signal weight (default: 0.5)
 //   - CODETECT_SEARCH_WEIGHT_SYMBOL: Symbol signal weight (default: 0.2)
-//
-// Reranking:
-//   - CODETECT_RERANK_ENABLED: Enable reranking (default: false)
-//   - CODETECT_RERANK_MODEL: Reranking model (default: bge-reranker-v2-m3)
-//   - CODETECT_RERANK_PROVIDER: Provider (default: ollama)
-//   - CODETECT_RERANK_TOP_K: Candidates to rerank (default: 20)
-//   - CODETECT_RERANK_THRESHOLD: Min score threshold (default: 0.0)
-//   - CODETECT_RERANK_BASE_URL: Service base URL (default: http://localhost:11434)
 func LoadSearchConfigFromEnv() SearchConfig {
 	cfg := DefaultSearchConfig()
 
@@ -170,30 +120,6 @@ func LoadSearchConfigFromEnv() SearchConfig {
 		}
 	}
 
-	// Reranking config
-	if v := os.Getenv("CODETECT_RERANK_ENABLED"); v != "" {
-		cfg.Reranking.Enabled = parseBool(v, false)
-	}
-	if v := os.Getenv("CODETECT_RERANK_MODEL"); v != "" {
-		cfg.Reranking.Model = v
-	}
-	if v := os.Getenv("CODETECT_RERANK_PROVIDER"); v != "" {
-		cfg.Reranking.Provider = v
-	}
-	if v := os.Getenv("CODETECT_RERANK_TOP_K"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			cfg.Reranking.TopK = n
-		}
-	}
-	if v := os.Getenv("CODETECT_RERANK_THRESHOLD"); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			cfg.Reranking.Threshold = f
-		}
-	}
-	if v := os.Getenv("CODETECT_RERANK_BASE_URL"); v != "" {
-		cfg.Reranking.BaseURL = v
-	}
-
 	return cfg
 }
 
@@ -231,18 +157,6 @@ func (c RetrieverConfig) WithSymbolLimit(n int) RetrieverConfig {
 // WithParallel returns a copy of the config with parallel setting.
 func (c RetrieverConfig) WithParallel(parallel bool) RetrieverConfig {
 	c.Parallel = parallel
-	return c
-}
-
-// WithEnabled returns a copy of the config with enabled setting.
-func (c RerankerConfig) WithEnabled(enabled bool) RerankerConfig {
-	c.Enabled = enabled
-	return c
-}
-
-// WithTopK returns a copy of the config with top_k setting.
-func (c RerankerConfig) WithTopK(k int) RerankerConfig {
-	c.TopK = k
 	return c
 }
 

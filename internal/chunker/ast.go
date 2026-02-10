@@ -20,6 +20,14 @@ const DefaultFallbackOverlap = 10
 // MinGapLines is the minimum number of uncovered lines to create a gap chunk.
 const MinGapLines = 3
 
+// DefaultContextWindowLines is the number of lines to include before and after
+// each AST chunk boundary to restore cross-boundary context (v4 Phase 2).
+const DefaultContextWindowLines = 10
+
+// MaxChunkContentSize is the maximum size for a context-windowed chunk in characters.
+// If a chunk exceeds this after adding context, we fall back to AST-bounded content only.
+const MaxChunkContentSize = 4000
+
 // Phase 2a: scopeStack tracks parent scopes during AST traversal for rich context.
 type scopeStack struct {
 	scopes []scopeInfo
@@ -135,7 +143,10 @@ func (c *ASTChunker) ChunkFile(ctx context.Context, path string, content []byte)
 	// Sort by start position
 	sortChunks(chunks)
 
-	// Compute hashes for all chunks
+	// Phase 2 (v4): Expand chunks with context windows
+	c.expandChunksWithContext(&chunks, content, DefaultContextWindowLines)
+
+	// Compute hashes for all chunks (after expansion, so hash includes context)
 	for i := range chunks {
 		chunks[i].ComputeHash()
 	}
@@ -218,6 +229,52 @@ func (c *ASTChunker) nodeToChunk(node *sitter.Node, content []byte, path string,
 		ParentScope:  stack.current(),
 		ScopeKind:    stack.currentKind(),
 		ReceiverType: stack.currentReceiverType(),
+	}
+}
+
+// expandChunksWithContext expands each chunk's content by ±contextLines.
+// The canonical StartLine/EndLine remain at AST boundaries for ID purposes,
+// but the Content field includes the context window. This restores cross-boundary
+// context that makes results self-contained.
+// Phase 2 (v4): Addresses the key regression from v1 → v2 where precise AST
+// chunking removed the overlap that made v1 chunks actionable.
+func (c *ASTChunker) expandChunksWithContext(chunks *[]Chunk, content []byte, contextLines int) {
+	if contextLines <= 0 {
+		return
+	}
+
+	// Split content into lines for context extraction
+	lines := strings.Split(string(content), "\n")
+
+	for i := range *chunks {
+		chunk := &(*chunks)[i]
+
+		// Calculate expanded boundaries (1-indexed, inclusive)
+		expandedStart := chunk.StartLine - contextLines
+		if expandedStart < 1 {
+			expandedStart = 1
+		}
+
+		expandedEnd := chunk.EndLine + contextLines
+		if expandedEnd > len(lines) {
+			expandedEnd = len(lines)
+		}
+
+		// Extract expanded content
+		expandedContent := strings.Join(lines[expandedStart-1:expandedEnd], "\n")
+
+		// Check size cap: if expanded chunk exceeds MaxChunkContentSize,
+		// fall back to AST-bounded content only
+		if len(expandedContent) > MaxChunkContentSize {
+			// Keep original AST-bounded content
+			continue
+		}
+
+		// Update chunk content with context window
+		chunk.Content = expandedContent
+
+		// Note: StartLine/EndLine stay at AST boundaries for ID generation.
+		// The expanded content is what gets embedded and returned to the agent.
 	}
 }
 

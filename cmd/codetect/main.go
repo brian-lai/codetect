@@ -18,12 +18,11 @@ func main() {
 
 	server := mcp.NewServer(serverName, serverVersion)
 
-	// Phase 2a: Enable rich context enrichment by default
-	// This reduces token usage by ~40% by including scope info and context lines
-	// in search results, avoiding full file reads.
 	toolsConfig := tools.DefaultConfigWithEnrichment()
+	if toolsConfig.Pool != nil {
+		defer toolsConfig.Pool.Close()
+	}
 
-	// Register all tools with enrichment enabled
 	tools.RegisterAll(server, toolsConfig)
 
 	logger.Info("starting MCP server", "name", serverName, "version", serverVersion)

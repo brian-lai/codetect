@@ -11,12 +11,15 @@ import (
 )
 
 // Config holds optional dependencies for tools.
-// Phase 2a: Enables dependency injection for search enrichment.
 // All fields are optional - if nil, the feature is disabled.
 type Config struct {
 	// Enricher enriches search results with scope info and context lines.
 	// If nil, results are returned without enrichment (backward compatible).
 	Enricher *search.Enricher
+
+	// Pool manages shared database connections, indexers, and embedders.
+	// If nil, tools fall back to per-call initialization.
+	Pool *ResourcePool
 }
 
 // DefaultConfig returns a config with no enrichment (backward compatible).
@@ -33,20 +36,25 @@ func WithEnricher(enricher *search.Enricher) *Config {
 	}
 }
 
-// DefaultConfigWithEnrichment returns a config with enrichment enabled using defaults.
-// This opens the embedding store from the current working directory and creates
-// an enricher with 3 lines of context before/after matches.
-// If the store can't be opened, returns a config without enrichment.
+// DefaultConfigWithEnrichment returns a config with enrichment and resource pooling.
+// Creates a ResourcePool for shared connections and an enricher for context.
+// If enrichment can't be set up, the pool is still provided.
 func DefaultConfigWithEnrichment() *Config {
-	// Attempt to create enricher with default settings
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return DefaultConfig()
+	}
+
+	pool := NewResourcePool(repoRoot)
+
 	enricher, err := createDefaultEnricher()
 	if err != nil {
-		// Fall back to no enrichment if store unavailable
-		return DefaultConfig()
+		return &Config{Pool: pool}
 	}
 
 	return &Config{
 		Enricher: enricher,
+		Pool:     pool,
 	}
 }
 

@@ -1,67 +1,60 @@
 # Current Work Summary
 
-Phase 2a - Rich Context in Search Results: ✅ Core Implementation Complete
+v3.0.0-beta.2 — Token Efficiency Release (TDD)
 
-**Status:** Ready for integration testing and validation
-**Branch:** `para/phase2-critical-features-phase2a`
-**Master Plan:** context/plans/2026-02-03-phase2-critical-features.md
-**Phase Plan:** context/plans/2026-02-04-phase2a-rich-context.md
-**Summary:** context/summaries/2026-02-07-phase2a-rich-context-summary.md
+**Status:** Planning complete, awaiting review
+**Branch:** `para/v3-beta2-token-efficiency` (to be created)
+**Master Plan:** context/plans/2026-02-13-v3-beta2-token-efficiency.md
+**Research:** context/research/2026-02-12-token-savings-analysis.md
+**Base:** v3.0.0-beta.1
+**Methodology:** TDD — tests first, implementation second, eval validation per phase
 
 ## Objective
 
-Enable search results to include function/class/struct names and surrounding context lines. This makes search results self-explanatory without requiring full file reads, reducing token usage by ~40%.
+Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regression <50% (down from 87.5%). Apply findings from token savings regression analysis across 3 phases using TDD.
 
 ## To-Do List
 
-### Database Schema
-- [x] Add migration for new columns (parent_scope, scope_kind, receiver_type)
-- [x] Update SQLite schema in embeddings table
-- [x] Update PostgreSQL schema via embeddingColumnsForDialect
-- [ ] Add `GetChunkScopeInfo()` method to both adapters
-- [ ] Test migration on existing databases
+### Phase 1: Surface Area Reduction (TDD, 2-3 hours)
+- [ ] Update eval runner allowedTools to v2/Phase 2b tools
+- [ ] Write JSON serialization tests for fusion.Result field exclusion (RED)
+- [ ] Implement `json:"-"` tags on internal-only fields (GREEN)
+- [ ] Slim HybridSearchV2Result to Results-only wrapper
+- [ ] Remove deprecated v1 tools (search_semantic, hybrid_search)
+- [ ] Compress all tool and parameter descriptions
+- [ ] **Run eval → verify no accuracy regression**
 
-### AST Chunker Updates
-- [x] Add scopeStack struct to track parent scopes
-- [x] Implement `mapNodeTypeToKind()` for all supported languages
-- [x] Implement `extractReceiverType()` for Go, Python, TypeScript, Rust
-- [x] Update `walkTree()` to populate new chunk fields via scope stack
-- [x] Update Chunk struct definition
-- [ ] Test scope extraction on sample files (Go, Python, TS)
+### Phase 2: Response Budgeting & Detail Levels (TDD, 4-8 hours)
+- [ ] Write response_test.go: detail parsing, marshaling, snippet budgeting (RED)
+- [ ] Implement response.go: DetailLevel, marshal functions (GREEN)
+- [ ] Lower default result limits (20→10 for search, 50→20 for symbols)
+- [ ] Integrate `detail` parameter into search_keyword
+- [ ] Integrate `detail` parameter into hybrid_search_v2
+- [ ] Add snippet length budgeting based on result count
+- [ ] **Run eval → verify token reduction ≥20%, no accuracy regression**
 
-### Context Extraction
-- [x] Create `internal/search/context.go`
-- [x] Implement `ContextExtractor.ExtractContext()`
-- [x] Add unit tests with sample files
-- [x] Handle edge cases (start of file, end of file, nonexistent files)
-
-### Search Result Updates
-- [x] Update SearchResult struct with new fields (hybrid, keyword, fusion)
-- [x] Implement enrichment functions (Enricher with Enrich*Results methods)
-- [x] Update `hybrid_search_v2` to call enrichment
-- [x] Update `search_keyword` to call enrichment
-- [x] Add `include_context` parameter to MCP tool schemas
-- [x] Implement dependency injection via tools.Config (easily removable)
-
-### Testing & Validation
-- [ ] Write unit tests for scope extraction
-- [ ] Write unit tests for context extraction
-- [ ] Write integration tests for enriched search results
-- [ ] Test with real codebases (codetect itself, sample repos)
-- [ ] Validate token usage improvement (measure before/after)
-- [ ] Update documentation with examples
+### Phase 3: Connection Pooling (TDD, 4-8 hours)
+- [ ] Write pool_test.go: lifecycle, concurrent access, cleanup (RED)
+- [ ] Implement pool.go: ResourcePool with lazy init (GREEN)
+- [ ] Integrate pool into tools.Config
+- [ ] Refactor symbol, reference, and semantic tools to use pool
+- [ ] Remove dead per-call initialization functions
+- [ ] **Run eval → verify latency <50% regression, no accuracy regression**
 
 ## Progress Notes
 
-_Update this section as you complete items._
+_Update this section as phases are completed._
 
 ---
 
 ```json
 {
   "active_context": [
-    "context/plans/2026-02-03-phase2-critical-features.md",
-    "context/plans/2026-02-04-phase2a-rich-context.md"
+    "context/plans/2026-02-13-v3-beta2-token-efficiency.md",
+    "context/plans/2026-02-13-v3-beta2-token-efficiency-phase-1.md",
+    "context/plans/2026-02-13-v3-beta2-token-efficiency-phase-2.md",
+    "context/plans/2026-02-13-v3-beta2-token-efficiency-phase-3.md",
+    "context/research/2026-02-12-token-savings-analysis.md"
   ],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
@@ -73,49 +66,34 @@ _Update this section as you complete items._
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
     "context/summaries/2026-02-07-phase2a-rich-context-summary.md"
   ],
-  "execution_branch": "para/phase2-critical-features-phase2a",
-  "execution_started": "2026-02-04T12:00:00Z",
+  "execution_branch": "para/v3-beta2-token-efficiency",
   "phased_execution": {
-    "master_plan": "context/plans/2026-02-03-phase2-critical-features.md",
+    "master_plan": "context/plans/2026-02-13-v3-beta2-token-efficiency.md",
     "phases": [
       {
-        "phase": "2a",
-        "name": "Rich Context in Search Results",
-        "plan": "context/plans/2026-02-04-phase2a-rich-context.md",
-        "summary": "context/summaries/2026-02-07-phase2a-rich-context-summary.md",
-        "status": "completed",
-        "completed_date": "2026-02-07",
-        "duration": "3 days (planned 1 week)",
-        "objective": "Search results include function/class names and surrounding lines"
+        "phase": 1,
+        "name": "Surface Area Reduction",
+        "plan": "context/plans/2026-02-13-v3-beta2-token-efficiency-phase-1.md",
+        "status": "pending",
+        "objective": "Remove v1 tools, compress descriptions, slim response structs"
       },
       {
-        "phase": "2b",
-        "name": "Symbol Graph Navigation",
-        "plan": "TBD",
+        "phase": 2,
+        "name": "Response Budgeting & Detail Levels",
+        "plan": "context/plans/2026-02-13-v3-beta2-token-efficiency-phase-2.md",
         "status": "pending",
-        "duration": "3 weeks",
-        "objective": "Navigate code structure without reading files"
+        "objective": "Lower defaults, add detail parameter, budget snippet lengths"
       },
       {
-        "phase": "2c",
-        "name": "Query Expansion & Filtering",
-        "plan": "TBD",
+        "phase": 3,
+        "name": "Connection Pooling",
+        "plan": "context/plans/2026-02-13-v3-beta2-token-efficiency-phase-3.md",
         "status": "pending",
-        "duration": "2 weeks",
-        "objective": "Reduce number of search rounds needed"
-      },
-      {
-        "phase": "2d",
-        "name": "Dual-Model Embeddings",
-        "plan": "TBD",
-        "status": "pending",
-        "duration": "2 weeks",
-        "objective": "Code-specific embeddings for better code queries"
+        "objective": "Singleton resource pool for latency reduction"
       }
     ],
-    "current_phase": "2a",
-    "total_duration": "8 weeks (10 with buffer)"
+    "current_phase": null
   },
-  "last_updated": "2026-02-07T20:45:00Z"
+  "last_updated": "2026-02-13T00:00:00Z"
 }
 ```

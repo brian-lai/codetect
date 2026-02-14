@@ -16,12 +16,12 @@ Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regressi
 ## To-Do List
 
 ### Phase 1: Surface Area Reduction (TDD, 2-3 hours)
-- [ ] Update eval runner allowedTools to v2/Phase 2b tools
-- [ ] Write JSON serialization tests for fusion.Result field exclusion (RED)
-- [ ] Implement `json:"-"` tags on internal-only fields (GREEN)
-- [ ] Slim HybridSearchV2Result to Results-only wrapper
-- [ ] Remove deprecated v1 tools (search_semantic, hybrid_search)
-- [ ] Compress all tool and parameter descriptions
+- [x] Update eval runner allowedTools to v2/Phase 2b tools
+- [x] Write JSON serialization tests for fusion.Result field exclusion (RED)
+- [x] Implement `json:"-"` tags on internal-only fields (GREEN)
+- [x] Slim HybridSearchV2Result to Results-only wrapper
+- [x] Remove deprecated v1 tools (search_semantic, hybrid_search)
+- [x] Compress all tool and parameter descriptions
 - [ ] **Run eval → verify no accuracy regression**
 
 ### Phase 2: Response Budgeting & Detail Levels (TDD, 4-8 hours)
@@ -43,7 +43,12 @@ Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regressi
 
 ## Progress Notes
 
-_Update this section as phases are completed._
+### Phase 1 Progress
+- Removed `registerSearchSemantic` and `registerHybridSearch` (~150 lines)
+- Added `json:"-"` tags to hide internal fields (ID, Score, Source, Metadata, RRFScore, Sources) from JSON
+- Slimmed `HybridSearchV2Result` from 9 fields to 1 (Results only)
+- Compressed all 5 tool descriptions and 12 parameter descriptions
+- Fixed eval runner to reference only existing tools (removed phantom ref tools)
 
 ---
 
@@ -92,7 +97,7 @@ _Update this section as phases are completed._
         "objective": "Singleton resource pool for latency reduction"
       }
     ],
-    "current_phase": null
+    "current_phase": 1
   },
   "last_updated": "2026-02-13T00:00:00Z"
 }

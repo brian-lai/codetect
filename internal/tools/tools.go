@@ -19,7 +19,7 @@ func RegisterAll(server *mcp.Server, config *Config) {
 	}
 	registerSearchKeyword(server, config)
 	registerGetFile(server)
-	RegisterSymbolTools(server)
+	RegisterSymbolTools(server, config)
 	RegisterV2SemanticTools(server, config)
 }
 

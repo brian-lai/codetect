@@ -3,22 +3,18 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 
-	"codetect/internal/config"
-	"codetect/internal/db"
 	"codetect/internal/mcp"
 	"codetect/internal/search/symbols"
 )
 
 // RegisterSymbolTools registers the symbol-related MCP tools
-func RegisterSymbolTools(server *mcp.Server) {
-	registerFindSymbol(server)
-	registerListDefsInFile(server)
+func RegisterSymbolTools(server *mcp.Server, config *Config) {
+	registerFindSymbol(server, config)
+	registerListDefsInFile(server, config)
 }
 
-func registerFindSymbol(server *mcp.Server) {
+func registerFindSymbol(server *mcp.Server, config *Config) {
 	tool := mcp.Tool{
 		Name:        "find_symbol",
 		Description: "Find symbol definitions by name with fuzzy matching.",
@@ -58,8 +54,11 @@ func registerFindSymbol(server *mcp.Server) {
 			limit = int(l)
 		}
 
-		// Get index path
-		idx, err := openIndex()
+		if config.Pool == nil {
+			return nil, fmt.Errorf("resource pool not initialized")
+		}
+
+		idx, err := config.Pool.SymbolIndex()
 		if err != nil {
 			return &mcp.ToolsCallResult{
 				Content: []mcp.Content{{
@@ -68,9 +67,7 @@ func registerFindSymbol(server *mcp.Server) {
 				}},
 			}, nil
 		}
-		defer idx.Close()
 
-		// Search for symbols
 		syms, err := idx.FindSymbol(name, kind, limit)
 		if err != nil {
 			return nil, fmt.Errorf("searching symbols: %w", err)
@@ -96,7 +93,7 @@ func registerFindSymbol(server *mcp.Server) {
 	server.RegisterTool(tool, handler)
 }
 
-func registerListDefsInFile(server *mcp.Server) {
+func registerListDefsInFile(server *mcp.Server, config *Config) {
 	tool := mcp.Tool{
 		Name:        "list_defs_in_file",
 		Description: "List all definitions in a file (functions, types, variables).",
@@ -118,8 +115,11 @@ func registerListDefsInFile(server *mcp.Server) {
 			return nil, fmt.Errorf("path is required")
 		}
 
-		// Get index
-		idx, err := openIndex()
+		if config.Pool == nil {
+			return nil, fmt.Errorf("resource pool not initialized")
+		}
+
+		idx, err := config.Pool.SymbolIndex()
 		if err != nil {
 			return &mcp.ToolsCallResult{
 				Content: []mcp.Content{{
@@ -128,9 +128,7 @@ func registerListDefsInFile(server *mcp.Server) {
 				}},
 			}, nil
 		}
-		defer idx.Close()
 
-		// Get symbols in file
 		syms, err := idx.ListDefsInFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("listing symbols: %w", err)
@@ -155,31 +153,4 @@ func registerListDefsInFile(server *mcp.Server) {
 	}
 
 	server.RegisterTool(tool, handler)
-}
-
-// openIndex opens the symbol index for the current working directory.
-// Uses database configuration from environment variables, supporting both
-// SQLite (default) and PostgreSQL backends.
-func openIndex() (*symbols.Index, error) {
-	// Load database configuration from environment
-	dbConfig := config.LoadDatabaseConfigFromEnv()
-
-	// Get current working directory as repo root for multi-repo isolation
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("getting working directory: %w", err)
-	}
-
-	// For SQLite, use path relative to current working directory
-	if dbConfig.Type == db.DatabaseSQLite {
-		dbPath := filepath.Join(cwd, ".codetect", "symbols.db")
-		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("no symbol index found - run 'make index' first")
-		}
-		dbConfig.Path = dbPath
-	}
-
-	// Convert to db.Config and open with config-aware constructor
-	cfg := dbConfig.ToDBConfig()
-	return symbols.NewIndexWithConfig(cfg, cwd)
 }

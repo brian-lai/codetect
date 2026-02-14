@@ -8,10 +8,8 @@ import (
 	"sync"
 
 	"codetect/internal/config"
-	dbpkg "codetect/internal/db"
 	"codetect/internal/embedding"
 	"codetect/internal/fusion"
-	"codetect/internal/indexer"
 	"codetect/internal/mcp"
 	"codetect/internal/rerank"
 	"codetect/internal/search/keyword"
@@ -81,20 +79,12 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 
 		ctx := context.Background()
 
-		// Open v2 indexer for search
-		idx, err := openV2Indexer(repoRoot)
-		if err != nil {
-			return &mcp.ToolsCallResult{
-				Content: []mcp.Content{{
-					Type: "text",
-					Text: fmt.Sprintf(`{"available": false, "error": %q}`, err.Error()),
-				}},
-			}, nil
+		// Get v2 semantic searcher from pool (or nil if unavailable)
+		var v2Searcher *embedding.V2SemanticSearcher
+		if toolConfig.Pool != nil {
+			v2Searcher, err = toolConfig.Pool.V2Searcher()
+			// Non-fatal: semantic search is optional
 		}
-		defer idx.Close()
-
-		// Create native v2 semantic searcher
-		v2Searcher, err := createV2SemanticSearcher(idx, repoRoot)
 
 		// Compute snippet budget based on detail level and result limit
 		snippetMaxLen := SnippetMaxLen(limit)
@@ -193,74 +183,6 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 	}
 
 	server.RegisterTool(tool, handler)
-}
-
-// openV2Indexer opens a v2 indexer for the given repository.
-func openV2Indexer(repoRoot string) (*indexer.Indexer, error) {
-	// Load database configuration from environment
-	dbConfig := config.LoadDatabaseConfigFromEnv()
-	embConfig := embedding.LoadConfigFromEnv()
-
-	// Build indexer config
-	cfg := &indexer.Config{
-		DBType:            string(dbConfig.Type),
-		Dimensions:        dbConfig.VectorDimensions,
-		EmbeddingProvider: string(embConfig.Provider),
-		EmbeddingModel:    embConfig.Model,
-		OllamaURL:         embConfig.OllamaURL,
-		LiteLLMURL:        embConfig.LiteLLMURL,
-		LiteLLMKey:        embConfig.LiteLLMKey,
-		BatchSize:         32,
-		MaxWorkers:        4,
-	}
-
-	// Set database path/DSN
-	if dbConfig.Type == dbpkg.DatabasePostgres {
-		cfg.DSN = dbConfig.DSN
-	} else {
-		cfg.DBPath = filepath.Join(repoRoot, ".codetect", "index.db")
-	}
-
-	// Check if v2 index exists
-	if dbConfig.Type == dbpkg.DatabaseSQLite {
-		if _, err := os.Stat(cfg.DBPath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("no v2 index found - run 'codetect-index index --v2' first")
-		}
-	}
-
-	return indexer.New(repoRoot, cfg)
-}
-
-// createV2SemanticSearcher creates a native v2 semantic searcher from indexer components.
-func createV2SemanticSearcher(idx *indexer.Indexer, repoRoot string) (*embedding.V2SemanticSearcher, error) {
-	// Create embedder from environment configuration
-	embedder, err := embedding.NewEmbedderFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("creating embedder: %w", err)
-	}
-
-	// Check if embedder is available
-	if !embedder.Available() {
-		return nil, fmt.Errorf("embedder not available")
-	}
-
-	// Get the cache from the indexer
-	cache := idx.Cache()
-	if cache == nil {
-		return nil, fmt.Errorf("embedding cache not available")
-	}
-
-	// Get locations store
-	locations := idx.Locations()
-	if locations == nil {
-		return nil, fmt.Errorf("location store not available")
-	}
-
-	// Get vector index (may be nil, searcher will use brute-force fallback)
-	vectorIndex := idx.VectorIndex()
-
-	// Create native v2 semantic searcher
-	return embedding.NewV2SemanticSearcher(cache, locations, embedder, repoRoot, vectorIndex), nil
 }
 
 // searchKeywordV2 performs keyword search and returns results in fusion format.

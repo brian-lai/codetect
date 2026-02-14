@@ -16,48 +16,53 @@ const RRFConstant = 60
 // Result represents a search result from any source.
 // This is the common format used to combine results from different search signals.
 type Result struct {
-	// ID is a unique identifier for the result (e.g., content_hash or path:line)
-	ID string
+	// ID is a unique identifier for the result (e.g., content_hash or path:line).
+	// Internal only — not serialized to JSON responses.
+	ID string `json:"-"`
 
 	// Path is the file path of the result
-	Path string
+	Path string `json:"path"`
 
 	// Line is the primary line number (start line for multi-line results)
-	Line int
+	Line int `json:"line"`
 
 	// EndLine is the end line for multi-line results (0 if single line)
-	EndLine int
+	EndLine int `json:"end_line,omitempty"`
 
-	// Score is the original score from the source (used for tie-breaking)
-	Score float64
+	// Score is the original score from the source (used for tie-breaking).
+	// Internal only — not serialized to JSON responses.
+	Score float64 `json:"-"`
 
-	// Source identifies which search signal produced this result
-	// Common values: "keyword", "semantic", "symbol"
-	Source string
+	// Source identifies which search signal produced this result.
+	// Internal only — not serialized to JSON responses.
+	Source string `json:"-"`
 
 	// Snippet is optional text content from the match
-	Snippet string
+	Snippet string `json:"snippet,omitempty"`
 
-	// Metadata contains source-specific additional data
-	Metadata map[string]interface{}
+	// Metadata contains source-specific additional data.
+	// Internal only — not serialized to JSON responses.
+	Metadata map[string]interface{} `json:"-"`
 
 	// Phase 2a: Rich context fields
-	ParentScope   string   `json:"parent_scope,omitempty"`    // Fully qualified name of containing scope
-	ScopeKind     string   `json:"scope_kind,omitempty"`      // Type of containing scope (function, method, class, etc.)
-	ReceiverType  string   `json:"receiver_type,omitempty"`   // For methods: struct/class name
-	ContextBefore []string `json:"context_before,omitempty"`  // Lines before the match
-	ContextAfter  []string `json:"context_after,omitempty"`   // Lines after the match
+	ParentScope   string   `json:"parent_scope,omitempty"`   // Fully qualified name of containing scope
+	ScopeKind     string   `json:"scope_kind,omitempty"`     // Type of containing scope (function, method, class, etc.)
+	ReceiverType  string   `json:"receiver_type,omitempty"`  // For methods: struct/class name
+	ContextBefore []string `json:"context_before,omitempty"` // Lines before the match
+	ContextAfter  []string `json:"context_after,omitempty"`  // Lines after the match
 }
 
 // RRFResult is a fused result with combined RRF score.
 type RRFResult struct {
 	Result
 
-	// RRFScore is the combined score from all contributing sources
-	RRFScore float64
+	// RRFScore is the combined score from all contributing sources.
+	// Internal only — not serialized to JSON responses.
+	RRFScore float64 `json:"-"`
 
-	// Sources lists which search signals contributed to this result
-	Sources []string
+	// Sources lists which search signals contributed to this result.
+	// Internal only — not serialized to JSON responses.
+	Sources []string `json:"-"`
 }
 
 // ReciprocalRankFusion combines multiple ranked lists using the RRF algorithm.

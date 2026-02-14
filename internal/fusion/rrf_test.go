@@ -1,6 +1,8 @@
 package fusion
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -312,5 +314,87 @@ func BenchmarkWeightedRRF(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		WeightedRRF(weights, lists...)
+	}
+}
+
+func TestResultJSONExcludesInternalFields(t *testing.T) {
+	r := Result{
+		ID:       "test:1",
+		Path:     "foo.go",
+		Line:     10,
+		EndLine:  20,
+		Score:    0.95,
+		Source:   "keyword",
+		Snippet:  "func main() {",
+		Metadata: map[string]interface{}{"lang": "go"},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	s := string(data)
+	// Internal fields must NOT appear in JSON
+	if strings.Contains(s, `"id"`) {
+		t.Error("JSON should not contain 'id' field")
+	}
+	if strings.Contains(s, `"score"`) {
+		t.Error("JSON should not contain 'score' field")
+	}
+	if strings.Contains(s, `"source"`) {
+		t.Error("JSON should not contain 'source' field")
+	}
+	if strings.Contains(s, `"metadata"`) {
+		t.Error("JSON should not contain 'metadata' field")
+	}
+
+	// Public fields MUST appear
+	if !strings.Contains(s, `"path"`) {
+		t.Error("JSON must contain 'path' field")
+	}
+	if !strings.Contains(s, `"line"`) {
+		t.Error("JSON must contain 'line' field")
+	}
+	if !strings.Contains(s, `"snippet"`) {
+		t.Error("JSON must contain 'snippet' field")
+	}
+}
+
+func TestRRFResultJSONExcludesInternalFields(t *testing.T) {
+	r := RRFResult{
+		Result:   Result{Path: "bar.go", Line: 5, Snippet: "x := 1"},
+		RRFScore: 0.032,
+		Sources:  []string{"keyword", "semantic"},
+	}
+
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	s := string(data)
+	if strings.Contains(s, `"rrf_score"`) {
+		t.Error("JSON should not contain 'rrf_score' field")
+	}
+	if strings.Contains(s, `"sources"`) {
+		t.Error("JSON should not contain 'sources' field")
+	}
+}
+
+func TestResultInternalFieldsAccessibleInGo(t *testing.T) {
+	r := Result{ID: "a", Score: 0.9, Source: "keyword", Metadata: map[string]interface{}{"k": "v"}}
+
+	if r.ID != "a" {
+		t.Error("ID should be accessible in Go")
+	}
+	if r.Score != 0.9 {
+		t.Error("Score should be accessible in Go")
+	}
+	if r.Source != "keyword" {
+		t.Error("Source should be accessible in Go")
+	}
+	if r.Metadata["k"] != "v" {
+		t.Error("Metadata should be accessible in Go")
 	}
 }

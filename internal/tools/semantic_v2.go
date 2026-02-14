@@ -14,7 +14,6 @@ import (
 	"codetect/internal/indexer"
 	"codetect/internal/mcp"
 	"codetect/internal/rerank"
-	"codetect/internal/search/files"
 	"codetect/internal/search/keyword"
 )
 
@@ -97,6 +96,12 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 		// Create native v2 semantic searcher
 		v2Searcher, err := createV2SemanticSearcher(idx, repoRoot)
 
+		// Compute snippet budget based on detail level and result limit
+		snippetMaxLen := SnippetMaxLen(limit)
+		if !detail.ShouldIncludeSnippets() {
+			snippetMaxLen = 0
+		}
+
 		// Run keyword and semantic search in parallel
 		var keywordResults, semanticResults []fusion.Result
 		var keywordErr, semanticErr error
@@ -116,7 +121,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 			if v2Searcher == nil || !v2Searcher.Available() {
 				return
 			}
-			semanticResults, semanticErr = searchSemanticV2(ctx, v2Searcher, query, repoRoot, limit)
+			semanticResults, semanticErr = searchSemanticV2(ctx, v2Searcher, query, repoRoot, limit, snippetMaxLen)
 		}()
 
 		wg.Wait()
@@ -287,25 +292,21 @@ func searchKeywordV2(ctx context.Context, query, repoRoot string, limit int) ([]
 }
 
 // searchSemanticV2 performs semantic search using the native v2 searcher.
-func searchSemanticV2(ctx context.Context, searcher *embedding.V2SemanticSearcher, query, repoRoot string, limit int) ([]fusion.Result, error) {
+func searchSemanticV2(ctx context.Context, searcher *embedding.V2SemanticSearcher, query, repoRoot string, limit, snippetMaxLen int) ([]fusion.Result, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
+	// Use budgeted snippet function
+	snippetFn := getSnippetFnWithLimit(snippetMaxLen)
+	wrappedFn := func(path string, start, end int) string {
+		return snippetFn(filepath.Join(repoRoot, path), start, end)
+	}
+
 	// Use SearchWithSnippets to include code snippets
-	response, err := searcher.SearchWithSnippets(ctx, query, limit, func(path string, start, end int) string {
-		result, err := files.GetFile(filepath.Join(repoRoot, path), start, end)
-		if err != nil {
-			return fmt.Sprintf("[Error reading %s: %v]", path, err)
-		}
-		snippet := result.Content
-		if len(snippet) > 500 {
-			snippet = snippet[:500] + "..."
-		}
-		return snippet
-	})
+	response, err := searcher.SearchWithSnippets(ctx, query, limit, wrappedFn)
 	if err != nil {
 		return nil, err
 	}

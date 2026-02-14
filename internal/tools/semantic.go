@@ -108,8 +108,13 @@ func openEmbeddingStore(dbConfig config.DatabaseConfig) (*embedding.EmbeddingSto
 	}
 }
 
-// getSnippetFn returns a function that reads code snippets from files
+// getSnippetFn returns a function that reads code snippets from files with default max length.
 func getSnippetFn() func(path string, start, end int) string {
+	return getSnippetFnWithLimit(500)
+}
+
+// getSnippetFnWithLimit returns a snippet reader with a configurable max length.
+func getSnippetFnWithLimit(maxLen int) func(path string, start, end int) string {
 	return func(path string, start, end int) string {
 		result, err := files.GetFile(path, start, end)
 		if err != nil {
@@ -117,10 +122,8 @@ func getSnippetFn() func(path string, start, end int) string {
 		}
 
 		snippet := result.Content
-
-		// Truncate if too long
-		if len(snippet) > 500 {
-			snippet = snippet[:500] + "..."
+		if len(snippet) > maxLen {
+			snippet = snippet[:maxLen] + "..."
 		}
 
 		return snippet

@@ -53,6 +53,10 @@ func TestResourcePool_ConcurrentAccess(t *testing.T) {
 }
 
 func TestResourcePool_SymbolIndex_ErrorsWithoutDB(t *testing.T) {
+	// Force SQLite mode so the file existence check triggers
+	t.Setenv("CODETECT_DB_TYPE", "sqlite")
+	t.Setenv("CODETECT_DB_DSN", "")
+
 	pool := NewResourcePool("/tmp/nonexistent-repo")
 	defer pool.Close()
 

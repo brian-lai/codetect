@@ -25,12 +25,12 @@ Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regressi
 - [ ] **Run eval → verify no accuracy regression**
 
 ### Phase 2: Response Budgeting & Detail Levels (TDD, 4-8 hours)
-- [ ] Write response_test.go: detail parsing, marshaling, snippet budgeting (RED)
-- [ ] Implement response.go: DetailLevel, marshal functions (GREEN)
-- [ ] Lower default result limits (20→10 for search, 50→20 for symbols)
-- [ ] Integrate `detail` parameter into search_keyword
-- [ ] Integrate `detail` parameter into hybrid_search_v2
-- [ ] Add snippet length budgeting based on result count
+- [x] Write response_test.go: detail parsing, marshaling, snippet budgeting (RED)
+- [x] Implement response.go: DetailLevel, marshal functions (GREEN)
+- [x] Lower default result limits (20→10 for search, 50→20 for symbols)
+- [x] Integrate `detail` parameter into search_keyword
+- [x] Integrate `detail` parameter into hybrid_search_v2
+- [x] Add snippet length budgeting based on result count
 - [ ] **Run eval → verify token reduction ≥20%, no accuracy regression**
 
 ### Phase 3: Connection Pooling (TDD, 4-8 hours)
@@ -49,6 +49,14 @@ Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regressi
 - Slimmed `HybridSearchV2Result` from 9 fields to 1 (Results only)
 - Compressed all 5 tool descriptions and 12 parameter descriptions
 - Fixed eval runner to reference only existing tools (removed phantom ref tools)
+
+### Phase 2 Progress
+- Wrote response_test.go (10 tests) → RED, then response.go → GREEN
+- Lowered defaults: search 20→10, symbols 50→20
+- Added `detail` parameter (minimal/standard/rich) to search_keyword and hybrid_search_v2
+- Replaced include_context with detail-level gating for enrichment
+- Added snippet budgeting: ≤5 results→500 chars, ≤10→300, >10→150
+- Removed HybridSearchV2Result wrapper struct (dead code after MarshalRRFByDetail)
 
 ---
 

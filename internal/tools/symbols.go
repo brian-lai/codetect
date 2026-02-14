@@ -21,21 +21,21 @@ func RegisterSymbolTools(server *mcp.Server) {
 func registerFindSymbol(server *mcp.Server) {
 	tool := mcp.Tool{
 		Name:        "find_symbol",
-		Description: "Find symbol definitions (functions, types, variables, etc.) by name. Uses fuzzy matching.",
+		Description: "Find symbol definitions by name with fuzzy matching.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"name": {
 					Type:        "string",
-					Description: "Symbol name to search for (supports partial matching)",
+					Description: "Symbol name (partial match supported)",
 				},
 				"kind": {
 					Type:        "string",
-					Description: "Filter by symbol kind: function, type, class, struct, interface, variable, constant",
+					Description: "Filter: function, type, class, struct, interface, variable, constant",
 				},
 				"limit": {
 					Type:        "number",
-					Description: "Maximum number of results (default: 50)",
+					Description: "Max results (default: 50)",
 				},
 			},
 			Required: []string{"name"},
@@ -99,13 +99,13 @@ func registerFindSymbol(server *mcp.Server) {
 func registerListDefsInFile(server *mcp.Server) {
 	tool := mcp.Tool{
 		Name:        "list_defs_in_file",
-		Description: "List all symbol definitions in a specific file. Returns functions, types, variables, etc.",
+		Description: "List all definitions in a file (functions, types, variables).",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"path": {
 					Type:        "string",
-					Description: "File path to list definitions for",
+					Description: "File path",
 				},
 			},
 			Required: []string{"path"},

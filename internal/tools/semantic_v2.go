@@ -32,25 +32,25 @@ func RegisterV2SemanticTools(server *mcp.Server, toolConfig *Config) {
 func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 	tool := mcp.Tool{
 		Name:        "hybrid_search_v2",
-		Description: "v2 hybrid search combining keyword, semantic, and symbol search with RRF fusion. Uses AST-based chunking and content-addressed caching. Optionally applies cross-encoder reranking for higher precision.",
+		Description: "Hybrid search combining keyword + semantic signals with RRF fusion.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"query": {
 					Type:        "string",
-					Description: "Search query (used for all search signals)",
+					Description: "Search query",
 				},
 				"limit": {
 					Type:        "number",
-					Description: "Max results to return (default: 20)",
+					Description: "Max results (default: 20)",
 				},
 				"rerank": {
 					Type:        "boolean",
-					Description: "Enable cross-encoder reranking for higher precision (default: false)",
+					Description: "Enable cross-encoder reranking (default: false)",
 				},
 				"include_context": {
 					Type:        "boolean",
-					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
+					Description: "Add surrounding scope context (default: true)",
 				},
 			},
 			Required: []string{"query"},

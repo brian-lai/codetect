@@ -20,28 +20,27 @@ func RegisterAll(server *mcp.Server, config *Config) {
 	registerSearchKeyword(server, config)
 	registerGetFile(server)
 	RegisterSymbolTools(server)
-	RegisterSemanticTools(server, config)
-	RegisterV2SemanticTools(server, config) // v2 tools with RRF fusion
+	RegisterV2SemanticTools(server, config)
 }
 
 func registerSearchKeyword(server *mcp.Server, config *Config) {
 	tool := mcp.Tool{
 		Name:        "search_keyword",
-		Description: "Search for a keyword/pattern in the codebase using ripgrep. Returns matching files with line numbers and snippets.",
+		Description: "Regex search via ripgrep. Returns file paths, line numbers, and snippets.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"query": {
 					Type:        "string",
-					Description: "The search query (supports regex)",
+					Description: "Search pattern (regex supported)",
 				},
 				"top_k": {
 					Type:        "number",
-					Description: "Maximum number of results to return (default: 20)",
+					Description: "Max results (default: 20)",
 				},
 				"include_context": {
 					Type:        "boolean",
-					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
+					Description: "Add surrounding scope context (default: true)",
 				},
 			},
 			Required: []string{"query"},
@@ -103,21 +102,21 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 func registerGetFile(server *mcp.Server) {
 	tool := mcp.Tool{
 		Name:        "get_file",
-		Description: "Read the contents of a file, optionally specifying a line range.",
+		Description: "Read file contents with optional line range.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"path": {
 					Type:        "string",
-					Description: "Path to the file (relative or absolute)",
+					Description: "File path (relative or absolute)",
 				},
 				"start_line": {
 					Type:        "number",
-					Description: "First line to read (1-indexed, inclusive). Omit to start from beginning.",
+					Description: "Start line, 1-indexed (omit for beginning)",
 				},
 				"end_line": {
 					Type:        "number",
-					Description: "Last line to read (1-indexed, inclusive). Omit to read to end.",
+					Description: "End line, 1-indexed (omit for end)",
 				},
 			},
 			Required: []string{"path"},

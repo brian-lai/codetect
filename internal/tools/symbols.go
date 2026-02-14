@@ -35,7 +35,7 @@ func registerFindSymbol(server *mcp.Server) {
 				},
 				"limit": {
 					Type:        "number",
-					Description: "Max results (default: 50)",
+					Description: "Max results (default: 20)",
 				},
 			},
 			Required: []string{"name"},
@@ -53,7 +53,7 @@ func registerFindSymbol(server *mcp.Server) {
 			kind = k
 		}
 
-		limit := 50
+		limit := 20
 		if l, ok := args["limit"].(float64); ok {
 			limit = int(l)
 		}

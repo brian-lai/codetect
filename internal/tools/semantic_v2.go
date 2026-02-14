@@ -42,7 +42,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 				},
 				"limit": {
 					Type:        "number",
-					Description: "Max results (default: 20)",
+					Description: "Max results (default: 10)",
 				},
 				"rerank": {
 					Type:        "boolean",
@@ -63,7 +63,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 			return nil, fmt.Errorf("query is required")
 		}
 
-		limit := 20
+		limit := 10
 		if l, ok := args["limit"].(float64); ok {
 			limit = int(l)
 		}

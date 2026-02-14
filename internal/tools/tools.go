@@ -36,7 +36,7 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 				},
 				"top_k": {
 					Type:        "number",
-					Description: "Max results (default: 20)",
+					Description: "Max results (default: 10)",
 				},
 				"include_context": {
 					Type:        "boolean",
@@ -53,7 +53,7 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 			return nil, fmt.Errorf("query is required")
 		}
 
-		topK := 20
+		topK := 10
 		if tk, ok := args["top_k"].(float64); ok {
 			topK = int(tk)
 		}

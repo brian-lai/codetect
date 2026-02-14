@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,9 +47,9 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 					Type:        "boolean",
 					Description: "Enable cross-encoder reranking (default: false)",
 				},
-				"include_context": {
-					Type:        "boolean",
-					Description: "Add surrounding scope context (default: true)",
+				"detail": {
+					Type:        "string",
+					Description: "Response detail: minimal, standard, rich (default: standard)",
 				},
 			},
 			Required: []string{"query"},
@@ -73,11 +72,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 			enableRerank = r
 		}
 
-		// Phase 2a: Check if context enrichment requested
-		var includeContext *bool
-		if ic, ok := args["include_context"].(bool); ok {
-			includeContext = &ic
-		}
+		detail := ParseDetailLevel(args)
 
 		// Get current working directory as repo root
 		repoRoot, err := os.Getwd()
@@ -172,19 +167,14 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 			fusedResults = fusedResults[:limit]
 		}
 
-		// Phase 2a: Enrich results if enricher available
-		if toolConfig.Enricher != nil {
-			if err := toolConfig.Enricher.EnrichRRFResults(fusedResults, includeContext); err != nil {
-				// Log but don't fail - enrichment is optional
-			}
+		// Only enrich if detail=rich
+		if detail.ShouldEnrich() && toolConfig.Enricher != nil {
+			enrichCtx := true
+			toolConfig.Enricher.EnrichRRFResults(fusedResults, &enrichCtx)
 		}
 
-		// Build response
-		response := HybridSearchV2Result{
-			Results: fusedResults,
-		}
-
-		data, err := json.Marshal(response)
+		// Marshal based on detail level
+		data, err := MarshalRRFByDetail(fusedResults, detail)
 		if err != nil {
 			return nil, err
 		}
@@ -198,11 +188,6 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 	}
 
 	server.RegisterTool(tool, handler)
-}
-
-// HybridSearchV2Result is the response format for v2 hybrid search.
-type HybridSearchV2Result struct {
-	Results []fusion.RRFResult `json:"results"`
 }
 
 // openV2Indexer opens a v2 indexer for the given repository.

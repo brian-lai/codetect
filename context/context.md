@@ -34,11 +34,12 @@ Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regressi
 - [ ] **Run eval → verify token reduction ≥20%, no accuracy regression**
 
 ### Phase 3: Connection Pooling (TDD, 4-8 hours)
-- [ ] Write pool_test.go: lifecycle, concurrent access, cleanup (RED)
-- [ ] Implement pool.go: ResourcePool with lazy init (GREEN)
-- [ ] Integrate pool into tools.Config
-- [ ] Refactor symbol, reference, and semantic tools to use pool
-- [ ] Remove dead per-call initialization functions
+- [x] Write pool_test.go: lifecycle, concurrent access, cleanup (RED)
+- [x] Implement pool.go: ResourcePool with lazy init (GREEN)
+- [x] Integrate pool into tools.Config
+- [x] Refactor symbol tools to use pool (removed openIndex)
+- [x] Refactor semantic_v2 to use pool (removed openV2Indexer + createV2SemanticSearcher)
+- [x] Remove dead per-call initialization functions (openSemanticSearcher, openEmbeddingStore, getSnippetFn)
 - [ ] **Run eval → verify latency <50% regression, no accuracy regression**
 
 ## Progress Notes
@@ -57,6 +58,14 @@ Achieve ≥25% token reduction vs no-MCP baseline while keeping latency regressi
 - Replaced include_context with detail-level gating for enrichment
 - Added snippet budgeting: ≤5 results→500 chars, ≤10→300, >10→150
 - Removed HybridSearchV2Result wrapper struct (dead code after MarshalRRFByDetail)
+
+### Phase 3 Progress
+- Wrote pool_test.go (6 tests) → RED, then pool.go → GREEN
+- ResourcePool with lazy init for SymbolIndex, V2Indexer, Embedder, V2Searcher
+- Integrated pool into Config, added defer Close() in main.go
+- Refactored symbol tools: RegisterSymbolTools now takes *Config, uses pool
+- Refactored semantic_v2: uses pool.V2Searcher() instead of per-call init
+- Removed ~300 lines of dead code (openIndex, openV2Indexer, createV2SemanticSearcher, openSemanticSearcher, openEmbeddingStore)
 
 ---
 

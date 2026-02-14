@@ -38,9 +38,9 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 					Type:        "number",
 					Description: "Max results (default: 10)",
 				},
-				"include_context": {
-					Type:        "boolean",
-					Description: "Add surrounding scope context (default: true)",
+				"detail": {
+					Type:        "string",
+					Description: "Response detail: minimal, standard, rich (default: standard)",
 				},
 			},
 			Required: []string{"query"},
@@ -58,11 +58,7 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 			topK = int(tk)
 		}
 
-		// Phase 2a: Check if context enrichment requested
-		var includeContext *bool
-		if ic, ok := args["include_context"].(bool); ok {
-			includeContext = &ic
-		}
+		detail := ParseDetailLevel(args)
 
 		// Get current working directory as root
 		root, err := os.Getwd()
@@ -75,15 +71,14 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 			return nil, err
 		}
 
-		// Phase 2a: Enrich results if enricher available
-		if config.Enricher != nil {
-			if err := config.Enricher.EnrichKeywordResults(result.Results, includeContext); err != nil {
-				// Log but don't fail - enrichment is optional
-			}
+		// Only enrich if detail=rich
+		if detail.ShouldEnrich() && config.Enricher != nil {
+			enrichCtx := true
+			config.Enricher.EnrichKeywordResults(result.Results, &enrichCtx)
 		}
 
-		// Serialize results to JSON
-		data, err := json.Marshal(result)
+		// Marshal based on detail level
+		data, err := MarshalKeywordByDetail(result.Results, detail)
 		if err != nil {
 			return nil, err
 		}

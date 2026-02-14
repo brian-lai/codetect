@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"codetect/internal/config"
 	dbpkg "codetect/internal/db"
@@ -87,7 +86,6 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 		}
 
 		ctx := context.Background()
-		start := time.Now()
 
 		// Open v2 indexer for search
 		idx, err := openV2Indexer(repoRoot)
@@ -103,7 +101,6 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 
 		// Create native v2 semantic searcher
 		v2Searcher, err := createV2SemanticSearcher(idx, repoRoot)
-		semanticAvailable := err == nil && v2Searcher != nil && v2Searcher.Available()
 
 		// Run keyword and semantic search in parallel
 		var keywordResults, semanticResults []fusion.Result
@@ -184,15 +181,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 
 		// Build response
 		response := HybridSearchV2Result{
-			Query:             query,
-			Results:           fusedResults,
-			KeywordCount:      len(keywordResults),
-			SemanticCount:     len(semanticResults),
-			SymbolCount:       0, // Symbol search not implemented for v2 yet
-			SemanticAvailable: semanticAvailable,
-			SymbolAvailable:   false,
-			Reranked:          enableRerank,
-			Duration:          time.Since(start).String(),
+			Results: fusedResults,
 		}
 
 		data, err := json.Marshal(response)
@@ -213,15 +202,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 
 // HybridSearchV2Result is the response format for v2 hybrid search.
 type HybridSearchV2Result struct {
-	Query             string             `json:"query"`
-	Results           []fusion.RRFResult `json:"results"`
-	KeywordCount      int                `json:"keyword_count"`
-	SemanticCount     int                `json:"semantic_count"`
-	SymbolCount       int                `json:"symbol_count"`
-	SemanticAvailable bool               `json:"semantic_available"`
-	SymbolAvailable   bool               `json:"symbol_available"`
-	Reranked          bool               `json:"reranked"`
-	Duration          string             `json:"duration"`
+	Results []fusion.RRFResult `json:"results"`
 }
 
 // openV2Indexer opens a v2 indexer for the given repository.

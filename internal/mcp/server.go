@@ -36,6 +36,20 @@ func NewServer(name, version string) *Server {
 	}
 }
 
+// Tools returns the list of registered tools
+func (s *Server) Tools() []Tool {
+	return s.tools
+}
+
+// CallTool invokes a registered tool handler by name
+func (s *Server) CallTool(name string, args map[string]any) (*ToolsCallResult, error) {
+	handler, ok := s.handlers[name]
+	if !ok {
+		return nil, fmt.Errorf("tool not found: %s", name)
+	}
+	return handler(args)
+}
+
 // RegisterTool adds a tool to the server
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.tools = append(s.tools, tool)

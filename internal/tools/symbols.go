@@ -8,22 +8,29 @@ import (
 	"codetect/internal/search/symbols"
 )
 
-// RegisterSymbolTools registers the symbol-related MCP tools
+// RegisterSymbolTools registers the consolidated symbols MCP tool
 func RegisterSymbolTools(server *mcp.Server, config *Config) {
-	registerFindSymbol(server, config)
-	registerListDefsInFile(server, config)
+	registerSymbols(server, config)
 }
 
-func registerFindSymbol(server *mcp.Server, config *Config) {
+func registerSymbols(server *mcp.Server, config *Config) {
 	tool := mcp.Tool{
-		Name:        "find_symbol",
-		Description: "Find symbol definitions by name with fuzzy matching.",
+		Name:        "symbols",
+		Description: "Find symbols by name or list all definitions in a file.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
+				"mode": {
+					Type:        "string",
+					Description: "find (search by name, default) or list (all defs in file)",
+				},
 				"name": {
 					Type:        "string",
-					Description: "Symbol name (partial match supported)",
+					Description: "Symbol name for find mode (partial match supported)",
+				},
+				"path": {
+					Type:        "string",
+					Description: "File path for list mode",
 				},
 				"kind": {
 					Type:        "string",
@@ -31,27 +38,16 @@ func registerFindSymbol(server *mcp.Server, config *Config) {
 				},
 				"limit": {
 					Type:        "number",
-					Description: "Max results (default: 20)",
+					Description: "Max results (default: 20, find mode only)",
 				},
 			},
-			Required: []string{"name"},
 		},
 	}
 
 	handler := func(args map[string]any) (*mcp.ToolsCallResult, error) {
-		name, ok := args["name"].(string)
-		if !ok || name == "" {
-			return nil, fmt.Errorf("name is required")
-		}
-
-		kind := ""
-		if k, ok := args["kind"].(string); ok {
-			kind = k
-		}
-
-		limit := 20
-		if l, ok := args["limit"].(float64); ok {
-			limit = int(l)
+		mode := "find"
+		if m, ok := args["mode"].(string); ok && m != "" {
+			mode = m
 		}
 
 		if config.Pool == nil {
@@ -68,89 +64,82 @@ func registerFindSymbol(server *mcp.Server, config *Config) {
 			}, nil
 		}
 
-		syms, err := idx.FindSymbol(name, kind, limit)
-		if err != nil {
-			return nil, fmt.Errorf("searching symbols: %w", err)
+		switch mode {
+		case "find":
+			return handleFindSymbol(args, idx)
+		case "list":
+			return handleListDefs(args, idx)
+		default:
+			return nil, fmt.Errorf("invalid mode %q: use find or list", mode)
 		}
-
-		result := symbols.FindSymbolResult{
-			Symbols: syms,
-		}
-
-		data, err := json.Marshal(result)
-		if err != nil {
-			return nil, err
-		}
-
-		return &mcp.ToolsCallResult{
-			Content: []mcp.Content{{
-				Type: "text",
-				Text: string(data),
-			}},
-		}, nil
 	}
 
 	server.RegisterTool(tool, handler)
 }
 
-func registerListDefsInFile(server *mcp.Server, config *Config) {
-	tool := mcp.Tool{
-		Name:        "list_defs_in_file",
-		Description: "List all definitions in a file (functions, types, variables).",
-		InputSchema: mcp.InputSchema{
-			Type: "object",
-			Properties: map[string]mcp.Property{
-				"path": {
-					Type:        "string",
-					Description: "File path",
-				},
-			},
-			Required: []string{"path"},
-		},
+func handleFindSymbol(args map[string]any, idx *symbols.Index) (*mcp.ToolsCallResult, error) {
+	name, ok := args["name"].(string)
+	if !ok || name == "" {
+		return nil, fmt.Errorf("name is required for find mode")
 	}
 
-	handler := func(args map[string]any) (*mcp.ToolsCallResult, error) {
-		path, ok := args["path"].(string)
-		if !ok || path == "" {
-			return nil, fmt.Errorf("path is required")
-		}
-
-		if config.Pool == nil {
-			return nil, fmt.Errorf("resource pool not initialized")
-		}
-
-		idx, err := config.Pool.SymbolIndex()
-		if err != nil {
-			return &mcp.ToolsCallResult{
-				Content: []mcp.Content{{
-					Type: "text",
-					Text: fmt.Sprintf(`{"available": false, "error": %q}`, err.Error()),
-				}},
-			}, nil
-		}
-
-		syms, err := idx.ListDefsInFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("listing symbols: %w", err)
-		}
-
-		result := symbols.ListDefsResult{
-			Path:    path,
-			Symbols: syms,
-		}
-
-		data, err := json.Marshal(result)
-		if err != nil {
-			return nil, err
-		}
-
-		return &mcp.ToolsCallResult{
-			Content: []mcp.Content{{
-				Type: "text",
-				Text: string(data),
-			}},
-		}, nil
+	kind := ""
+	if k, ok := args["kind"].(string); ok {
+		kind = k
 	}
 
-	server.RegisterTool(tool, handler)
+	limit := 20
+	if l, ok := args["limit"].(float64); ok {
+		limit = int(l)
+	}
+
+	syms, err := idx.FindSymbol(name, kind, limit)
+	if err != nil {
+		return nil, fmt.Errorf("searching symbols: %w", err)
+	}
+
+	result := symbols.FindSymbolResult{
+		Symbols: syms,
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mcp.ToolsCallResult{
+		Content: []mcp.Content{{
+			Type: "text",
+			Text: string(data),
+		}},
+	}, nil
+}
+
+func handleListDefs(args map[string]any, idx *symbols.Index) (*mcp.ToolsCallResult, error) {
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return nil, fmt.Errorf("path is required for list mode")
+	}
+
+	syms, err := idx.ListDefsInFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("listing symbols: %w", err)
+	}
+
+	result := symbols.ListDefsResult{
+		Path:    path,
+		Symbols: syms,
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mcp.ToolsCallResult{
+		Content: []mcp.Content{{
+			Type: "text",
+			Text: string(data),
+		}},
+	}, nil
 }

@@ -124,6 +124,11 @@ func (s *Server) handleInitialize(req *Request) *Response {
 			Name:    s.name,
 			Version: s.version,
 		},
+		Instructions: "codetect provides codebase search and navigation. " +
+			"For simple lookups (find a function, check a file), use detail=minimal. " +
+			"Use detail=standard only when you need code snippets. " +
+			"Use hybrid_search_v2 as the primary search — it combines keyword and semantic signals. " +
+			"Only fall back to search_keyword for exact regex patterns.",
 	}
 
 	return &Response{

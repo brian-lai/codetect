@@ -8,7 +8,7 @@ Executing: Response Token Reduction via Server Instructions + Tool Consolidation
 
 ## To-Do List
 
-- [ ] Add `instructions` field to MCP InitializeResult (types.go, server.go, unit test)
+- [x] Add `instructions` field to MCP InitializeResult (types.go, server.go, unit test)
 - [ ] Consolidate find_symbol + list_defs_in_file into single `symbols` tool (symbols.go, tools.go, unit tests)
 - [ ] Update eval runner allowedTools to replace old tool names with `symbols` (evals/runner.go)
 - [ ] Run eval — validate token reduction (accuracy ≥ 85%, MCP tokens decrease)

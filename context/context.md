@@ -11,11 +11,18 @@ Executing: Response Token Reduction via Server Instructions + Tool Consolidation
 - [x] Add `instructions` field to MCP InitializeResult (types.go, server.go, unit test)
 - [x] Consolidate find_symbol + list_defs_in_file into single `symbols` tool (symbols.go, tools.go, unit tests)
 - [x] Update eval runner allowedTools to replace old tool names with `symbols` (evals/runner.go)
-- [ ] Run eval — validate token reduction (accuracy ≥ 85%, MCP tokens decrease)
+- [x] Run eval — validate token reduction (accuracy ≥ 85%, MCP tokens decrease)
 
 ## Progress Notes
 
-_Update this section as you complete items._
+### Eval Results (2026-02-16)
+- **Accuracy: 85.7% MCP vs 81.4% baseline (+5.2%)**
+- **Total tokens: MCP now 1.5% FEWER than baseline** (was 14% more)
+- Cache create: 15,473 (down from ~19,989)
+- Cache read: 103,824 (down from ~111,503)
+- Avg turns: 6.4 MCP vs 6.5 baseline (parity)
+- Latency: 29.0s vs 29.1s (parity)
+- MCP wins 10 test cases, No-MCP wins 2
 
 ### Prior Work (Phases 1-3)
 - Phase 1: Surface Area Reduction — 87.3% accuracy, +3.9% over baseline

@@ -47,9 +47,8 @@ Then in any project:
 ```bash
 cd /path/to/your/project
 codetect init      # Creates .mcp.json
-codetect index     # Index symbols
-codetect embed     # Optional: enable semantic search
-claude                # Start Claude Code
+codetect index     # Index symbols + generate embeddings
+claude             # Start Claude Code
 ```
 
 **Optional:** Create `.codetectignore` to exclude files from indexing (generated code, minified files, etc.). See [.codetectignore Guide](docs/codetectignore.md).
@@ -72,9 +71,8 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 
 ```bash
 codetect init        # Initialize in current directory (.mcp.json)
-codetect index       # Index with AST-based, incremental indexer
-codetect embed       # Generate embeddings (sequential)
-codetect embed -j 10 # Generate embeddings in parallel (10 workers, 3.3x faster)
+codetect index       # Index symbols + generate embeddings (if Ollama available)
+codetect embed       # Re-embed with different provider/model settings
 codetect doctor      # Check dependencies and configuration
 codetect stats       # Show index statistics
 codetect migrate     # Discover existing indexes and register them
@@ -83,10 +81,10 @@ codetect help        # Show all commands
 ```
 
 **Indexer features:**
+- `codetect index` handles both symbol indexing and embedding in one step
 - Incremental indexing with Merkle tree change detection (~2s vs ~30s)
 - AST-based chunking preserves semantic boundaries
 - Content-addressed caching (95% cache hit rate)
-- Parallel embedding with `-j` flag (3.3x faster)
 
 ### Daemon Commands
 

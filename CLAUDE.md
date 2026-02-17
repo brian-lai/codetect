@@ -83,8 +83,7 @@ make install
 # Initialize in a project
 cd /path/to/your/project
 codetect init      # Creates .mcp.json
-codetect index     # Index symbols
-codetect embed     # Optional: enable semantic search
+codetect index     # Index symbols + generate embeddings
 
 # Start Claude Code
 claude

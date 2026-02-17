@@ -1,11 +1,11 @@
 # codetect Architecture
 
-> **Version:** v2.0.0+
-> **For v1 architecture:** See [v1 Architecture](v1/architecture.md) (deprecated)
+> **Version:** v3.0.0
+> **For v1 architecture:** See [v1 Architecture](v1/architecture.md) (legacy)
 
 ---
 
-This document describes the technical architecture of codetect v2.0.0+.
+This document describes the technical architecture of codetect v3.0.0.
 
 ## Table of Contents
 
@@ -51,7 +51,7 @@ codetect is an MCP (Model Context Protocol) server that provides fast codebase s
 
 **Key Files:**
 - `internal/mcp/server.go` - MCP protocol implementation
-- `internal/tools/registry.go` - Tool registration (search_keyword, get_file, etc.)
+- `internal/tools/tools.go` - Tool registration (search_keyword, get_file, symbols, hybrid_search_v2)
 - `internal/search/keyword.go` - Ripgrep integration
 - `internal/search/symbols/index.go` - Symbol indexing with ctags
 - `internal/embedding/searcher.go` - Semantic search implementation
@@ -187,12 +187,12 @@ const (
 
 ```
 1. Claude Code sends MCP request
-   └─ Tool: search_keyword, find_symbol, or search_semantic
+   └─ Tool: search_keyword, symbols, or hybrid_search_v2
 
 2. Route to appropriate handler
    ├─ search_keyword → ripgrep
-   ├─ find_symbol → SQL query on symbols table
-   └─ search_semantic → vector similarity search
+   ├─ symbols → SQL query on symbols table
+   └─ hybrid_search_v2 → keyword + vector similarity search
 
 3. Execute search
    ├─ Keyword: spawn ripgrep subprocess
@@ -470,8 +470,7 @@ codetect is designed to work with partial dependencies:
 | Dependency | If Missing |
 |------------|------------|
 | ripgrep | `search_keyword` fails (required) |
-| ctags | `find_symbol`, `list_defs_in_file` unavailable |
-| Ollama/LiteLLM | `search_semantic`, `hybrid_search` return `available: false` |
+| Ollama/LiteLLM | `hybrid_search_v2` returns `available: false` |
 
 The MCP server always starts; tools report availability in their responses.
 
@@ -541,21 +540,22 @@ Commands:
 
 ## Future Enhancements
 
-### Planned for v2.x
+### Completed in v3.0
 
-- [ ] **Incremental embedding** - Only re-embed changed chunks
+- [x] **Merkle trees** - Sub-second change detection for large repos
+- [x] **AST-aware indexing** - Parse syntax trees directly (no ctags)
+- [x] **Hybrid ranking** - Reciprocal rank fusion of keyword + semantic scores
+- [x] **Reranking models** - Post-filter results with cross-encoder
+- [x] **Connection pooling** - Shared DB/embedding connections via `ResourcePool`
+- [x] **Token-efficient design** - `detail` parameter, response budgeting, compressed descriptions
+
+### Planned
+
 - [ ] **Multi-language AST chunking** - Expand beyond Go/Python/JavaScript
-- [ ] **Reranking models** - Post-filter results with cross-encoder
 - [ ] **Query expansion** - Automatic synonym expansion for semantic search
 - [ ] **Configuration file** - Project-level `.codetect.yaml`
 - [ ] **HTTP API** - Alternative to MCP for non-MCP tools
 - [ ] **CLI query mode** - `codetect search "query"` for terminal use
-
-### Considered for v3.0
-
-- [ ] **Merkle trees** - Sub-second change detection for large repos
-- [ ] **AST-aware indexing** - Parse syntax trees directly (no ctags)
-- [ ] **Hybrid ranking** - Machine-learned fusion of keyword + semantic scores
 - [ ] **Graph-based navigation** - Call graphs, type hierarchies, dependency trees
 - [ ] **LSP integration** - Real-time indexing via Language Server Protocol
 - [ ] **Distributed indexing** - Index large monorepos across multiple machines
@@ -566,11 +566,11 @@ Commands:
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [Reciprocal Rank Fusion Paper](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)
 - [HNSW Algorithm](https://arxiv.org/abs/1603.09320)
-- [v1 Architecture](v1/architecture.md) (deprecated)
+- [v1 Architecture](v1/architecture.md) (legacy)
 - [Migration Guide](MIGRATION.md)
 
 ---
 
-**Document Version:** 2.0
-**Last Updated:** 2026-02-01
-**codetect Version:** 2.0.0+
+**Document Version:** 3.0
+**Last Updated:** 2026-02-16
+**codetect Version:** 3.0.0

@@ -1,3 +1,55 @@
+# Migration Guide
+
+## v2.x → v3.0.0
+
+### Overview
+
+v3.0.0 consolidates and renames several MCP tools. If you reference tool names in `allowedTools` configuration or scripts, you must update them.
+
+### Tool Changes
+
+| v2 Tool | v3 Tool | Notes |
+|---------|---------|-------|
+| `search_keyword` | `search_keyword` | Unchanged (new `detail` parameter added) |
+| `get_file` | `get_file` | Unchanged |
+| `find_symbol` | `symbols` (mode=find) | Consolidated into `symbols` tool |
+| `list_defs_in_file` | `symbols` (mode=list) | Consolidated into `symbols` tool |
+| `search_semantic` | *removed* | Use `hybrid_search_v2` instead |
+| `hybrid_search` | *removed* | Use `hybrid_search_v2` instead |
+
+### Breaking Changes
+
+- **`--v1` flag removed** — the v1 ctags-based indexer is no longer available
+- **`find_symbol` and `list_defs_in_file` no longer exist** — use `symbols` with `mode=find` or `mode=list`
+- **`search_semantic` and `hybrid_search` no longer exist** — use `hybrid_search_v2`
+- **Default result limits lowered** — `search_keyword` default `top_k` reduced from 20 to 10; `symbols` default `limit` reduced from 50 to 20
+
+### Updating allowedTools
+
+If you use `allowedTools` in Claude Code configuration:
+
+```diff
+- --allowedTools mcp__codetect__search_keyword,mcp__codetect__find_symbol,mcp__codetect__list_defs_in_file,mcp__codetect__search_semantic,mcp__codetect__hybrid_search,mcp__codetect__get_file
++ --allowedTools mcp__codetect__search_keyword,mcp__codetect__symbols,mcp__codetect__hybrid_search_v2,mcp__codetect__get_file
+```
+
+### Upgrade Steps
+
+```bash
+# 1. Update codetect
+codetect update
+
+# 2. Verify
+codetect --version  # Should show 3.0.0
+
+# 3. Re-index (recommended, not required)
+codetect index
+```
+
+No re-embedding is needed. Existing indexes and embeddings are fully compatible.
+
+---
+
 # Migration Guide: v1.x → v2.0.0
 
 This guide helps you upgrade from codetect v1.x to v2.0.0.
@@ -458,7 +510,7 @@ codetect init
 codetect index
 ```
 
-All MCP tools except `search_semantic` and `hybrid_search` will work.
+All MCP tools except `hybrid_search_v2` will work (it requires embeddings).
 
 ## v1 Documentation
 

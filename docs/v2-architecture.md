@@ -182,12 +182,12 @@ const (
 
 ```
 1. Claude Code sends MCP request
-   └─ Tool: search_keyword, find_symbol, or search_semantic
+   └─ Tool: search_keyword, symbols, or hybrid_search_v2
 
 2. Route to appropriate handler
    ├─ search_keyword → ripgrep
-   ├─ find_symbol → SQL query on symbols table
-   └─ search_semantic → vector similarity search
+   ├─ symbols → SQL query on symbols table
+   └─ hybrid_search_v2 → keyword + vector similarity search
 
 3. Execute search
    ├─ Keyword: spawn ripgrep subprocess

@@ -17,7 +17,7 @@ import (
 
 var logger *slog.Logger
 
-const version = "2.2.3"
+const version = "3.0.0"
 
 func main() {
 	logger = logging.Default("codetect-eval")
@@ -141,7 +141,7 @@ category:
   - "Find files that import the database package"
 
 - navigate.jsonl: symbol lookup, call graphs, type relationships, cross-references
-  Available tools: find_symbol, list_defs_in_file, find_references, find_callers, find_implementations
+  Available tools: symbols (mode=find, mode=list)
   Example prompts:
   - "What functions call the OpenDB method?"
   - "Find all references to the User type"

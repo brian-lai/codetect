@@ -75,6 +75,14 @@ func (e *ContextExtractor) ExtractContext(filePath string, targetLine int) (befo
 		return []string{}, []string{}, nil
 	}
 
+	// Ensure non-nil slices
+	if before == nil {
+		before = []string{}
+	}
+	if after == nil {
+		after = []string{}
+	}
+
 	return before, after, nil
 }
 

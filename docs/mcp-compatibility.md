@@ -38,8 +38,8 @@ codetect uses the standard `.mcp.json` configuration format:
 {
   "mcpServers": {
     "codetect": {
-      "command": "codetect-mcp",
-      "args": [],
+      "command": "codetect",
+      "args": ["mcp"],
       "cwd": "/path/to/your/project"
     }
   }

@@ -12,21 +12,20 @@ Cursor solves this through upfront codebase indexing—their speed and token eff
 
 codetect brings the same approach to any LLM through intelligent codebase indexing. By building symbol graphs, embeddings, and call relationships, it enables:
 
-- ~40% faster responses (1 tool call instead of 4-8)
-- ~25% fewer tokens (direct answers without reading multiple files)
-- Smarter context (function names, scopes, relationships in search results)
+- 85.7% accuracy on codebase questions (vs 81.4% without MCP tools)
+- Zero token overhead (1.5% fewer tokens than baseline)
+- Zero latency overhead (0.3% faster than baseline)
+- 4 focused tools instead of multi-step grep/find workflows
 - Works with any LLM (Claude, OpenAI, local models via MCP protocol)
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and [Migration Guide](docs/MIGRATION.md) for upgrade instructions.
 
 ## Features
 
-- **`search_keyword`** - Fast regex search powered by ripgrep
+- **`search_keyword`** - Fast regex search powered by ripgrep, with `detail` levels (minimal/standard/rich)
 - **`get_file`** - File reading with optional line-range slicing
-- **`find_symbol`** - Symbol lookup (functions, types, etc.) via ctags + SQLite
-- **`list_defs_in_file`** - List all definitions in a file
-- **`search_semantic`** - Semantic code search via local embeddings (Ollama)
-- **`hybrid_search`** - Combined keyword + semantic search
+- **`symbols`** - Symbol lookup and file definition listing (`mode=find` or `mode=list`)
+- **`hybrid_search_v2`** - Combined keyword + semantic search with cross-encoder reranking and `detail` levels
 
 ## Quick Start
 
@@ -39,7 +38,6 @@ cd codetect
 
 The installer will:
 - ✓ Check for required dependencies (Go, ripgrep)
-- ✓ Offer to install ctags automatically for symbol indexing
 - ✓ Guide you through Ollama setup for semantic search (with prominent warnings if missing)
 - ✓ Build and install globally to `~/.local/bin`
 - ✓ Configure your shell PATH automatically
@@ -64,10 +62,9 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 |------------|----------|---------|
 | Go 1.21+ | Yes | Building from source |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Yes | Keyword search |
-| [universal-ctags](https://github.com/universal-ctags/ctags) | No | Symbol indexing (v1 legacy mode only, v2 uses built-in tree-sitter) |
 | [Ollama](https://ollama.ai) | No | Semantic search (local embeddings) |
 
-**Note:** v2 (default) uses built-in tree-sitter parsers for symbol extraction. ctags is only needed if using `--v1` legacy mode.
+**Note:** v3 uses built-in tree-sitter parsers for symbol extraction. No external ctags dependency required.
 
 ## CLI Commands
 
@@ -75,27 +72,21 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 
 ```bash
 codetect init        # Initialize in current directory (.mcp.json)
-codetect index       # Index with v2 (AST-based, incremental, 15x faster)
-codetect index --v1  # Index with v1 (ctags-based, legacy, deprecated)
+codetect index       # Index with AST-based, incremental indexer
 codetect embed       # Generate embeddings (sequential)
 codetect embed -j 10 # Generate embeddings in parallel (10 workers, 3.3x faster)
 codetect doctor      # Check dependencies and configuration
-codetect stats       # Show v2 index statistics
-codetect stats --v1  # Show v1 index statistics (if v1 index exists)
+codetect stats       # Show index statistics
 codetect migrate     # Discover existing indexes and register them
 codetect update      # Update to latest version
 codetect help        # Show all commands
 ```
 
-**v2 features (default):**
-- ⚡ Incremental indexing with Merkle tree change detection (~2s vs ~30s)
-- 🧬 AST-based chunking preserves semantic boundaries
-- 📦 Content-addressed caching (95% cache hit rate)
-- 🔄 Parallel embedding with `-j` flag (3.3x faster)
-
-**v1 legacy mode:**
-- Use `--v1` flag for ctags-based indexing (deprecated, removed in v3.0.0)
-- See [v1 documentation](docs/v1/README.md) for details
+**Indexer features:**
+- Incremental indexing with Merkle tree change detection (~2s vs ~30s)
+- AST-based chunking preserves semantic boundaries
+- Content-addressed caching (95% cache hit rate)
+- Parallel embedding with `-j` flag (3.3x faster)
 
 ### Daemon Commands
 
@@ -130,8 +121,10 @@ codetect-eval list                  # List available test cases
 Search for patterns using ripgrep:
 
 ```json
-{"query": "func main", "top_k": 5}
+{"query": "func main", "top_k": 5, "detail": "standard"}
 ```
+
+Parameters: `query` (required), `top_k` (default: 10), `detail` (`minimal`/`standard`/`rich`)
 
 ### get_file
 
@@ -141,39 +134,28 @@ Read file contents with optional line range:
 {"path": "main.go", "start_line": 10, "end_line": 20}
 ```
 
-### find_symbol
+### symbols
 
-Find symbol definitions by name:
-
-```json
-{"name": "Server", "kind": "struct", "limit": 50}
-```
-
-### list_defs_in_file
-
-List all symbols in a file:
+Find symbols by name or list all definitions in a file:
 
 ```json
-{"path": "internal/mcp/server.go"}
+{"mode": "find", "name": "Server", "kind": "struct", "limit": 20}
+{"mode": "list", "path": "internal/mcp/server.go"}
 ```
 
-### search_semantic
+Parameters: `mode` (`find`/`list`, required), `name` (for find), `kind` (for find), `path` (for list), `limit` (default: 20)
 
-Search using natural language (requires Ollama):
+### hybrid_search_v2
+
+Combined keyword + semantic search with cross-encoder reranking:
 
 ```json
-{"query": "error handling logic", "limit": 10}
+{"query": "authentication", "top_k": 10, "detail": "standard"}
 ```
+
+Parameters: `query` (required), `top_k` (default: 10), `detail` (`minimal`/`standard`/`rich`)
 
 **Tip:** Use `bge-m3` embedding model for 47% better retrieval quality. See [Embedding Model Comparison](docs/embedding-model-comparison.md).
-
-### hybrid_search
-
-Combined keyword + semantic search:
-
-```json
-{"query": "authentication", "keyword_limit": 20, "semantic_limit": 10}
-```
 
 ## Configuration
 
@@ -281,14 +263,16 @@ See [MCP Compatibility](docs/mcp-compatibility.md) for details and roadmap for n
 
 - [x] MCP stdio server
 - [x] Keyword search via ripgrep
-- [x] Symbol indexing via ctags
+- [x] Symbol indexing (AST-based via tree-sitter)
 - [x] Semantic search via Ollama
-- [x] Hybrid search
+- [x] Hybrid search with cross-encoder reranking
 - [x] Global installation
 - [x] Background indexing daemon
 - [x] Project registry
 - [x] Evaluation framework
 - [x] PostgreSQL + pgvector support for scalable vector search
+- [x] Token-efficient tool design (detail levels, response budgeting)
+- [x] Connection pooling for shared DB/embedding connections
 - [ ] HTTP API for non-MCP tools
 - [ ] CLI query mode
 

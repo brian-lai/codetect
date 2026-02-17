@@ -19,29 +19,28 @@ func RegisterAll(server *mcp.Server, config *Config) {
 	}
 	registerSearchKeyword(server, config)
 	registerGetFile(server)
-	RegisterSymbolTools(server)
-	RegisterSemanticTools(server, config)
-	RegisterV2SemanticTools(server, config) // v2 tools with RRF fusion
+	RegisterSymbolTools(server, config)
+	RegisterV2SemanticTools(server, config)
 }
 
 func registerSearchKeyword(server *mcp.Server, config *Config) {
 	tool := mcp.Tool{
 		Name:        "search_keyword",
-		Description: "Search for a keyword/pattern in the codebase using ripgrep. Returns matching files with line numbers and snippets.",
+		Description: "Regex search via ripgrep. Returns file paths, line numbers, and snippets.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"query": {
 					Type:        "string",
-					Description: "The search query (supports regex)",
+					Description: "Search pattern (regex supported)",
 				},
 				"top_k": {
 					Type:        "number",
-					Description: "Maximum number of results to return (default: 20)",
+					Description: "Max results (default: 10)",
 				},
-				"include_context": {
-					Type:        "boolean",
-					Description: "Include function/class names and surrounding lines in results (default: true if enricher available)",
+				"detail": {
+					Type:        "string",
+					Description: "Response detail: minimal, standard, rich (default: standard)",
 				},
 			},
 			Required: []string{"query"},
@@ -54,16 +53,12 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 			return nil, fmt.Errorf("query is required")
 		}
 
-		topK := 20
+		topK := 10
 		if tk, ok := args["top_k"].(float64); ok {
 			topK = int(tk)
 		}
 
-		// Phase 2a: Check if context enrichment requested
-		var includeContext *bool
-		if ic, ok := args["include_context"].(bool); ok {
-			includeContext = &ic
-		}
+		detail := ParseDetailLevel(args)
 
 		// Get current working directory as root
 		root, err := os.Getwd()
@@ -76,15 +71,14 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 			return nil, err
 		}
 
-		// Phase 2a: Enrich results if enricher available
-		if config.Enricher != nil {
-			if err := config.Enricher.EnrichKeywordResults(result.Results, includeContext); err != nil {
-				// Log but don't fail - enrichment is optional
-			}
+		// Only enrich if detail=rich
+		if detail.ShouldEnrich() && config.Enricher != nil {
+			enrichCtx := true
+			config.Enricher.EnrichKeywordResults(result.Results, &enrichCtx)
 		}
 
-		// Serialize results to JSON
-		data, err := json.Marshal(result)
+		// Marshal based on detail level
+		data, err := MarshalKeywordByDetail(result.Results, detail)
 		if err != nil {
 			return nil, err
 		}
@@ -103,21 +97,21 @@ func registerSearchKeyword(server *mcp.Server, config *Config) {
 func registerGetFile(server *mcp.Server) {
 	tool := mcp.Tool{
 		Name:        "get_file",
-		Description: "Read the contents of a file, optionally specifying a line range.",
+		Description: "Read file contents with optional line range.",
 		InputSchema: mcp.InputSchema{
 			Type: "object",
 			Properties: map[string]mcp.Property{
 				"path": {
 					Type:        "string",
-					Description: "Path to the file (relative or absolute)",
+					Description: "File path (relative or absolute)",
 				},
 				"start_line": {
 					Type:        "number",
-					Description: "First line to read (1-indexed, inclusive). Omit to start from beginning.",
+					Description: "Start line, 1-indexed (omit for beginning)",
 				},
 				"end_line": {
 					Type:        "number",
-					Description: "Last line to read (1-indexed, inclusive). Omit to read to end.",
+					Description: "End line, 1-indexed (omit for end)",
 				},
 			},
 			Required: []string{"path"},

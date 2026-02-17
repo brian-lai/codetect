@@ -349,7 +349,7 @@ func (r *Runner) buildClaudeArgs(tc TestCase, mode ExecutionMode) []string {
 		mcpConfig := `{"mcpServers":{"codetect":{"command":"codetect","args":["mcp"]}}}`
 		args = append(args,
 			"--mcp-config", mcpConfig,
-			"--allowedTools", "mcp__codetect__search_keyword,mcp__codetect__find_symbol,mcp__codetect__list_defs_in_file,mcp__codetect__hybrid_search_v2,mcp__codetect__get_file,Read",
+			"--allowedTools", "mcp__codetect__search_keyword,mcp__codetect__symbols,mcp__codetect__hybrid_search_v2,mcp__codetect__get_file,Read",
 		)
 	} else {
 		// Standard tools only

@@ -25,7 +25,7 @@ import (
 
 var logger *slog.Logger
 
-const version = "2.2.3"
+const version = "3.0.0"
 
 func main() {
 	logger = logging.Default("codetect-index")
@@ -88,8 +88,8 @@ func runIndex(args []string) {
 
 	// V1 path: legacy ctags-based symbol indexing (deprecated)
 	logger.Warn("⚠️  Using legacy v1 indexer (deprecated)")
-	logger.Warn("    v1 indexer will be removed in v3.0.0")
-	logger.Warn("    Remove --v1 flag to use v2 indexer with AST-based chunking")
+	logger.Warn("    The v1 indexer is deprecated and will be removed in a future release")
+	logger.Warn("    Remove --v1 flag to use the default AST-based indexer")
 
 	// Check if ctags is available
 	if !symbols.CtagsAvailable() {

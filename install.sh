@@ -217,7 +217,7 @@ if [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE" 2>/dev/null; then
 fi
 
 # Symbol Indexing
-print_section "Symbol Indexing (enables find_symbol, list_defs_in_file)"
+print_section "Symbol Indexing (enables symbols tool)"
 
 ENABLE_SYMBOLS=false
 CTAGS_AVAILABLE=false
@@ -305,7 +305,7 @@ fi
 #
 print_header "Step 3/6: Semantic Search Setup"
 
-print_section "Semantic Search (enables search_semantic, hybrid_search)"
+print_section "Semantic Search (enables hybrid_search_v2)"
 
 echo "Semantic search allows natural language queries like:"
 info "\"error handling logic\""

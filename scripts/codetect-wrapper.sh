@@ -12,6 +12,7 @@
 #   migrate        Discover existing indexes and register them
 #   daemon         Manage background indexing daemon
 #   registry       Manage project registry
+#   version        Show installed version
 #   help           Show this help message
 #
 
@@ -207,17 +208,6 @@ PYTHON_SCRIPT
     registry_add "$(pwd)" 2>/dev/null || true
 
     info "Run 'codetect index' to index this codebase"
-
-    # Add to .gitignore if exists and using SQLite (not needed for Postgres)
-    load_config
-    if [[ "${CODETECT_DB_TYPE:-sqlite}" == "sqlite" && -f ".gitignore" ]]; then
-        if ! grep -q "^\.codetect/$" .gitignore 2>/dev/null; then
-            echo "" >> .gitignore
-            echo "# codetect index" >> .gitignore
-            echo ".codetect/" >> .gitignore
-            success "Added .codetect/ to .gitignore"
-        fi
-    fi
 }
 
 cmd_doctor() {
@@ -315,43 +305,42 @@ cmd_doctor() {
         info "No .mcp.json (run 'codetect init' to create)"
     fi
 
-    if [[ -d ".codetect" ]]; then
-        success ".codetect/ index exists"
-        if [[ -f ".codetect/symbols.db" ]]; then
-            local size=$(du -h ".codetect/symbols.db" | cut -f1)
-            info "Database size: $size"
-        fi
+    # Check for centralized data directory
+    local data_dir="$HOME/.codetect/projects"
+    if [[ -d "$data_dir" ]]; then
+        local project_count=$(ls -1d "$data_dir"/*/ 2>/dev/null | wc -l | tr -d ' ')
+        success "Centralized storage: $data_dir ($project_count projects)"
     else
-        info "No index (run 'codetect index' to create)"
+        info "No centralized storage (run 'codetect index' to create)"
+    fi
+
+    # Check if current project has an index
+    local project_name=$(basename "$(pwd)")
+    local found_index=false
+    if [[ -d "$data_dir" ]]; then
+        for dir in "$data_dir"/"${project_name}"-*/; do
+            if [[ -d "$dir" ]]; then
+                found_index=true
+                if [[ -f "${dir}index.db" ]]; then
+                    local size=$(du -h "${dir}index.db" | cut -f1)
+                    success "Index found: $(basename "$dir") (${size})"
+                else
+                    success "Data dir found: $(basename "$dir")"
+                fi
+                break
+            fi
+        done
+    fi
+    if [[ "$found_index" == "false" ]]; then
+        info "No index for current project (run 'codetect index' to create)"
     fi
 }
 
 cmd_stats() {
     load_config
 
-    if [[ ! -f ".codetect/symbols.db" ]]; then
-        error "No index found. Run 'codetect index' first."
-        return 1
-    fi
-
-    echo -e "${CYAN}Index Statistics${NC}"
-    echo ""
-
-    # Symbol count
-    local symbols=$(sqlite3 ".codetect/symbols.db" "SELECT COUNT(*) FROM symbols" 2>/dev/null || echo "0")
-    echo "Symbols: $symbols"
-
-    # File count
-    local files=$(sqlite3 ".codetect/symbols.db" "SELECT COUNT(DISTINCT path) FROM symbols" 2>/dev/null || echo "0")
-    echo "Files with symbols: $files"
-
-    # Embedding count
-    local embeddings=$(sqlite3 ".codetect/symbols.db" "SELECT COUNT(*) FROM embeddings" 2>/dev/null || echo "0")
-    echo "Embedded chunks: $embeddings"
-
-    # Database size
-    local size=$(du -h ".codetect/symbols.db" | cut -f1)
-    echo "Database size: $size"
+    # Use codetect-index stats (handles centralized path resolution)
+    "$BIN_DIR/codetect-index" stats "$@"
 }
 
 #
@@ -906,6 +895,35 @@ migrate_help() {
     echo "  codetect migrate ~/work ~/personal # Scan specific directories"
 }
 
+cmd_version() {
+    local source_dir="${CODETECT_SOURCE:-$HOME/dev/codetect}"
+
+    # Try git tag from source repo first (most accurate after `codetect update`)
+    if [[ -d "$source_dir/.git" ]]; then
+        local tag
+        tag=$(git -C "$source_dir" describe --tags --exact-match 2>/dev/null) || true
+        if [[ -n "$tag" ]]; then
+            echo "codetect $tag"
+            return 0
+        fi
+        # Fallback: short commit hash
+        local commit
+        commit=$(git -C "$source_dir" rev-parse --short HEAD 2>/dev/null) || true
+        if [[ -n "$commit" ]]; then
+            echo "codetect dev ($commit)"
+            return 0
+        fi
+    fi
+
+    # Fallback: ask codetect-index for its version
+    if [[ -x "$BIN_DIR/codetect-index" ]]; then
+        "$BIN_DIR/codetect-index" version
+        return 0
+    fi
+
+    echo "codetect (unknown version)"
+}
+
 cmd_update() {
     local source_dir="${CODETECT_SOURCE:-$HOME/dev/codetect}"
 
@@ -935,6 +953,7 @@ cmd_help() {
     echo "  daemon <cmd>    Manage background indexing daemon"
     echo "  registry <cmd>  Manage project registry"
     echo "  update          Update to latest version from GitHub"
+    echo "  version         Show installed version"
     echo "  help            Show this help message"
     echo ""
     echo "Daemon Commands:"
@@ -999,6 +1018,9 @@ main() {
             ;;
         update)
             cmd_update "$@"
+            ;;
+        version|--version|-V)
+            cmd_version
             ;;
         help|--help|-h)
             cmd_help

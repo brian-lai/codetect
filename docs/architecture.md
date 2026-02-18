@@ -448,20 +448,27 @@ USING hnsw (embedding vector_cosine_ops);
 
 ## Storage
 
-All indexes are stored in `.codetect/` at the project root:
+All indexes are stored centrally under `~/.codetect/projects/`:
 
 ```
-.codetect/
-└── index.db          # SQLite database containing:
-    ├── symbols       # Symbol definitions
-    ├── repo_embeddings_768   # 768-dim embeddings
-    ├── repo_embeddings_1024  # 1024-dim embeddings
-    └── repo_configs  # Model tracking
+~/.codetect/projects/
+├── index.json                    # Reverse lookup: dir name → repo path
+├── myproject-a1b2c3d4/           # <basename>-<hash> naming
+│   ├── index.db                  # SQLite database containing:
+│   │   ├── symbols               # Symbol definitions
+│   │   ├── repo_embeddings_768   # 768-dim embeddings
+│   │   ├── repo_embeddings_1024  # 1024-dim embeddings
+│   │   └── repo_configs          # Model tracking
+│   └── merkle-tree.json          # Change detection tree
+└── other-repo-e5f6g7h8/
+    └── ...
 ```
 
-This directory should be added to `.gitignore`.
+The directory name hash is derived from the git remote origin URL (for repos with a remote) or the absolute path (for non-git directories). This means git repos survive directory moves — the same data directory is used regardless of where the repo is cloned.
 
-**v1 Note:** v1 used `.repo_search/` (early) and later `.codetect/symbols.db`. v2 uses `.codetect/index.db` with a different schema.
+**Migration:** Existing `.codetect/` directories at project roots are auto-migrated to centralized storage on first use.
+
+**v1 Note:** v1 used `.repo_search/` (early) and later `.codetect/symbols.db`. v2 uses centralized `index.db` with a different schema.
 
 ## Graceful Degradation
 
@@ -529,7 +536,7 @@ Test Cases → Runner → [MCP Search, Direct Search] → Validator → Report
 Features:
 - JSONL-based test case format
 - Categories: search, navigate, understand
-- Per-repo test case storage in `.codetect/evals/cases/`
+- Per-repo test case storage in centralized data directory
 - Automated validation of results
 - Performance comparison reports
 

@@ -10,6 +10,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"codetect/internal/datadir"
 )
 
 const (
@@ -32,6 +34,7 @@ type IndexStats struct {
 type Project struct {
 	Path         string     `json:"path"`
 	Name         string     `json:"name"`
+	DataDir      string     `json:"data_dir,omitempty"`
 	AddedAt      time.Time  `json:"added_at"`
 	LastIndexed  *time.Time `json:"last_indexed,omitempty"`
 	IndexStats   IndexStats `json:"index_stats"`
@@ -150,10 +153,14 @@ func (r *Registry) Add(projectPath string) error {
 		return fmt.Errorf("maximum number of projects (%d) reached", r.data.Settings.MaxProjects)
 	}
 
+	// Resolve centralized data directory
+	dd, _ := datadir.ForRepoNoMigrate(absPath)
+
 	// Add new project
 	project := Project{
 		Path:         absPath,
 		Name:         filepath.Base(absPath),
+		DataDir:      dd,
 		AddedAt:      time.Now(),
 		WatchEnabled: r.data.Settings.AutoWatch,
 	}

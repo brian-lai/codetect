@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"codetect/internal/config"
+	"codetect/internal/datadir"
 	dbpkg "codetect/internal/db"
 	"codetect/internal/embedding"
 	"codetect/internal/indexer"
@@ -60,8 +61,12 @@ func (p *ResourcePool) symbolIndexLocked() (*symbols.Index, error) {
 	}
 
 	dbConfig := config.LoadDatabaseConfigFromEnv()
-	if dbConfig.Type == dbpkg.DatabaseSQLite {
-		dbPath := filepath.Join(p.repoRoot, ".codetect", "symbols.db")
+	if dbConfig.Type == dbpkg.DatabaseSQLite && dbConfig.Path == "" {
+		dd, err := datadir.ForRepoNoMigrate(p.repoRoot)
+		if err != nil {
+			return nil, fmt.Errorf("resolving data directory: %w", err)
+		}
+		dbPath := filepath.Join(dd, "symbols.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("no symbol index found at %s", dbPath)
 		}
@@ -112,8 +117,14 @@ func (p *ResourcePool) v2IndexerLocked() (*indexer.Indexer, error) {
 
 	if dbConfig.Type == dbpkg.DatabasePostgres {
 		cfg.DSN = dbConfig.DSN
+	} else if dbConfig.Path != "" {
+		cfg.DBPath = dbConfig.Path
 	} else {
-		cfg.DBPath = filepath.Join(p.repoRoot, ".codetect", "index.db")
+		dd, err := datadir.ForRepoNoMigrate(p.repoRoot)
+		if err != nil {
+			return nil, fmt.Errorf("resolving data directory: %w", err)
+		}
+		cfg.DBPath = filepath.Join(dd, "index.db")
 	}
 
 	// Check if v2 index exists (SQLite only)

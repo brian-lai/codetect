@@ -14,6 +14,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"codetect/internal/chunker"
+	"codetect/internal/datadir"
 	"codetect/internal/db"
 	"codetect/internal/embedding"
 	"codetect/internal/merkle"
@@ -95,9 +96,9 @@ func New(repoPath string, cfg *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("resolving path: %w", err)
 	}
 
-	dataDir := filepath.Join(absPath, ".codetect")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, fmt.Errorf("creating data directory: %w", err)
+	dataDir, err := datadir.ForRepo(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolving data directory: %w", err)
 	}
 
 	idx := &Indexer{

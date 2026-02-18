@@ -585,7 +585,7 @@ echo "Choose a database backend for storing embeddings:"
 echo ""
 echo -e "  ${GREEN}${BOLD}1)${NC} SQLite (local, simple, recommended for most users)"
 info "Good for: Up to ~10k embeddings, single-user, simple setup"
-info "Storage: Local .codetect/symbols.db file"
+info "Storage: ~/.codetect/projects/ (centralized)"
 echo ""
 echo -e "  ${GREEN}${BOLD}2)${NC} PostgreSQL + pgvector (scalable, recommended for teams)"
 info "Good for: Large codebases, team deployments, millions of embeddings"
@@ -1386,11 +1386,17 @@ if [[ "${DIMENSION_MISMATCH:-false}" == "true" ]]; then
         fi
     fi
 
-    # Also check for .codetect directories (repositories with local embeddings)
-    if [[ $DB_TYPE == "sqlite" ]]; then
-        while IFS= read -r codetect_dir; do
-            [[ -n "$codetect_dir" ]] && INDEXED_REPOS+=("$(dirname "$codetect_dir")")
-        done < <(find ~ -type d -name ".codetect" -path "*/.codetect" 2>/dev/null | head -20)
+    # Also check centralized storage for indexed projects
+    if [[ $DB_TYPE == "sqlite" && -d "$HOME/.codetect/projects/index.json" ]] || [[ -f "$HOME/.codetect/projects/index.json" ]]; then
+        if command -v jq &> /dev/null; then
+            while IFS= read -r repo; do
+                [[ -n "$repo" ]] && INDEXED_REPOS+=("$repo")
+            done < <(jq -r '.entries[]?.repo_path // empty' "$HOME/.codetect/projects/index.json" 2>/dev/null)
+        else
+            while IFS= read -r repo; do
+                [[ -n "$repo" ]] && INDEXED_REPOS+=("$repo")
+            done < <(grep -oP '"repo_path":\s*"\K[^"]+' "$HOME/.codetect/projects/index.json" 2>/dev/null)
+        fi
     fi
 
     # Remove duplicates and sort

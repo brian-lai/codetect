@@ -230,7 +230,7 @@ codetect-eval run --repo /path/to/project
 codetect-eval report
 ```
 
-Eval cases are stored in `.codetect/evals/cases/` (auto-added to .gitignore) so you can version-control test cases while keeping results local.
+Eval cases are stored in `~/.codetect/projects/<name>-<hash>/evals/cases/` (centralized storage) to keep project directories clean.
 
 See [Evaluation Guide](docs/evaluation.md) for detailed documentation on creating test cases, understanding metrics, and best practices.
 

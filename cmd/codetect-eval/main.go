@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"codetect/evals"
+	"codetect/internal/datadir"
 	"codetect/internal/logging"
 )
 
@@ -80,10 +81,6 @@ func runEval(args []string) {
 		os.Exit(1)
 	}
 
-	// Check if evaluating a different repo before we update config
-	cwd, _ := os.Getwd()
-	isExternalRepo := absRepoPath != cwd
-
 	config.RepoPath = absRepoPath
 
 	absCasesDir, err := filepath.Abs(*casesDir)
@@ -94,13 +91,6 @@ func runEval(args []string) {
 
 	// Create runner and load test cases
 	runner := evals.NewRunner(config)
-
-	// Ensure .codetect is in .gitignore when running against a target repo
-	if isExternalRepo {
-		if err := runner.EnsureGitignore(); err != nil {
-			logger.Warn("could not update .gitignore", "error", err)
-		}
-	}
 
 	cases, err := runner.LoadTestCases(absCasesDir)
 	if err != nil {
@@ -117,9 +107,9 @@ func runEval(args []string) {
 		fmt.Fprintf(os.Stderr, "  %s\n", absCasesDir)
 		fmt.Fprintln(os.Stderr, "")
 
-		// Check if we're evaluating a different repo
-		repoEvalDir := filepath.Join(absRepoPath, ".codetect", "evals", "cases")
-		if absRepoPath != "." {
+		// Show centralized data directory hint
+		if dd, err := datadir.ForRepoNoMigrate(absRepoPath); err == nil {
+			repoEvalDir := filepath.Join(dd, "evals", "cases")
 			fmt.Fprintf(os.Stderr, "For repo-specific eval cases, create them in:\n")
 			fmt.Fprintf(os.Stderr, "  %s\n", repoEvalDir)
 			fmt.Fprintln(os.Stderr, "")

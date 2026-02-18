@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -244,12 +245,14 @@ func (c *OllamaClient) ProviderID() string {
 // Dimensions implements Embedder.Dimensions - returns embedding vector size
 func (c *OllamaClient) Dimensions() int {
 	// Model-specific dimensions
-	switch c.model {
-	case "nomic-embed-text", "nomic-embed-text:latest":
+	switch {
+	case c.model == "nomic-embed-text" || c.model == "nomic-embed-text:latest":
 		return 768
-	case "mxbai-embed-large", "mxbai-embed-large:latest":
+	case strings.HasPrefix(c.model, "manutic/nomic-embed-code"):
+		return 3584 // nomic-embed-code (code-optimized, 7B params)
+	case c.model == "mxbai-embed-large" || c.model == "mxbai-embed-large:latest":
 		return 1024
-	case "all-minilm", "all-minilm:latest":
+	case c.model == "all-minilm" || c.model == "all-minilm:latest":
 		return 384
 	default:
 		return DefaultDimensions // 768

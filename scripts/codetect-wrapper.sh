@@ -76,10 +76,23 @@ cmd_mcp() {
 
 cmd_index() {
     load_config
-    local target_dir="${1:-.}"
+    local target_dir="."
+    local extra_flags=()
+
+    # Separate the target directory from flags
+    for arg in "$@"; do
+        case "$arg" in
+            -*)
+                extra_flags+=("$arg")
+                ;;
+            *)
+                target_dir="$arg"
+                ;;
+        esac
+    done
 
     echo -e "${CYAN}Indexing symbols in: ${target_dir}${NC}"
-    "$BIN_DIR/codetect-index" index "$target_dir"
+    "$BIN_DIR/codetect-index" index "$target_dir" "${extra_flags[@]}"
     success "Symbol indexing complete"
 }
 

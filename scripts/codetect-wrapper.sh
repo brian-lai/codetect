@@ -240,11 +240,19 @@ cmd_doctor() {
         error "ripgrep (rg) not found"
     fi
 
+    if command -v sg &> /dev/null; then
+        ASTGREP_VERSION=$(sg --version 2>/dev/null | head -1)
+        success "ast-grep: $ASTGREP_VERSION (primary)"
+    else
+        warn "ast-grep (sg) not found — install for best symbol indexing"
+        info "  brew install ast-grep"
+    fi
+
     if command -v ctags &> /dev/null && ctags --version 2>&1 | grep -q "Universal Ctags"; then
         CTAGS_VERSION=$(ctags --version | head -1 | cut -d',' -f1)
-        success "ctags: $CTAGS_VERSION"
+        success "ctags: $CTAGS_VERSION (fallback)"
     else
-        warn "universal-ctags not found (symbol indexing will be limited)"
+        warn "universal-ctags not found (fallback for unsupported languages)"
     fi
     echo ""
 

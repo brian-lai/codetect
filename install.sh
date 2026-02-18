@@ -220,22 +220,79 @@ fi
 print_section "Symbol Indexing (enables symbols tool)"
 
 ENABLE_SYMBOLS=false
+ASTGREP_AVAILABLE=false
 CTAGS_AVAILABLE=false
 
+# ast-grep (primary backend)
+if command -v sg &> /dev/null; then
+    ASTGREP_VERSION=$(sg --version 2>/dev/null | head -1)
+    success "ast-grep already installed: $ASTGREP_VERSION"
+    ASTGREP_AVAILABLE=true
+    ENABLE_SYMBOLS=true
+else
+    warn "ast-grep is not installed"
+    echo ""
+    info "ast-grep is the primary symbol indexing backend. It provides accurate"
+    info "AST-based parsing for Go, TypeScript, Python, Rust, and more."
+    echo ""
+
+    read -p "$(prompt "Install ast-grep? [Y/n]")" INSTALL_ASTGREP
+    INSTALL_ASTGREP=${INSTALL_ASTGREP:-Y}
+
+    if [[ $INSTALL_ASTGREP =~ ^[Yy] ]]; then
+        echo ""
+        case $PKG_MGR in
+            brew)
+                info "Installing ast-grep via Homebrew..."
+                if brew install ast-grep; then
+                    success "ast-grep installed successfully"
+                    ASTGREP_AVAILABLE=true
+                    ENABLE_SYMBOLS=true
+                else
+                    error "Failed to install ast-grep"
+                    warn "Will fall back to universal-ctags if available"
+                fi
+                ;;
+            apt|dnf|pacman)
+                info "Installing ast-grep via cargo..."
+                if command -v cargo &> /dev/null; then
+                    if cargo install ast-grep; then
+                        success "ast-grep installed successfully"
+                        ASTGREP_AVAILABLE=true
+                        ENABLE_SYMBOLS=true
+                    else
+                        error "Failed to install ast-grep"
+                        warn "Will fall back to universal-ctags if available"
+                    fi
+                else
+                    warn "cargo not found — install Rust first: https://rustup.rs"
+                    info "Install manually: cargo install ast-grep"
+                    info "Or: https://ast-grep.github.io/guide/quick-start.html"
+                fi
+                ;;
+            *)
+                warn "Automatic installation not supported on this platform"
+                info "Install manually from: ${BOLD}https://ast-grep.github.io/guide/quick-start.html${NC}"
+                ;;
+        esac
+    else
+        warn "Skipping ast-grep installation"
+        info "You can install ast-grep later and run 'codetect index'"
+    fi
+fi
+
+# universal-ctags (fallback backend)
 if command -v ctags &> /dev/null && ctags --version 2>&1 | grep -q "Universal Ctags"; then
     CTAGS_VERSION=$(ctags --version | head -1 | cut -d',' -f1)
-    success "universal-ctags already installed: $CTAGS_VERSION"
+    success "universal-ctags already installed: $CTAGS_VERSION (fallback)"
     CTAGS_AVAILABLE=true
     ENABLE_SYMBOLS=true
 else
     warn "universal-ctags is not installed"
-    echo ""
-    info "Symbol indexing allows you to search for functions, types, classes,"
-    info "and other code symbols by name. This enables fast navigation in large"
-    info "codebases."
+    info "universal-ctags is the fallback for languages not supported by ast-grep."
     echo ""
 
-    read -p "$(prompt "Enable symbol indexing? [Y/n]")" INSTALL_CTAGS
+    read -p "$(prompt "Install universal-ctags (fallback)? [Y/n]")" INSTALL_CTAGS
     INSTALL_CTAGS=${INSTALL_CTAGS:-Y}
 
     if [[ $INSTALL_CTAGS =~ ^[Yy] ]]; then
@@ -249,7 +306,6 @@ else
                     ENABLE_SYMBOLS=true
                 else
                     error "Failed to install universal-ctags"
-                    warn "Symbol indexing will be disabled"
                 fi
                 ;;
             apt)
@@ -261,7 +317,6 @@ else
                     ENABLE_SYMBOLS=true
                 else
                     error "Failed to install universal-ctags"
-                    warn "Symbol indexing will be disabled"
                 fi
                 ;;
             dnf)
@@ -273,7 +328,6 @@ else
                     ENABLE_SYMBOLS=true
                 else
                     error "Failed to install ctags"
-                    warn "Symbol indexing will be disabled"
                 fi
                 ;;
             pacman)
@@ -285,18 +339,15 @@ else
                     ENABLE_SYMBOLS=true
                 else
                     error "Failed to install ctags"
-                    warn "Symbol indexing will be disabled"
                 fi
                 ;;
             *)
                 warn "Automatic installation not supported on this platform"
                 info "Install manually from: ${BOLD}https://github.com/universal-ctags/ctags${NC}"
-                info "Symbol indexing will be disabled for now"
                 ;;
         esac
     else
-        warn "Skipping symbol indexing setup"
-        info "You can install universal-ctags later and run 'codetect index'"
+        warn "Skipping universal-ctags installation"
     fi
 fi
 
@@ -1326,7 +1377,7 @@ else
     CODETECT_CMD="./dist/codetect"
 fi
 
-if [[ $CTAGS_AVAILABLE == true ]]; then
+if [[ $ASTGREP_AVAILABLE == true || $CTAGS_AVAILABLE == true ]]; then
     echo ""
     read -p "$(prompt "Index symbols in this repository now? [Y/n]")" RUN_INDEX
     RUN_INDEX=${RUN_INDEX:-Y}
@@ -1544,7 +1595,7 @@ print_box "$MAGENTA" \
     "${BOLD}Features Enabled${NC}" \
     "  Database:        ${GREEN}✓${NC}  ($DB_TYPE)" \
     "  Keyword Search:  ${GREEN}✓${NC}  (ripgrep)" \
-    "  Symbol Indexing: $(if [[ $CTAGS_AVAILABLE == true ]]; then echo "${GREEN}✓${NC}  (universal-ctags)"; else echo "${YELLOW}✗${NC}  (not installed)"; fi)" \
+    "  Symbol Indexing: $(if [[ $ASTGREP_AVAILABLE == true && $CTAGS_AVAILABLE == true ]]; then echo "${GREEN}✓${NC}  (ast-grep + ctags fallback)"; elif [[ $ASTGREP_AVAILABLE == true ]]; then echo "${GREEN}✓${NC}  (ast-grep)"; elif [[ $CTAGS_AVAILABLE == true ]]; then echo "${YELLOW}✓${NC}  (ctags only — ast-grep not installed)"; else echo "${YELLOW}✗${NC}  (not installed)"; fi)" \
     "  Semantic Search: $(if [[ $EMBEDDING_PROVIDER != "off" ]]; then echo "${GREEN}✓${NC}  ($EMBEDDING_PROVIDER)"; else echo "${YELLOW}✗${NC}  (disabled)"; fi)"
 
 print_box "$BLUE" \

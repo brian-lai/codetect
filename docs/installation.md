@@ -390,7 +390,7 @@ codetect doctor
 |----------|-------------|---------|
 | `CODETECT_DB_TYPE` | Database backend: `sqlite` or `postgres` | `sqlite` |
 | `CODETECT_DB_DSN` | PostgreSQL connection string (required if type=postgres) | (none) |
-| `CODETECT_DB_PATH` | SQLite database path (used if type=sqlite) | `.codetect/index.db` (v2) |
+| `CODETECT_DB_PATH` | SQLite database path (used if type=sqlite) | `~/.codetect/projects/<name>-<hash>/index.db` |
 | `CODETECT_EMBEDDING_PROVIDER` | Provider: `ollama`, `litellm`, or `off` | `ollama` |
 | `CODETECT_OLLAMA_URL` | Ollama server URL | `http://localhost:11434` |
 | `CODETECT_LITELLM_URL` | LiteLLM server URL | `http://localhost:4000` |
@@ -402,7 +402,7 @@ codetect doctor
 
 **Using SQLite (default):**
 ```bash
-codetect embed  # Uses SQLite at .codetect/index.db (v2)
+codetect embed  # Uses SQLite at ~/.codetect/projects/<name>-<hash>/index.db
 ```
 
 **Using PostgreSQL:**
@@ -483,13 +483,16 @@ When you run `codetect init` in a project:
 
 ```
 your-project/
-├── .mcp.json                # MCP server registration
-└── .codetect/            # Index storage (gitignored)
-    └── index.db             # SQLite database (v2)
-                             # Or symbols.db (v1, legacy)
+└── .mcp.json                # MCP server registration
+
+~/.codetect/projects/
+├── index.json               # Reverse lookup
+└── your-project-a1b2c3d4/   # Centralized data directory
+    ├── index.db              # SQLite database (v2)
+    └── merkle-tree.json      # Change detection
 ```
 
-**Note:** v2 uses `index.db` with dimension-grouped tables. v1 (deprecated) used `symbols.db`. Both can coexist.
+**Note:** Index data is stored centrally under `~/.codetect/projects/` to keep project directories clean. Existing `.codetect/` directories are auto-migrated on first use.
 
 ## Uninstalling
 
@@ -502,7 +505,7 @@ This removes:
 - `~/.local/bin/codetect*`
 - `~/.local/share/codetect/`
 
-Project-specific files (`.mcp.json`, `.codetect/`) are not removed.
+Project-specific files (`.mcp.json`) and centralized data (`~/.codetect/`) are not removed.
 
 ## Troubleshooting
 

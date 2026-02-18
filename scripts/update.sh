@@ -94,7 +94,7 @@ OLD_COMMIT=$(git rev-parse --short HEAD)
 
 # Pull latest
 echo "Fetching latest changes..."
-git fetch origin --tags
+git fetch origin --tags --force 2>/dev/null
 
 # Determine target version
 if [[ -n "$SPECIFIC_VERSION" ]]; then

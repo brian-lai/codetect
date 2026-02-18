@@ -15,6 +15,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"codetect/internal/config"
+	"codetect/internal/datadir"
 	"codetect/internal/db"
 	"codetect/internal/embedding"
 	"codetect/internal/indexer"
@@ -101,15 +102,14 @@ func runIndex(args []string) {
 	// Load database configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 
-	// For SQLite, ensure .codetect directory exists and set path relative to target
+	// For SQLite, resolve centralized data directory and set path
 	if dbConfig.Type == db.DatabaseSQLite {
-		indexDir := filepath.Join(absPath, ".codetect")
-		if err := os.MkdirAll(indexDir, 0755); err != nil {
-			logger.Error("creating index directory failed", "error", err)
+		dd, err := datadir.ForRepo(absPath)
+		if err != nil {
+			logger.Error("resolving data directory failed", "error", err)
 			os.Exit(1)
 		}
-		// Override path for SQLite to be relative to indexed directory
-		dbConfig.Path = filepath.Join(indexDir, "symbols.db")
+		dbConfig.Path = filepath.Join(dd, "symbols.db")
 	}
 
 	// Convert to db.Config
@@ -179,7 +179,12 @@ func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
 	if dbConfig.Type == db.DatabasePostgres {
 		cfg.DSN = dbConfig.DSN
 	} else {
-		cfg.DBPath = filepath.Join(absPath, ".codetect", "index.db")
+		dd, err := datadir.ForRepo(absPath)
+		if err != nil {
+			logger.Error("resolving data directory failed", "error", err)
+			os.Exit(1)
+		}
+		cfg.DBPath = filepath.Join(dd, "index.db")
 	}
 
 	// Load gitignore patterns
@@ -356,10 +361,14 @@ func runEmbed(args []string) {
 	// Load database configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 
-	// For SQLite, verify index exists and set path relative to target
+	// For SQLite, verify index exists using centralized data directory
 	if dbConfig.Type == db.DatabaseSQLite {
-		indexDir := filepath.Join(absPath, ".codetect")
-		dbPath := filepath.Join(indexDir, "symbols.db")
+		dd, err := datadir.ForRepoNoMigrate(absPath)
+		if err != nil {
+			logger.Error("resolving data directory failed", "error", err)
+			os.Exit(1)
+		}
+		dbPath := filepath.Join(dd, "symbols.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			logger.Error("no symbol index found, run 'codetect-index index' first")
 			os.Exit(1)
@@ -675,9 +684,14 @@ func runStats(args []string) {
 	// Load database configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 
-	// For SQLite, verify index exists and set path relative to target
+	// For SQLite, verify index exists using centralized data directory
 	if dbConfig.Type == db.DatabaseSQLite {
-		dbPath := filepath.Join(absPath, ".codetect", "symbols.db")
+		dd, err := datadir.ForRepoNoMigrate(absPath)
+		if err != nil {
+			logger.Error("resolving data directory failed", "error", err)
+			os.Exit(1)
+		}
+		dbPath := filepath.Join(dd, "symbols.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			logger.Error("no index found, run 'index' first")
 			os.Exit(1)
@@ -739,7 +753,12 @@ func runStatsV2(absPath string, jsonOutput bool) {
 	if dbConfig.Type == db.DatabasePostgres {
 		cfg.DSN = dbConfig.DSN
 	} else {
-		cfg.DBPath = filepath.Join(absPath, ".codetect", "index.db")
+		dd, err := datadir.ForRepoNoMigrate(absPath)
+		if err != nil {
+			logger.Error("resolving data directory failed", "error", err)
+			os.Exit(1)
+		}
+		cfg.DBPath = filepath.Join(dd, "index.db")
 	}
 
 	// Create indexer
@@ -918,7 +937,7 @@ Logging Environment Variables:
   CODETECT_LOG_FORMAT           Output format (text, json) [default: text]
 
 Database:
-  Default: SQLite stored in .codetect/ relative to indexed path.
+  Default: SQLite stored in ~/.codetect/projects/<name>-<hash>/.
   PostgreSQL: Set CODETECT_DB_TYPE=postgres and CODETECT_DB_DSN.
 
 Requirements:

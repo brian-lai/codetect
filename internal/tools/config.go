@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"codetect/internal/datadir"
 	"codetect/internal/db"
 	"codetect/internal/embedding"
 	"codetect/internal/search"
@@ -68,8 +69,17 @@ func createDefaultEnricher() (*search.Enricher, error) {
 		return nil, fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	// Build path to embedding store
-	dbPath := filepath.Join(repoRoot, ".codetect", "index.db")
+	// Build path to embedding store — respect CODETECT_DB_PATH if set
+	var dbPath string
+	if envPath := os.Getenv("CODETECT_DB_PATH"); envPath != "" {
+		dbPath = envPath
+	} else {
+		dd, err := datadir.ForRepoNoMigrate(repoRoot)
+		if err != nil {
+			return nil, fmt.Errorf("resolving data directory: %w", err)
+		}
+		dbPath = filepath.Join(dd, "index.db")
+	}
 
 	// Check if database exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {

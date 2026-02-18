@@ -118,7 +118,7 @@ codetect registry remove /path/to/project
 
 **What happens:**
 - Project is removed from registry
-- Local `.codetect/` directory is NOT deleted
+- Centralized data directory is NOT deleted
 - Project can be re-added later with `codetect registry add`
 
 **Confirmation:**
@@ -161,7 +161,7 @@ Daemon Status: Running (watching 3 projects)
 
 ### `codetect migrate`
 
-Discover existing `.codetect/` directories and register them.
+Discover existing indexes and register them.
 
 **Usage:**
 ```bash
@@ -175,10 +175,9 @@ codetect migrate /path/to/search
 **When to use:**
 - After upgrading from v1 (which didn't have registry)
 - When setting up registry for existing indexed projects
-- After manually copying `.codetect/` directories
 
 **What it does:**
-1. Recursively scans for `.codetect/` directories
+1. Scans `~/.codetect/projects/index.json` for indexed projects
 2. Checks if each project is already registered
 3. Prompts to add unregistered projects
 4. Updates statistics for existing projects
@@ -419,10 +418,10 @@ Each user has their own registry:
 ```
 
 **Shared projects:**
-If multiple users index the same repo, each has their own `.codetect/` directory:
+If multiple users index the same repo, each has their own centralized data directory:
 ```
-/shared/project/.codetect-alice/
-/shared/project/.codetect-bob/
+~alice/.codetect/projects/shared-project-a1b2c3d4/
+~bob/.codetect/projects/shared-project-a1b2c3d4/
 ```
 
 **Best practice:**

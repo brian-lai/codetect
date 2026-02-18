@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codetect/internal/config"
+	"codetect/internal/datadir"
 	"codetect/internal/db"
 	"codetect/internal/embedding"
 	"codetect/internal/logging"
@@ -17,9 +18,16 @@ import (
 
 var logger *slog.Logger
 
-const (
-	defaultSQLitePath = ".codetect/symbols.db"
-)
+var defaultSQLitePath string
+
+func init() {
+	// Default source path: try centralized data dir for current working dir
+	if dd, err := datadir.ForRepoNoMigrate("."); err == nil {
+		defaultSQLitePath = filepath.Join(dd, "symbols.db")
+	} else {
+		defaultSQLitePath = ".codetect/symbols.db" // legacy fallback
+	}
+}
 
 func main() {
 	logger = logging.Default("migrate-to-postgres")
@@ -90,11 +98,12 @@ func main() {
 		fmt.Println()
 	}
 
-	// Get repo root from SQLite path (parent of .codetect directory)
-	repoRoot, err := filepath.Abs(filepath.Dir(filepath.Dir(*sqlitePath)))
+	// Get repo root — default to current working directory
+	repoRoot, err := os.Getwd()
 	if err != nil {
-		repoRoot, _ = os.Getwd() // Fall back to current directory
+		repoRoot = "."
 	}
+	repoRoot, _ = filepath.Abs(repoRoot)
 
 	// Open source database (SQLite)
 	sqliteCfg := db.DefaultConfig(*sqlitePath)

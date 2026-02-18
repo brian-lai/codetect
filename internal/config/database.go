@@ -94,7 +94,7 @@ func (c DatabaseConfig) ToDBConfig() db.Config {
 	default: // SQLite
 		path := c.Path
 		if path == "" {
-			// Default path if not specified
+			// Default path if not specified (legacy fallback; callers should use datadir package)
 			path = ".codetect/symbols.db"
 		}
 		return db.DefaultConfig(path)

@@ -84,19 +84,57 @@ v2.0.0 introduces a new indexer architecture:
 | **Change detection** | Full re-scan | Merkle tree (sub-second) |
 | **Incremental speed** | ~30s (1000 files) | ~2s (1000 files) ⚡ |
 | **Cache hit rate** | ~50% | ~95% 📦 |
-| **Database** | `.codetect/symbols.db` | `.codetect/index.db` |
+| **Database** | `.codetect/symbols.db` | `~/.codetect/projects/<name>-<hash>/index.db` |
 | **Flag** | `--v1` | (default, no flag needed) |
 | **Status** | Deprecated (removed in v3.0) | Recommended |
 
 **Can I use both?**
 Yes! v1 and v2 indexes can coexist. They use different database files:
-- v1: `.codetect/symbols.db`
-- v2: `.codetect/index.db`
+- v1: `.codetect/symbols.db` (legacy local directory)
+- v2: `~/.codetect/projects/<name>-<hash>/index.db` (centralized)
 
 **Which should I use?**
 - **New projects:** Use v2 (the default)
 - **Existing v1 projects:** Migrate to v2 for better performance
 - **Need ctags compatibility:** Use v1 with `--v1` flag
+
+## Centralized Storage Migration (v3.1+)
+
+Starting with v3.1, codetect stores all index data centrally under `~/.codetect/projects/` instead of in a local `.codetect/` directory at each project root.
+
+### What Changed
+
+| Before (v3.0 and earlier) | After (v3.1+) |
+|---------------------------|---------------|
+| Data stored in `<project>/.codetect/` | Data stored in `~/.codetect/projects/<name>-<hash>/` |
+| Required `.gitignore` entry | No `.gitignore` modification needed |
+| Data tied to project location | Git repos survive directory moves |
+
+### How Migration Works
+
+**Automatic:** When you run any codetect command (e.g., `codetect index`), if a local `.codetect/` directory exists and no centralized directory exists yet, the data is automatically moved to the centralized location.
+
+**What happens:**
+1. Local `.codetect/` is moved (or copied) to `~/.codetect/projects/<basename>-<hash>/`
+2. The old `.codetect/` directory is removed
+3. An entry is added to `~/.codetect/projects/index.json` for reverse lookup
+
+**Directory naming:** The hash is derived from the git remote origin URL (or absolute path for non-git dirs), making it stable across directory moves.
+
+**Env var override:** Set `CODETECT_DATA_DIR` to use a custom data directory instead.
+
+### Manual Migration
+
+If you want to trigger migration without indexing:
+```bash
+cd /path/to/project
+codetect index  # Auto-migrates .codetect/ on first run
+```
+
+To check where data is stored:
+```bash
+ls ~/.codetect/projects/
+```
 
 ## Automatic Migrations
 

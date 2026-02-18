@@ -71,7 +71,7 @@ codetect-eval report [options]
 codetect-eval report
 
 # Show a specific report
-codetect-eval report --results .codetect/evals/results/2024-01-10-120000-results.json
+codetect-eval report --results ~/.codetect/projects/myrepo-a1b2c3d4/evals/results/2024-01-10-120000-results.json
 ```
 
 ### list
@@ -106,23 +106,23 @@ When you run evals on a repository without test cases, you'll see a helpful erro
 
 ### Repository-Specific Storage
 
-Eval data is stored in a `.codetect/` directory within the target repository:
+Eval data is stored in the centralized data directory:
 
 ```
-your-project/
-├── .codetect/           # Auto-added to .gitignore
-│   └── evals/
-│       ├── cases/          # Test case JSONL files
-│       │   ├── search.jsonl
-│       │   ├── navigate.jsonl
-│       │   └── understand.jsonl
-│       └── results/        # Evaluation results (JSON)
-│           └── 2024-01-10-120000-results.json
+~/.codetect/projects/your-project-a1b2c3d4/
+└── evals/
+    ├── cases/          # Test case JSONL files
+    │   ├── search.jsonl
+    │   ├── navigate.jsonl
+    │   └── understand.jsonl
+    ├── results/        # Evaluation results (JSON)
+    │   └── 2024-01-10-120000-results.json
+    └── logs/           # Raw Claude output logs
 ```
 
 This approach:
-- Keeps eval cases version-controlled with your codebase
-- Stores results locally (via .gitignore)
+- Keeps project directories clean (no `.codetect/` needed)
+- Stores results centrally
 - Allows different repos to have different test cases
 
 ### Manual Creation
@@ -130,10 +130,13 @@ This approach:
 Create the directory structure and add JSONL files:
 
 ```bash
-mkdir -p .codetect/evals/cases
+# Find your project's data directory
+ls ~/.codetect/projects/
+# Then create cases directory
+mkdir -p ~/.codetect/projects/your-project-<hash>/evals/cases
 ```
 
-Create test case files (e.g., `.codetect/evals/cases/search.jsonl`):
+Create test case files (e.g., `evals/cases/search.jsonl`):
 
 ```jsonl
 {"id":"search-001","category":"search","description":"Find error handling","prompt":"Find all error handling code in this repository","ground_truth":{"files":["internal/errors.go","pkg/handler.go"]},"difficulty":"easy"}
@@ -145,7 +148,7 @@ Create test case files (e.g., `.codetect/evals/cases/search.jsonl`):
 Start a Claude Code session in the target repository and paste this prompt:
 
 ```
-Create eval test cases for the codetect MCP tool in .codetect/evals/cases/
+Create eval test cases for the codetect MCP tool.
 
 These test cases will be used by codetect-eval to measure MCP search performance
 against this repository (without pre-indexing). Create JSONL files organized by
@@ -343,8 +346,8 @@ Improvements:
 1. **Update with code changes** - Keep ground truth in sync
 2. **Add new tests** - When you encounter interesting queries
 3. **Remove stale tests** - Delete tests for removed features
-4. **Version control cases** - Commit `.codetect/evals/cases/` to git
-5. **Ignore results** - Keep `.codetect/` in .gitignore (results are auto-added)
+4. **Version control cases** - Keep test case JSONL files in version control
+5. **Results are centralized** - Stored under `~/.codetect/projects/`
 
 ## Troubleshooting
 
@@ -353,7 +356,7 @@ Improvements:
 **Error:**
 ```
 ERROR: No test cases found!
-The eval runner could not find any test cases in: /path/to/repo/.codetect/evals/cases
+The eval runner could not find any test cases in: /path/to/cases/dir
 ```
 
 **Solution:** Create test cases using the manual or AI-assisted approach above.
@@ -387,7 +390,7 @@ If MCP tools aren't reducing tokens:
 Organize test cases by feature or module:
 
 ```
-.codetect/evals/cases/
+evals/cases/
 ├── auth/
 │   ├── search.jsonl
 │   └── navigate.jsonl
@@ -419,14 +422,14 @@ Run evals before and after upgrading codetect:
 ```bash
 # Before upgrade
 codetect-eval run --repo .
-cp .codetect/evals/results/latest.json before.json
+cp ~/.codetect/projects/<name>-<hash>/evals/results/latest.json before.json
 
 # Upgrade
 codetect update
 
 # After upgrade
 codetect-eval run --repo .
-cp .codetect/evals/results/latest.json after.json
+cp ~/.codetect/projects/<name>-<hash>/evals/results/latest.json after.json
 
 # Compare (manually or with custom script)
 ```

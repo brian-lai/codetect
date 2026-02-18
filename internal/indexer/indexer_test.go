@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,10 +68,13 @@ func main() {
 		t.Errorf("RepoPath() = %q, want %q", idx.RepoPath(), tempDir)
 	}
 
-	// Verify .codetect directory was created
-	codetectDir := filepath.Join(tempDir, ".codetect")
-	if _, err := os.Stat(codetectDir); os.IsNotExist(err) {
-		t.Error(".codetect directory was not created")
+	// Verify data directory was created (centralized under ~/.codetect/projects/)
+	// The indexer's dataDir should exist
+	if idx.dataDir == "" {
+		t.Error("dataDir is empty")
+	}
+	if _, err := os.Stat(idx.dataDir); os.IsNotExist(err) {
+		t.Errorf("data directory was not created: %s", idx.dataDir)
 	}
 }
 
@@ -261,6 +265,176 @@ func main() {
 	if stats.FileCount == 0 {
 		t.Error("FileCount = 0, want > 0")
 	}
+}
+
+// TestNewIndexer_DataDirIsCentralized verifies that the indexer stores data
+// under ~/.codetect/projects/, NOT under the project root.
+func TestNewIndexer_DataDirIsCentralized(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "indexer_centralized_test")
+	if err != nil {
+		t.Fatalf("creating temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a test file
+	testFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(testFile, []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg := &Config{
+		DBType:            "sqlite",
+		EmbeddingProvider: "off",
+		Dimensions:        768,
+	}
+
+	idx, err := New(tempDir, cfg)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer idx.Close()
+
+	// 1. dataDir must NOT be under the project root
+	if strings.HasPrefix(idx.dataDir, tempDir+string(filepath.Separator)) {
+		t.Errorf("dataDir %q is under project root %q — should be centralized", idx.dataDir, tempDir)
+	}
+
+	// 2. No .codetect/ should exist in the project root
+	localCodetect := filepath.Join(tempDir, ".codetect")
+	if _, err := os.Stat(localCodetect); err == nil {
+		t.Errorf("FAIL: .codetect/ was created in project root %s", tempDir)
+	}
+
+	// 3. dataDir should contain "projects" in its path (centralized structure)
+	if !containsPathComponent(idx.dataDir, "projects") {
+		t.Errorf("dataDir %q doesn't look centralized (missing 'projects' component)", idx.dataDir)
+	}
+
+	// 4. Database file should exist in the centralized location
+	dbPath := filepath.Join(idx.dataDir, "index.db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Errorf("index.db not found at centralized location: %s", dbPath)
+	}
+}
+
+// TestNewIndexer_NoLocalCodetectAfterIndex verifies that after a full
+// indexing operation, no .codetect/ directory exists in the project root.
+func TestNewIndexer_NoLocalCodetectAfterIndex(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "indexer_nolocal_test")
+	if err != nil {
+		t.Fatalf("creating temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	testFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(testFile, []byte(`package main
+
+func main() {
+	println("hello")
+}
+`), 0644); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg := &Config{
+		DBType:            "sqlite",
+		EmbeddingProvider: "off",
+		Dimensions:        768,
+	}
+
+	idx, err := New(tempDir, cfg)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer idx.Close()
+
+	// Run full index
+	ctx := context.Background()
+	_, err = idx.Index(ctx, IndexOptions{Force: true})
+	if err != nil {
+		t.Fatalf("Index() error = %v", err)
+	}
+
+	// CRITICAL: no .codetect/ should exist in the project root
+	localCodetect := filepath.Join(tempDir, ".codetect")
+	if _, err := os.Stat(localCodetect); err == nil {
+		entries, _ := os.ReadDir(localCodetect)
+		t.Errorf("FAIL: .codetect/ was created in project root %s (contains %d items)", tempDir, len(entries))
+	}
+}
+
+// TestNewIndexer_MigratesExistingLocalData verifies that if a project
+// has an existing .codetect/ directory, the indexer migrates it.
+func TestNewIndexer_MigratesExistingLocalData(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "indexer_migrate_test")
+	if err != nil {
+		t.Fatalf("creating temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an existing .codetect/ with data (simulating pre-upgrade)
+	localCodetect := filepath.Join(tempDir, ".codetect")
+	if err := os.MkdirAll(localCodetect, 0755); err != nil {
+		t.Fatal(err)
+	}
+	oldDB := filepath.Join(localCodetect, "merkle-tree.json")
+	if err := os.WriteFile(oldDB, []byte(`{"old":"data"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	testFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(testFile, []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &Config{
+		DBType:            "sqlite",
+		EmbeddingProvider: "off",
+		Dimensions:        768,
+	}
+
+	idx, err := New(tempDir, cfg)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer idx.Close()
+
+	// Old data should be in centralized location
+	migratedPath := filepath.Join(idx.dataDir, "merkle-tree.json")
+	content, err := os.ReadFile(migratedPath)
+	if err != nil {
+		t.Fatalf("migrated file not found: %v", err)
+	}
+	if string(content) != `{"old":"data"}` {
+		t.Errorf("migrated content = %q", content)
+	}
+
+	// Old .codetect/ should be gone
+	if _, err := os.Stat(localCodetect); err == nil {
+		t.Errorf("old .codetect/ still exists after migration")
+	}
+}
+
+func containsPathComponent(path, component string) bool {
+	for _, part := range filepath.SplitList(path) {
+		if part == component {
+			return true
+		}
+	}
+	// filepath.SplitList splits by os.PathListSeparator, not by /
+	// Use a simpler approach
+	for path != "" {
+		dir, file := filepath.Split(path)
+		if file == component {
+			return true
+		}
+		// Remove trailing slash
+		path = filepath.Clean(dir)
+		if path == dir {
+			break // at root
+		}
+	}
+	return false
 }
 
 func TestLoadGitignore(t *testing.T) {

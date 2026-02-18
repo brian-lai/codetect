@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"codetect/internal/datadir"
 )
 
 // Runner executes evaluation test cases.
@@ -32,10 +34,12 @@ func NewRunner(config EvalConfig) *Runner {
 func (r *Runner) LoadTestCases(casesDir string) ([]TestCase, error) {
 	var cases []TestCase
 
-	// Check for repo-specific eval cases first
-	repoEvalDir := filepath.Join(r.config.RepoPath, ".codetect", "evals", "cases")
-	if info, err := os.Stat(repoEvalDir); err == nil && info.IsDir() {
-		casesDir = repoEvalDir
+	// Check for repo-specific eval cases first (centralized data dir)
+	if dd, err := datadir.ForRepoNoMigrate(r.config.RepoPath); err == nil {
+		repoEvalDir := filepath.Join(dd, "evals", "cases")
+		if info, err := os.Stat(repoEvalDir); err == nil && info.IsDir() {
+			casesDir = repoEvalDir
+		}
 	}
 
 	// Find all JSONL files (including in subdirectories)
@@ -365,10 +369,13 @@ func (r *Runner) buildClaudeArgs(tc TestCase, mode ExecutionMode) []string {
 }
 
 // SaveResults writes the raw results to a JSON file.
-// It always uses the repo-specific .codetect/evals/results directory.
+// It uses the centralized data directory's evals/results subdirectory.
 func (r *Runner) SaveResults(report *EvalReport) error {
-	// Always use repo-specific results directory to keep results with cases
-	outputDir := filepath.Join(r.config.RepoPath, ".codetect", "evals", "results")
+	dd, err := datadir.ForRepo(r.config.RepoPath)
+	if err != nil {
+		return fmt.Errorf("resolving data directory: %w", err)
+	}
+	outputDir := filepath.Join(dd, "evals", "results")
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("creating output dir: %w", err)
@@ -396,7 +403,11 @@ func contains(slice []string, item string) bool {
 
 // saveLog writes the raw Claude stdout to a log file for later inspection.
 func (r *Runner) saveLog(testCaseID string, mode ExecutionMode, timestamp time.Time, data []byte) error {
-	logsDir := filepath.Join(r.config.RepoPath, ".codetect", "evals", "logs")
+	dd, err := datadir.ForRepo(r.config.RepoPath)
+	if err != nil {
+		return fmt.Errorf("resolving data directory: %w", err)
+	}
+	logsDir := filepath.Join(dd, "evals", "logs")
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
 		return fmt.Errorf("creating logs dir: %w", err)
 	}
@@ -422,7 +433,11 @@ type LogEntry struct {
 
 // ListLogs returns all log files for a given repo, sorted by timestamp (newest first).
 func (r *Runner) ListLogs() ([]LogEntry, error) {
-	logsDir := filepath.Join(r.config.RepoPath, ".codetect", "evals", "logs")
+	dd, err := datadir.ForRepoNoMigrate(r.config.RepoPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolving data directory: %w", err)
+	}
+	logsDir := filepath.Join(dd, "evals", "logs")
 
 	files, err := filepath.Glob(filepath.Join(logsDir, "*.log"))
 	if err != nil {
@@ -502,38 +517,3 @@ func (r *Runner) ReadLog(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// EnsureGitignore ensures the .codetect directory is in the target repo's .gitignore.
-func (r *Runner) EnsureGitignore() error {
-	gitignorePath := filepath.Join(r.config.RepoPath, ".gitignore")
-
-	// Read existing .gitignore if it exists
-	content, err := os.ReadFile(gitignorePath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("reading .gitignore: %w", err)
-	}
-
-	// Check if .codetect is already in .gitignore
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == ".codetect" || trimmed == ".codetect/" {
-			return nil // Already exists
-		}
-	}
-
-	// Append .codetect to .gitignore
-	var newContent string
-	if len(content) > 0 && !strings.HasSuffix(string(content), "\n") {
-		newContent = string(content) + "\n.codetect/\n"
-	} else if len(content) > 0 {
-		newContent = string(content) + ".codetect/\n"
-	} else {
-		newContent = ".codetect/\n"
-	}
-
-	if err := os.WriteFile(gitignorePath, []byte(newContent), 0644); err != nil {
-		return fmt.Errorf("writing .gitignore: %w", err)
-	}
-
-	return nil
-}

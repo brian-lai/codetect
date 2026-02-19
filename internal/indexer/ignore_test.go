@@ -1,8 +1,11 @@
 package indexer
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	ignore "github.com/sabhiram/go-gitignore"
@@ -76,10 +79,13 @@ dist/
 }
 
 func TestLoadCodetectIgnore(t *testing.T) {
-	// Create temporary directory for test
 	tmpDir := t.TempDir()
+	tmpHome := t.TempDir()
 
-	// Test 1: No .codetectignore file
+	// Isolate from real home dir and XDG config
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg-config"))
+
 	t.Run("no ignore file", func(t *testing.T) {
 		ig, err := LoadCodetectIgnore(tmpDir)
 		if err != nil {
@@ -90,14 +96,13 @@ func TestLoadCodetectIgnore(t *testing.T) {
 		}
 	})
 
-	// Test 2: Project .codetectignore exists
 	t.Run("project ignore file", func(t *testing.T) {
 		ignoreFile := filepath.Join(tmpDir, ".codetectignore")
-		content := `*.min.js
-dist/`
+		content := "*.min.js\ndist/\n"
 		if err := os.WriteFile(ignoreFile, []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
+		defer os.Remove(ignoreFile)
 
 		ig, err := LoadCodetectIgnore(tmpDir)
 		if err != nil {
@@ -106,8 +111,6 @@ dist/`
 		if ig == nil {
 			t.Fatal("LoadCodetectIgnore() should return non-nil when file exists")
 		}
-
-		// Test pattern matching
 		if !ig.MatchesPath("app.min.js") {
 			t.Error("Should match *.min.js pattern")
 		}
@@ -117,17 +120,92 @@ dist/`
 		if ig.MatchesPath("src/app.js") {
 			t.Error("Should not match src/app.js")
 		}
+	})
 
-		// Cleanup
-		os.Remove(ignoreFile)
+	t.Run("XDG global ignore file", func(t *testing.T) {
+		xdgDir := filepath.Join(tmpHome, "xdg-config", "codetect")
+		if err := os.MkdirAll(xdgDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		xdgIgnoreFile := filepath.Join(xdgDir, "ignore")
+		if err := os.WriteFile(xdgIgnoreFile, []byte("*.generated.go\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(xdgIgnoreFile)
+
+		ig, err := LoadCodetectIgnore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnore() error = %v", err)
+		}
+		if ig == nil {
+			t.Fatal("LoadCodetectIgnore() should return non-nil for XDG global file")
+		}
+		if !ig.MatchesPath("api.generated.go") {
+			t.Error("Should match *.generated.go from XDG global file")
+		}
+	})
+
+	t.Run("legacy ignore file loaded when XDG global absent", func(t *testing.T) {
+		legacyFile := filepath.Join(tmpHome, ".codetectignore")
+		if err := os.WriteFile(legacyFile, []byte("vendor/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(legacyFile)
+
+		ig, err := LoadCodetectIgnore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnore() error = %v", err)
+		}
+		if ig == nil {
+			t.Fatal("LoadCodetectIgnore() should return non-nil for legacy file")
+		}
+		if !ig.MatchesPath("vendor/lib.go") {
+			t.Error("Should match vendor/ from legacy file")
+		}
+	})
+
+	t.Run("XDG global takes precedence over legacy", func(t *testing.T) {
+		xdgDir := filepath.Join(tmpHome, "xdg-config", "codetect")
+		if err := os.MkdirAll(xdgDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		xdgIgnoreFile := filepath.Join(xdgDir, "ignore")
+		if err := os.WriteFile(xdgIgnoreFile, []byte("dist/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(xdgIgnoreFile)
+
+		legacyFile := filepath.Join(tmpHome, ".codetectignore")
+		if err := os.WriteFile(legacyFile, []byte("vendor/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(legacyFile)
+
+		ig, err := LoadCodetectIgnore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnore() error = %v", err)
+		}
+		if ig == nil {
+			t.Fatal("LoadCodetectIgnore() should return non-nil")
+		}
+		// XDG global (dist/) is returned, not legacy (vendor/)
+		if !ig.MatchesPath("dist/app.js") {
+			t.Error("Should match dist/ from XDG global file (takes precedence)")
+		}
+		if ig.MatchesPath("vendor/lib.go") {
+			t.Error("Should not match vendor/ (legacy file was skipped, XDG global takes precedence)")
+		}
 	})
 }
 
 func TestLoadCodetectIgnoreHierarchy(t *testing.T) {
-	// Create temporary directory for test
 	tmpDir := t.TempDir()
+	tmpHome := t.TempDir()
 
-	// Test 1: No ignore files
+	// Isolate from real home dir and XDG config
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg-config"))
+
 	t.Run("no ignore files", func(t *testing.T) {
 		ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
 		if err != nil {
@@ -138,14 +216,13 @@ func TestLoadCodetectIgnoreHierarchy(t *testing.T) {
 		}
 	})
 
-	// Test 2: Only project ignore file
 	t.Run("project ignore only", func(t *testing.T) {
 		projectIgnore := filepath.Join(tmpDir, ".codetectignore")
-		content := `*.min.js
-dist/`
+		content := "*.min.js\ndist/\n"
 		if err := os.WriteFile(projectIgnore, []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
+		defer os.Remove(projectIgnore)
 
 		ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
 		if err != nil {
@@ -154,17 +231,125 @@ dist/`
 		if ig == nil {
 			t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil when file exists")
 		}
-
 		if !ig.MatchesPath("app.min.js") {
 			t.Error("Should match *.min.js pattern from project file")
 		}
-
-		// Cleanup
-		os.Remove(projectIgnore)
 	})
 
-	// Test 3: Merged patterns (would need to mock global file for full test)
-	// Skipping global file test since it requires modifying ~/.codetectignore
+	t.Run("XDG global ignore file is loaded", func(t *testing.T) {
+		xdgDir := filepath.Join(tmpHome, "xdg-config", "codetect")
+		if err := os.MkdirAll(xdgDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		xdgIgnoreFile := filepath.Join(xdgDir, "ignore")
+		if err := os.WriteFile(xdgIgnoreFile, []byte("*.generated.go\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(xdgIgnoreFile)
+
+		ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnoreHierarchy() error = %v", err)
+		}
+		if ig == nil {
+			t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil")
+		}
+		if !ig.MatchesPath("api.generated.go") {
+			t.Error("Should match *.generated.go from XDG global file")
+		}
+	})
+
+	t.Run("legacy ignore file loaded when XDG global absent", func(t *testing.T) {
+		legacyFile := filepath.Join(tmpHome, ".codetectignore")
+		if err := os.WriteFile(legacyFile, []byte("vendor/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(legacyFile)
+
+		ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnoreHierarchy() error = %v", err)
+		}
+		if ig == nil {
+			t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil for legacy file")
+		}
+		if !ig.MatchesPath("vendor/lib.go") {
+			t.Error("Should match vendor/ from legacy file")
+		}
+	})
+
+	t.Run("all three sources merge correctly", func(t *testing.T) {
+		// XDG global
+		xdgDir := filepath.Join(tmpHome, "xdg-config", "codetect")
+		if err := os.MkdirAll(xdgDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		xdgIgnoreFile := filepath.Join(xdgDir, "ignore")
+		if err := os.WriteFile(xdgIgnoreFile, []byte("*.generated.go\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(xdgIgnoreFile)
+
+		// Legacy
+		legacyFile := filepath.Join(tmpHome, ".codetectignore")
+		if err := os.WriteFile(legacyFile, []byte("vendor/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(legacyFile)
+
+		// Project
+		projectFile := filepath.Join(tmpDir, ".codetectignore")
+		if err := os.WriteFile(projectFile, []byte("dist/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(projectFile)
+
+		ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnoreHierarchy() error = %v", err)
+		}
+		if ig == nil {
+			t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil")
+		}
+
+		// All patterns from all three sources should match
+		if !ig.MatchesPath("api.generated.go") {
+			t.Error("Should match *.generated.go from XDG global")
+		}
+		if !ig.MatchesPath("vendor/lib.go") {
+			t.Error("Should match vendor/ from legacy file")
+		}
+		if !ig.MatchesPath("dist/app.js") {
+			t.Error("Should match dist/ from project file")
+		}
+		if ig.MatchesPath("src/app.go") {
+			t.Error("Should not match src/app.go")
+		}
+	})
+
+	t.Run("deprecation warning emitted for legacy path", func(t *testing.T) {
+		legacyFile := filepath.Join(tmpHome, ".codetectignore")
+		if err := os.WriteFile(legacyFile, []byte("*.legacy\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(legacyFile)
+
+		// Capture slog output
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})
+		oldDefault := slog.Default()
+		slog.SetDefault(slog.New(handler))
+		defer slog.SetDefault(oldDefault)
+
+		_, err := LoadCodetectIgnoreHierarchy(tmpDir)
+		if err != nil {
+			t.Errorf("LoadCodetectIgnoreHierarchy() error = %v", err)
+		}
+
+		if !strings.Contains(buf.String(), "deprecated") {
+			t.Errorf("Expected deprecation warning in log output, got: %q", buf.String())
+		}
+	})
 }
 
 func TestPatternMatching(t *testing.T) {

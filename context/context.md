@@ -1,16 +1,21 @@
 # Current Work Summary
 
-v3.0.0-beta.2 — Token Efficiency Release complete.
+Executing: Migrate Global .codetectignore to XDG Config Dir
 
-**Branch:** `para/v3-beta2-token-efficiency`
-**Status:** All work complete, ready for archive
+**Branch:** `para/codetectignore-global-config`
+**Plan:** context/plans/2026-02-18-codetectignore-global-config.md
 
-## Final Results
+## To-Do List
 
-- Accuracy: 85.7% MCP vs 81.4% baseline (+5.2%)
-- Token overhead: eliminated (MCP uses 1.5% fewer tokens than baseline)
-- Latency overhead: eliminated (0.3%)
-- Tool count: 6 → 4
+- [x] Update `internal/indexer/ignore.go` — add XDG global path and deprecation warning for legacy `~/.codetectignore`
+- [x] Update `internal/indexer/ignore_test.go` — new tests for XDG path, legacy fallback, precedence, merge, and deprecation warning
+- [x] Update `scripts/codetect-wrapper.sh` `cmd_doctor` — add "Ignore Files" section
+- [x] Update `docs/codetectignore.md` — replace global path, add hierarchy section, fix reindex command
+- [x] Update `README.md` — expand one-liner into a small section with both paths
+
+## Progress Notes
+
+_Update this section as you complete items._
 
 ---
 
@@ -26,9 +31,11 @@ v3.0.0-beta.2 — Token Efficiency Release complete.
     "context/summaries/2026-02-03-phase1c-cross-encoder-reranking-summary.md",
     "context/summaries/2026-02-03-phase1d-codetectignore-summary.md",
     "context/summaries/2026-02-07-phase2a-rich-context-summary.md",
-    "context/summaries/2026-02-16-response-token-reduction-summary.md"
+    "context/summaries/2026-02-16-response-token-reduction-summary.md",
+    "context/summaries/2026-02-18-codetectignore-global-config-summary.md"
   ],
-  "execution_branch": "para/v3-beta2-token-efficiency",
-  "last_updated": "2026-02-16T00:00:00Z"
+  "execution_branch": "para/codetectignore-global-config",
+  "execution_started": "2026-02-18T00:00:00Z",
+  "last_updated": "2026-02-18T20:00:00Z"
 }
 ```

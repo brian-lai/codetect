@@ -11,7 +11,7 @@ Executing: Eval Cost Report Improvements
 - [x] Add cost-per-token-type breakdown rows to summary table in evals/report.go
 - [x] Add cost summary note below the table in evals/report.go
 - [x] Update eval generation prompt in cmd/codetect-eval/main.go
-- [ ] Add TestPrintReport_CostBreakdown unit test in evals/report_test.go
+- [x] Add TestPrintReport_CostBreakdown unit test in evals/report_test.go
 
 ## Progress Notes
 

@@ -10,6 +10,39 @@
 - Ignore test fixtures
 - Filter out large data files
 
+## File Locations
+
+Patterns are loaded from three locations and merged (OR logic — a file is excluded if it matches any pattern from any source):
+
+| Priority | Path | Notes |
+|---|---|---|
+| 1 (highest) | `<repo>/.codetectignore` | Project-specific; commit to VCS |
+| 2 | `~/.config/codetect/ignore` | Global (XDG config dir) |
+| 3 | `~/.codetectignore` | Legacy global — loaded with a deprecation warning |
+
+### Global Ignore
+
+Create `~/.config/codetect/ignore` to apply patterns across all your projects:
+
+```bash
+mkdir -p ~/.config/codetect
+cat >> ~/.config/codetect/ignore << 'EOF'
+# Global patterns for all projects
+*.min.js
+*.bundle.js
+vendor/
+EOF
+```
+
+**Migrating from `~/.codetectignore`:** If you have the legacy `~/.codetectignore`, move it:
+
+```bash
+mkdir -p ~/.config/codetect
+mv ~/.codetectignore ~/.config/codetect/ignore
+```
+
+The legacy path still works but prints a deprecation warning on every `codetect index` run.
+
 ## Quick Start
 
 Create `.codetectignore` in your repository root:
@@ -37,7 +70,7 @@ Then reindex:
 
 ```bash
 cd /path/to/your/project
-codetect-index index --force .
+codetect index --force
 ```
 
 ## Syntax
@@ -115,14 +148,6 @@ __snapshots__/
 
 **Example:** You can index `vendor/` even if it's gitignored, or exclude `*.generated.go` even if it's tracked.
 
-### Hierarchical Loading
-
-Patterns are loaded from:
-1. `.codetectignore` in repository root (project-level)
-2. `~/.codetectignore` in home directory (global)
-
-Patterns from both files are combined (OR logic).
-
 ## FAQ
 
 **Q: Do I need .codetectignore?**
@@ -135,10 +160,14 @@ Yes! `.codetectignore` is independent of `.gitignore`.
 Yes, just don't add them to `.codetectignore`.
 
 **Q: How do I see what files were excluded?**
-Run with verbose mode: `codetect-index index --verbose .`
+Run with verbose mode: `codetect index --verbose`
 
 **Q: Does .codetectignore affect search?**
 Yes, excluded files won't appear in any search results.
+
+**Q: Which ignore file takes precedence?**
+Project `.codetectignore` patterns always apply. All three sources are merged — a file
+is excluded if it matches any pattern from any file.
 
 ## Best Practices
 
@@ -146,6 +175,8 @@ Yes, excluded files won't appear in any search results.
 2. **Test first** - Use `--verbose` to see what gets excluded.
 3. **Be specific** - Prefer specific patterns (`*.generated.go`) over broad ones (`src/`).
 4. **Document** - Add comments to explain why patterns exist.
+5. **Use global for personal preferences** - Put patterns that apply to all your projects
+   (e.g., editor temp files) in `~/.config/codetect/ignore`.
 
 ## Troubleshooting
 
@@ -153,9 +184,10 @@ Yes, excluded files won't appear in any search results.
 
 **Solutions:**
 - Check pattern syntax (use `.gitignore` format)
-- Run `codetect-index index --force .` to force reindex
+- Run `codetect index --force` to force reindex
 - Use `--verbose` flag to see what's being excluded
 - Verify .codetectignore is in repository root
+- Run `codetect doctor` to see which ignore files are active
 
 **Problem:** Too many files are excluded
 
@@ -163,6 +195,14 @@ Yes, excluded files won't appear in any search results.
 - Review your patterns
 - Remove or comment out broad patterns
 - Use more specific exclusions
+
+**Problem:** Seeing "deprecated" warning about ~/.codetectignore
+
+**Solution:** Move the file to the XDG config location:
+```bash
+mkdir -p ~/.config/codetect
+mv ~/.codetectignore ~/.config/codetect/ignore
+```
 
 ## See Also
 

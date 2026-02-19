@@ -355,6 +355,29 @@ cmd_doctor() {
     if [[ "$found_index" == "false" ]]; then
         info "No index for current project (run 'codetect index' to create)"
     fi
+    echo ""
+
+    # Check ignore files
+    echo "Ignore Files:"
+    local xdg_ignore="$CONFIG_DIR/ignore"
+    local legacy_ignore="$HOME/.codetectignore"
+    local project_ignore=".codetectignore"
+
+    if [[ -f "$xdg_ignore" ]]; then
+        success "Global:  $xdg_ignore"
+    else
+        info "○ Global:  $xdg_ignore (not set)"
+    fi
+
+    if [[ -f "$legacy_ignore" ]]; then
+        warn "Legacy:  $legacy_ignore [deprecated → move to $xdg_ignore]"
+    fi
+
+    if [[ -f "$project_ignore" ]]; then
+        success "Project: $(pwd)/$project_ignore"
+    else
+        info "○ Project: .codetectignore (not set)"
+    fi
 }
 
 cmd_stats() {

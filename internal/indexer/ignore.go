@@ -1,63 +1,97 @@
 package indexer
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
-// LoadCodetectIgnore loads .codetectignore patterns from the repository root.
-// Returns nil if no .codetectignore file exists (no exclusions).
+// xdgCodetectConfigDir returns the XDG-based codetect config directory,
+// consistent with the config directory used by registry.go.
+func xdgCodetectConfigDir() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "codetect")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "codetect")
+}
+
+// LoadCodetectIgnore loads .codetectignore patterns using priority-based lookup.
+// Returns the first ignore file found, checking in order:
+//  1. <repoRoot>/.codetectignore (project-specific, highest priority)
+//  2. ~/.config/codetect/ignore (XDG global)
+//  3. ~/.codetectignore (legacy global, loads with deprecation warning)
 func LoadCodetectIgnore(repoRoot string) (*ignore.GitIgnore, error) {
-	// Check for project .codetectignore
+	// 1. Check for project .codetectignore
 	projectIgnoreFile := filepath.Join(repoRoot, ".codetectignore")
 	if _, err := os.Stat(projectIgnoreFile); err == nil {
 		return ignore.CompileIgnoreFile(projectIgnoreFile)
 	}
 
-	// Check for global ~/.codetectignore
+	xdgIgnoreFile := filepath.Join(xdgCodetectConfigDir(), "ignore")
+
+	// 2. Check for XDG global ~/.config/codetect/ignore
+	if _, err := os.Stat(xdgIgnoreFile); err == nil {
+		return ignore.CompileIgnoreFile(xdgIgnoreFile)
+	}
+
+	// 3. Check for legacy ~/.codetectignore
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		globalIgnoreFile := filepath.Join(homeDir, ".codetectignore")
-		if _, err := os.Stat(globalIgnoreFile); err == nil {
-			return ignore.CompileIgnoreFile(globalIgnoreFile)
+		legacyIgnoreFile := filepath.Join(homeDir, ".codetectignore")
+		if _, err := os.Stat(legacyIgnoreFile); err == nil {
+			slog.Warn("~/.codetectignore is deprecated; move it to the XDG config dir",
+				"legacy_path", legacyIgnoreFile,
+				"new_path", xdgIgnoreFile)
+			return ignore.CompileIgnoreFile(legacyIgnoreFile)
 		}
 	}
 
-	// No .codetectignore found, return nil (no exclusions)
 	return nil, nil
 }
 
-// LoadCodetectIgnoreHierarchy loads .codetectignore patterns from both
-// global (~/.codetectignore) and project (.codetectignore) locations,
-// merging them together. Patterns from both files are combined with OR logic.
+// LoadCodetectIgnoreHierarchy loads and merges .codetectignore patterns from
+// all three locations. Patterns are combined with OR logic (a file is excluded
+// if it matches any pattern from any source).
+//
+// Load order (project patterns appended last for negation precedence):
+//  1. ~/.config/codetect/ignore — XDG global
+//  2. ~/.codetectignore — legacy global (loads with deprecation warning)
+//  3. <repoRoot>/.codetectignore — project-specific (highest priority)
 func LoadCodetectIgnoreHierarchy(repoRoot string) (*ignore.GitIgnore, error) {
 	var patterns []string
 
-	// 1. Load global ~/.codetectignore
+	xdgIgnoreFile := filepath.Join(xdgCodetectConfigDir(), "ignore")
+
+	// 1. Load XDG global ~/.config/codetect/ignore
+	if content, err := os.ReadFile(xdgIgnoreFile); err == nil {
+		patterns = append(patterns, parseIgnoreLines(string(content))...)
+	}
+
+	// 2. Load legacy ~/.codetectignore (with deprecation warning)
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		globalFile := filepath.Join(homeDir, ".codetectignore")
-		if content, err := os.ReadFile(globalFile); err == nil {
-			globalPatterns := parseIgnoreLines(string(content))
-			patterns = append(patterns, globalPatterns...)
+		legacyFile := filepath.Join(homeDir, ".codetectignore")
+		if content, err := os.ReadFile(legacyFile); err == nil {
+			slog.Warn("~/.codetectignore is deprecated; move it to the XDG config dir",
+				"legacy_path", legacyFile,
+				"new_path", xdgIgnoreFile)
+			patterns = append(patterns, parseIgnoreLines(string(content))...)
 		}
 	}
 
-	// 2. Load project .codetectignore
+	// 3. Load project .codetectignore (highest priority)
 	projectFile := filepath.Join(repoRoot, ".codetectignore")
 	if content, err := os.ReadFile(projectFile); err == nil {
-		projectPatterns := parseIgnoreLines(string(content))
-		patterns = append(patterns, projectPatterns...)
+		patterns = append(patterns, parseIgnoreLines(string(content))...)
 	}
 
-	// If no patterns found, return nil (no exclusions)
 	if len(patterns) == 0 {
 		return nil, nil
 	}
 
-	// Compile all patterns together
 	return ignore.CompileIgnoreLines(patterns...), nil
 }
 

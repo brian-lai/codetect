@@ -1,0 +1,9 @@
+.git
+context/
+.claude
+bin
+codetect
+codetect-daemon
+codetect-eval
+codetect-index
+t yet

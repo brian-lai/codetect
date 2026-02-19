@@ -107,9 +107,11 @@ func runEval(args []string) {
 		fmt.Fprintf(os.Stderr, "  %s\n", absCasesDir)
 		fmt.Fprintln(os.Stderr, "")
 
-		// Show centralized data directory hint
+		// Show centralized data directory hint and capture path for the prompt
+		var targetCasesDir string
 		if dd, err := datadir.ForRepoNoMigrate(absRepoPath); err == nil {
 			repoEvalDir := filepath.Join(dd, "evals", "cases")
+			targetCasesDir = repoEvalDir
 			fmt.Fprintf(os.Stderr, "For repo-specific eval cases, create them in:\n")
 			fmt.Fprintf(os.Stderr, "  %s\n", repoEvalDir)
 			fmt.Fprintln(os.Stderr, "")
@@ -118,7 +120,7 @@ func runEval(args []string) {
 		fmt.Fprintln(os.Stderr, "To create eval cases, start a Claude Code session in the target repo and paste:")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "--------------------------------------------------------------------------------")
-		fmt.Fprintln(os.Stderr, `Create eval test cases for the codetect MCP tool in .codetect/evals/cases/
+		fmt.Fprintf(os.Stderr, `Create eval test cases for the codetect MCP tool in %s
 
 These test cases will be used by codetect-eval to measure MCP search performance
 against this repository (without pre-indexing). Create JSONL files organized by
@@ -162,7 +164,8 @@ Each line should be a JSON object with this structure:
 Create 5-10 test cases per category based on this repository's actual code structure.
 Focus on queries that have clear, verifiable answers and stress test the full range
 of codetect capabilities (keyword search, semantic search, symbol navigation, call
-graphs, type relationships).`)
+graphs, type relationships).
+`, targetCasesDir)
 		fmt.Fprintln(os.Stderr, "--------------------------------------------------------------------------------")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, strings.Repeat("=", 80))

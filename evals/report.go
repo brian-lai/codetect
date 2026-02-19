@@ -166,6 +166,37 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 		report.Summary.WithMCP.AvgTotalTokens,
 		report.Summary.WithoutMCP.AvgTotalTokens,
 		report.Summary.TokenReduction)
+	// Estimated cost breakdown by token type (hardcoded Sonnet prices)
+	const (
+		inputPricePerMTok       = 3.00
+		outputPricePerMTok      = 15.00
+		cacheReadPricePerMTok   = 0.30
+		cacheCreatePricePerMTok = 3.75
+	)
+	estInputCostMCP := report.Summary.WithMCP.AvgInputTokens / 1e6 * inputPricePerMTok
+	estInputCostNoMCP := report.Summary.WithoutMCP.AvgInputTokens / 1e6 * inputPricePerMTok
+	estOutputCostMCP := report.Summary.WithMCP.AvgOutputTokens / 1e6 * outputPricePerMTok
+	estOutputCostNoMCP := report.Summary.WithoutMCP.AvgOutputTokens / 1e6 * outputPricePerMTok
+	estCacheReadCostMCP := report.Summary.WithMCP.AvgCacheReadTokens / 1e6 * cacheReadPricePerMTok
+	estCacheReadCostNoMCP := report.Summary.WithoutMCP.AvgCacheReadTokens / 1e6 * cacheReadPricePerMTok
+	estCacheCreateCostMCP := report.Summary.WithMCP.AvgCacheCreateTokens / 1e6 * cacheCreatePricePerMTok
+	estCacheCreateCostNoMCP := report.Summary.WithoutMCP.AvgCacheCreateTokens / 1e6 * cacheCreatePricePerMTok
+	fmt.Fprintf(w, "| %-18s | ~$%13.4f | ~$%13.4f | %+14.1f%% |\n",
+		"Est. Input Cost",
+		estInputCostMCP, estInputCostNoMCP,
+		calcReduction(estInputCostNoMCP, estInputCostMCP))
+	fmt.Fprintf(w, "| %-18s | ~$%13.4f | ~$%13.4f | %+14.1f%% |\n",
+		"Est. Output Cost",
+		estOutputCostMCP, estOutputCostNoMCP,
+		calcReduction(estOutputCostNoMCP, estOutputCostMCP))
+	fmt.Fprintf(w, "| %-18s | ~$%13.4f | ~$%13.4f | %+14.1f%% |\n",
+		"Est. Cache Rd Cost",
+		estCacheReadCostMCP, estCacheReadCostNoMCP,
+		calcReduction(estCacheReadCostNoMCP, estCacheReadCostMCP))
+	fmt.Fprintf(w, "| %-18s | ~$%13.4f | ~$%13.4f | %+14.1f%% |\n",
+		"Est. Cache Cr Cost",
+		estCacheCreateCostMCP, estCacheCreateCostNoMCP,
+		calcReduction(estCacheCreateCostNoMCP, estCacheCreateCostMCP))
 	fmt.Fprintf(w, "| %-18s | $%14.4f | $%14.4f | %+14.1f%% |\n",
 		"Avg Cost",
 		report.Summary.WithMCP.AvgCostUSD,
@@ -192,6 +223,9 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 		report.Summary.WithoutMCP.SuccessRate*100,
 		(report.Summary.WithMCP.SuccessRate-report.Summary.WithoutMCP.SuccessRate)*100)
 	fmt.Fprintln(w, strings.Repeat("-", 75))
+	fmt.Fprintln(w, "Note: Cache create tokens cost ~12.5x more than cache read tokens.")
+	fmt.Fprintln(w, "      Higher cache creates with MCP reflect tool result overhead (unavoidable).")
+	fmt.Fprintln(w, "      Est. cost rows use hardcoded Sonnet 3.5 prices ($3/$15/$0.30/$3.75 per MTok).")
 	fmt.Fprintln(w, "")
 
 	// Per-test breakdown

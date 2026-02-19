@@ -8,8 +8,8 @@ Executing: Eval Cost Report Improvements
 ## To-Do List
 
 - [x] Fix "Total Tokens" label to "Avg Total Tokens" in evals/report.go
-- [ ] Add cost-per-token-type breakdown rows to summary table in evals/report.go
-- [ ] Add cost summary note below the table in evals/report.go
+- [x] Add cost-per-token-type breakdown rows to summary table in evals/report.go
+- [x] Add cost summary note below the table in evals/report.go
 - [ ] Update eval generation prompt in cmd/codetect-eval/main.go
 - [ ] Add TestPrintReport_CostBreakdown unit test in evals/report_test.go
 

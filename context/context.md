@@ -7,11 +7,11 @@ Executing: Migrate Global .codetectignore to XDG Config Dir
 
 ## To-Do List
 
-- [ ] Update `internal/indexer/ignore.go` — add XDG global path and deprecation warning for legacy `~/.codetectignore`
-- [ ] Update `internal/indexer/ignore_test.go` — new tests for XDG path, legacy fallback, precedence, merge, and deprecation warning
-- [ ] Update `scripts/codetect-wrapper.sh` `cmd_doctor` — add "Ignore Files" section
-- [ ] Update `docs/codetectignore.md` — replace global path, add hierarchy section, fix reindex command
-- [ ] Update `README.md` — expand one-liner into a small section with both paths
+- [x] Update `internal/indexer/ignore.go` — add XDG global path and deprecation warning for legacy `~/.codetectignore`
+- [x] Update `internal/indexer/ignore_test.go` — new tests for XDG path, legacy fallback, precedence, merge, and deprecation warning
+- [x] Update `scripts/codetect-wrapper.sh` `cmd_doctor` — add "Ignore Files" section
+- [x] Update `docs/codetectignore.md` — replace global path, add hierarchy section, fix reindex command
+- [x] Update `README.md` — expand one-liner into a small section with both paths
 
 ## Progress Notes
 

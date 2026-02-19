@@ -162,7 +162,7 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 		report.Summary.WithoutMCP.AvgCacheCreateTokens,
 		calcReduction(report.Summary.WithoutMCP.AvgCacheCreateTokens, report.Summary.WithMCP.AvgCacheCreateTokens))
 	fmt.Fprintf(w, "| %-18s | %15.0f | %15.0f | %+14.1f%% |\n",
-		"Total Tokens",
+		"Avg Total Tokens",
 		report.Summary.WithMCP.AvgTotalTokens,
 		report.Summary.WithoutMCP.AvgTotalTokens,
 		report.Summary.TokenReduction)

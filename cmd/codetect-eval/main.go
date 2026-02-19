@@ -122,29 +122,50 @@ func runEval(args []string) {
 		fmt.Fprintln(os.Stderr, "--------------------------------------------------------------------------------")
 		fmt.Fprintf(os.Stderr, `Create eval test cases for the codetect MCP tool in %s
 
-These test cases will be used by codetect-eval to measure MCP search performance
-against this repository (without pre-indexing). Create JSONL files organized by
-category:
+These test cases will be used by codetect-eval to measure how much the codetect
+MCP improves Claude's ability to explore this codebase.
 
-- search.jsonl: keyword/regex searches, file pattern matching, semantic search
+Available tools:
+- hybrid_search_v2: PRIMARY search tool. Combines keyword + semantic signals.
+  Use for all natural-language and concept queries.
+  Parameters: query (required), limit, detail (minimal|standard|rich), rerank
+- search_keyword: Regex/exact-pattern search via ripgrep. Use only when the query
+  needs a specific regex pattern or literal string.
+  Parameters: query (required), top_k, detail (minimal|standard|rich)
+- symbols: Find symbol definitions by name, or list all definitions in a file.
+  Does NOT support call graphs or reference tracking — definitions only.
+  Parameters: mode (find|list), name, path, kind (function|type|struct|interface|
+  variable|constant), limit
+- get_file: Read file contents with an optional line range.
+  Parameters: path (required), start_line, end_line
+
+Create JSONL files organized by category:
+
+- search.jsonl: keyword/regex searches, file pattern matching, semantic concept search
+  Primary tool: hybrid_search_v2 (semantic); search_keyword (regex/literal)
   Example prompts:
   - "Find all TODO comments"
-  - "Search for error handling code"
+  - "Search for rate limiting middleware"
   - "Find files that import the database package"
+  - "Find the CORS configuration"
 
-- navigate.jsonl: symbol lookup, call graphs, type relationships, cross-references
-  Available tools: symbols (mode=find, mode=list)
+- navigate.jsonl: definition lookup, symbol kind filtering, file structure exploration
+  Primary tool: symbols (mode=find with kind filter), get_file
+  NOTE: codetect finds definitions only — do NOT create cases expecting call graphs,
+  callers, or all-references traversal.
   Example prompts:
-  - "What functions call the OpenDB method?"
-  - "Find all references to the User type"
-  - "What structs implement the Handler interface?"
-  - "Show me the definition of the Index struct"
+  - "Find the Handler interface definition"
+  - "Find all struct definitions in the handlers package"
+  - "Show me the definition of the Config type"
+  - "List all exported functions in internal/search/keyword.go"
+  - "Find all constant definitions"
 
-- understand.jsonl: code comprehension, architectural questions, hybrid search
+- understand.jsonl: code comprehension, architecture questions, multi-tool reasoning
+  Primary tool: hybrid_search_v2 (with detail=standard for snippets)
   Example prompts:
   - "How does authentication work in this codebase?"
-  - "What's the flow for processing a request?"
-  - "Find code related to database connection pooling"
+  - "Explain the middleware chain"
+  - "What's the flow for processing a card creation request?"
 
 Each line should be a JSON object with this structure:
 {
@@ -162,9 +183,8 @@ Each line should be a JSON object with this structure:
 }
 
 Create 5-10 test cases per category based on this repository's actual code structure.
-Focus on queries that have clear, verifiable answers and stress test the full range
-of codetect capabilities (keyword search, semantic search, symbol navigation, call
-graphs, type relationships).
+Focus on queries that have clear, verifiable answers. Avoid questions that require
+call-graph traversal or reference tracking (codetect does not support these).
 `, targetCasesDir)
 		fmt.Fprintln(os.Stderr, "--------------------------------------------------------------------------------")
 		fmt.Fprintln(os.Stderr, "")

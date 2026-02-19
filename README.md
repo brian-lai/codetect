@@ -51,7 +51,7 @@ codetect index     # Index symbols + generate embeddings
 claude             # Start Claude Code
 ```
 
-**Optional:** Create `.codetectignore` to exclude files from indexing (generated code, minified files, etc.). See [.codetectignore Guide](docs/codetectignore.md).
+**Excluding files:** Create `.codetectignore` in your project root to exclude files from indexing (generated code, minified files, test fixtures, etc.). For patterns that apply to all your projects, use the global file at `~/.config/codetect/ignore`. Both files use standard `.gitignore` syntax and are independent of `.gitignore`. See the [.codetectignore Guide](docs/codetectignore.md) for full docs.
 
 See [Installation Guide](docs/installation.md) for detailed setup instructions.
 

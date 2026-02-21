@@ -113,6 +113,37 @@ func TestLoadDatabaseConfigFromEnv(t *testing.T) {
 
 		os.Unsetenv("CODETECT_DB_TYPE")
 	})
+
+	t.Run("Explicit SQLite NOT overridden by postgres DSN", func(t *testing.T) {
+		os.Setenv("CODETECT_DB_TYPE", "sqlite")
+		os.Setenv("CODETECT_DB_DSN", "postgres://user:pass@localhost/test")
+
+		cfg := LoadDatabaseConfigFromEnv()
+
+		if cfg.Type != db.DatabaseSQLite {
+			t.Errorf("Expected explicit SQLite to be preserved, got %v", cfg.Type)
+		}
+		if cfg.DSN != "postgres://user:pass@localhost/test" {
+			t.Errorf("Expected DSN to still be stored, got %s", cfg.DSN)
+		}
+
+		os.Unsetenv("CODETECT_DB_TYPE")
+		os.Unsetenv("CODETECT_DB_DSN")
+	})
+
+	t.Run("Auto-detect from DSN only when type unset", func(t *testing.T) {
+		// No CODETECT_DB_TYPE set — auto-detect should kick in
+		os.Unsetenv("CODETECT_DB_TYPE")
+		os.Setenv("CODETECT_DB_DSN", "postgres://user:pass@localhost/test")
+
+		cfg := LoadDatabaseConfigFromEnv()
+
+		if cfg.Type != db.DatabasePostgres {
+			t.Errorf("Expected auto-detected PostgreSQL when type unset, got %v", cfg.Type)
+		}
+
+		os.Unsetenv("CODETECT_DB_DSN")
+	})
 }
 
 func TestToDBConfig(t *testing.T) {

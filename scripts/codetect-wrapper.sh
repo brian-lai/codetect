@@ -8,6 +8,7 @@
 #   embed          Generate embeddings for semantic search
 #   init           Initialize codetect in current directory
 #   doctor         Check installation and dependencies
+#   reconfigure    Change database, embedding, and model settings
 #   stats          Show index statistics
 #   migrate        Discover existing indexes and register them
 #   daemon         Manage background indexing daemon
@@ -56,12 +57,70 @@ info() {
     echo -e "  $1"
 }
 
+prompt() {
+    echo -e "${BLUE}?${NC} $1"
+}
+
 #
 # Load global config if exists
 #
 load_config() {
     if [[ -f "$CONFIG_FILE" ]]; then
         source "$CONFIG_FILE"
+    fi
+}
+
+#
+# Generate config.env file with unset preamble
+# Uses variables: cfg_db_type, cfg_db_dsn, cfg_embedding_provider,
+#   cfg_ollama_url, cfg_embedding_model, cfg_vector_dimensions,
+#   cfg_litellm_url, cfg_litellm_api_key
+#
+generate_config_file() {
+    local target_file="$1"
+
+    cat > "$target_file" << 'UNSET_BLOCK'
+# codetect configuration
+# Clear all codetect variables (prevents stale values from previous configs)
+unset CODETECT_DB_TYPE
+unset CODETECT_DB_DSN
+unset CODETECT_DB_PATH
+unset CODETECT_EMBEDDING_PROVIDER
+unset CODETECT_OLLAMA_URL
+unset CODETECT_LITELLM_URL
+unset CODETECT_LITELLM_API_KEY
+unset CODETECT_EMBEDDING_MODEL
+unset CODETECT_VECTOR_DIMENSIONS
+UNSET_BLOCK
+
+    # Database backend
+    echo "" >> "$target_file"
+    echo "# Database backend: sqlite or postgres" >> "$target_file"
+    echo "export CODETECT_DB_TYPE=\"$cfg_db_type\"" >> "$target_file"
+
+    if [[ "$cfg_db_type" == "postgres" && -n "$cfg_db_dsn" ]]; then
+        echo "" >> "$target_file"
+        echo "# PostgreSQL configuration" >> "$target_file"
+        echo "export CODETECT_DB_DSN=\"$cfg_db_dsn\"" >> "$target_file"
+    fi
+
+    # Embedding provider
+    echo "" >> "$target_file"
+    echo "# Embedding provider: ollama, litellm, or off" >> "$target_file"
+    echo "export CODETECT_EMBEDDING_PROVIDER=\"$cfg_embedding_provider\"" >> "$target_file"
+
+    if [[ "$cfg_embedding_provider" == "ollama" ]]; then
+        echo "" >> "$target_file"
+        echo "# Ollama configuration" >> "$target_file"
+        echo "export CODETECT_OLLAMA_URL=\"$cfg_ollama_url\"" >> "$target_file"
+        echo "export CODETECT_EMBEDDING_MODEL=\"$cfg_embedding_model\"" >> "$target_file"
+        echo "export CODETECT_VECTOR_DIMENSIONS=\"$cfg_vector_dimensions\"" >> "$target_file"
+    elif [[ "$cfg_embedding_provider" == "litellm" ]]; then
+        echo "" >> "$target_file"
+        echo "# LiteLLM configuration" >> "$target_file"
+        echo "export CODETECT_LITELLM_URL=\"$cfg_litellm_url\"" >> "$target_file"
+        echo "export CODETECT_LITELLM_API_KEY=\"$cfg_litellm_api_key\"" >> "$target_file"
+        echo "export CODETECT_EMBEDDING_MODEL=\"$cfg_embedding_model\"" >> "$target_file"
     fi
 }
 
@@ -315,6 +374,41 @@ cmd_doctor() {
     else
         info "No global config (using defaults)"
         info "Create with: mkdir -p $CONFIG_DIR && touch $CONFIG_FILE"
+    fi
+    echo ""
+
+    # Show active configuration values
+    echo "Configuration Values:"
+    local config_vars=(
+        "CODETECT_DB_TYPE"
+        "CODETECT_DB_DSN"
+        "CODETECT_DB_PATH"
+        "CODETECT_EMBEDDING_PROVIDER"
+        "CODETECT_EMBEDDING_MODEL"
+        "CODETECT_VECTOR_DIMENSIONS"
+        "CODETECT_OLLAMA_URL"
+        "CODETECT_LITELLM_URL"
+        "CODETECT_LITELLM_API_KEY"
+    )
+    local has_config=false
+    for var in "${config_vars[@]}"; do
+        local val="${!var}"
+        if [[ -n "$val" ]]; then
+            has_config=true
+            # Mask API keys
+            if [[ "$var" == *"API_KEY"* ]]; then
+                info "$var=****${val: -4}"
+            # Mask password in DSN
+            elif [[ "$var" == *"DSN"* && "$val" == *"@"* ]]; then
+                local masked=$(echo "$val" | sed 's|://[^:]*:[^@]*@|://***:***@|')
+                info "$var=$masked"
+            else
+                info "$var=$val"
+            fi
+        fi
+    done
+    if [[ "$has_config" == "false" ]]; then
+        info "(no codetect variables set)"
     fi
     echo ""
 
@@ -939,6 +1033,197 @@ migrate_help() {
     echo "  codetect migrate ~/work ~/personal # Scan specific directories"
 }
 
+#
+# Reconfigure command
+#
+cmd_reconfigure() {
+    load_config
+
+    echo -e "${CYAN}codetect Configuration${NC}"
+    echo "======================"
+    echo ""
+
+    # Read current values (with defaults)
+    local old_db_type="${CODETECT_DB_TYPE:-sqlite}"
+    local old_db_dsn="${CODETECT_DB_DSN:-}"
+    local old_embedding_provider="${CODETECT_EMBEDDING_PROVIDER:-ollama}"
+    local old_ollama_url="${CODETECT_OLLAMA_URL:-http://localhost:11434}"
+    local old_embedding_model="${CODETECT_EMBEDDING_MODEL:-nomic-embed-text}"
+    local old_vector_dimensions="${CODETECT_VECTOR_DIMENSIONS:-768}"
+    local old_litellm_url="${CODETECT_LITELLM_URL:-http://localhost:4000}"
+    local old_litellm_api_key="${CODETECT_LITELLM_API_KEY:-}"
+
+    # --- Database backend ---
+    echo -e "${CYAN}Database Backend${NC}"
+    echo ""
+
+    local db_default=1
+    [[ "$old_db_type" == "postgres" ]] && db_default=2
+
+    if [[ "$old_db_type" == "sqlite" ]]; then
+        echo -e "  ${GREEN}1)${NC} SQLite (current)"
+        echo -e "  ${GREEN}2)${NC} PostgreSQL"
+    else
+        echo -e "  ${GREEN}1)${NC} SQLite"
+        echo -e "  ${GREEN}2)${NC} PostgreSQL (current)"
+    fi
+    echo ""
+    read -p "$(prompt "Your choice [$db_default]: ")" db_choice
+    db_choice=${db_choice:-$db_default}
+
+    cfg_db_type="sqlite"
+    cfg_db_dsn=""
+    if [[ "$db_choice" == "2" ]]; then
+        cfg_db_type="postgres"
+        echo ""
+        read -p "$(prompt "PostgreSQL DSN [$old_db_dsn]: ")" cfg_db_dsn
+        cfg_db_dsn=${cfg_db_dsn:-$old_db_dsn}
+    fi
+    echo ""
+
+    # --- Embedding provider ---
+    echo -e "${CYAN}Embedding Provider${NC}"
+    echo ""
+
+    local emb_default=1
+    [[ "$old_embedding_provider" == "litellm" ]] && emb_default=2
+    [[ "$old_embedding_provider" == "off" ]] && emb_default=3
+
+    if [[ "$old_embedding_provider" == "ollama" ]]; then
+        echo -e "  ${GREEN}1)${NC} Ollama (current)"
+    else
+        echo -e "  ${GREEN}1)${NC} Ollama"
+    fi
+    if [[ "$old_embedding_provider" == "litellm" ]]; then
+        echo -e "  ${GREEN}2)${NC} LiteLLM (current)"
+    else
+        echo -e "  ${GREEN}2)${NC} LiteLLM"
+    fi
+    if [[ "$old_embedding_provider" == "off" ]]; then
+        echo -e "  ${GREEN}3)${NC} Off (current)"
+    else
+        echo -e "  ${GREEN}3)${NC} Off (disable semantic search)"
+    fi
+    echo ""
+    read -p "$(prompt "Your choice [$emb_default]: ")" emb_choice
+    emb_choice=${emb_choice:-$emb_default}
+
+    cfg_embedding_provider="ollama"
+    cfg_ollama_url="$old_ollama_url"
+    cfg_embedding_model="$old_embedding_model"
+    cfg_vector_dimensions="$old_vector_dimensions"
+    cfg_litellm_url="$old_litellm_url"
+    cfg_litellm_api_key="$old_litellm_api_key"
+
+    case "$emb_choice" in
+        1)
+            cfg_embedding_provider="ollama"
+            echo ""
+
+            # Model selection menu
+            echo -e "${CYAN}Embedding Model${NC}"
+            echo ""
+
+            local model_default=1
+            case "$old_embedding_model" in
+                bge-m3) model_default=1 ;;
+                snowflake-arctic-embed*) model_default=2 ;;
+                jina-embeddings-v3) model_default=3 ;;
+                nomic-embed-text) model_default=4 ;;
+                *) model_default=5 ;;
+            esac
+
+            echo -e "  ${GREEN}1)${NC} bge-m3 (recommended, 1024 dims)$([ "$old_embedding_model" = "bge-m3" ] && echo " (current)")"
+            echo -e "  ${GREEN}2)${NC} snowflake-arctic-embed-l-v2.0 (1024 dims)$([ "$old_embedding_model" = "snowflake-arctic-embed" ] && echo " (current)")"
+            echo -e "  ${GREEN}3)${NC} jina-embeddings-v3 (1024 dims)$([ "$old_embedding_model" = "jina-embeddings-v3" ] && echo " (current)")"
+            echo -e "  ${GREEN}4)${NC} nomic-embed-text (768 dims)$([ "$old_embedding_model" = "nomic-embed-text" ] && echo " (current)")"
+            echo -e "  ${GREEN}5)${NC} Custom"
+            echo ""
+            read -p "$(prompt "Your choice [$model_default]: ")" model_choice
+            model_choice=${model_choice:-$model_default}
+
+            case "$model_choice" in
+                1) cfg_embedding_model="bge-m3"; cfg_vector_dimensions="1024" ;;
+                2) cfg_embedding_model="snowflake-arctic-embed"; cfg_vector_dimensions="1024" ;;
+                3) cfg_embedding_model="jina-embeddings-v3"; cfg_vector_dimensions="1024" ;;
+                4) cfg_embedding_model="nomic-embed-text"; cfg_vector_dimensions="768" ;;
+                5)
+                    read -p "$(prompt "Model name [$old_embedding_model]: ")" cfg_embedding_model
+                    cfg_embedding_model=${cfg_embedding_model:-$old_embedding_model}
+                    read -p "$(prompt "Vector dimensions [$old_vector_dimensions]: ")" cfg_vector_dimensions
+                    cfg_vector_dimensions=${cfg_vector_dimensions:-$old_vector_dimensions}
+                    ;;
+            esac
+
+            echo ""
+            read -p "$(prompt "Ollama URL [$old_ollama_url]: ")" cfg_ollama_url
+            cfg_ollama_url=${cfg_ollama_url:-$old_ollama_url}
+            ;;
+
+        2)
+            cfg_embedding_provider="litellm"
+            echo ""
+            read -p "$(prompt "LiteLLM URL [$old_litellm_url]: ")" cfg_litellm_url
+            cfg_litellm_url=${cfg_litellm_url:-$old_litellm_url}
+            read -p "$(prompt "API Key [$old_litellm_api_key]: ")" cfg_litellm_api_key
+            cfg_litellm_api_key=${cfg_litellm_api_key:-$old_litellm_api_key}
+            read -p "$(prompt "Embedding model [$old_embedding_model]: ")" cfg_embedding_model
+            cfg_embedding_model=${cfg_embedding_model:-$old_embedding_model}
+            ;;
+
+        3)
+            cfg_embedding_provider="off"
+            ;;
+    esac
+
+    echo ""
+
+    # Detect changes
+    local changes=()
+    [[ "$old_db_type" != "$cfg_db_type" ]] && changes+=("Database: $old_db_type -> $cfg_db_type")
+    [[ "$old_db_dsn" != "$cfg_db_dsn" && "$cfg_db_type" == "postgres" ]] && changes+=("DSN: updated")
+    [[ "$old_embedding_provider" != "$cfg_embedding_provider" ]] && changes+=("Provider: $old_embedding_provider -> $cfg_embedding_provider")
+    [[ "$old_embedding_model" != "$cfg_embedding_model" ]] && changes+=("Model: $old_embedding_model -> $cfg_embedding_model")
+    [[ "$old_vector_dimensions" != "$cfg_vector_dimensions" ]] && changes+=("Dimensions: $old_vector_dimensions -> $cfg_vector_dimensions")
+    [[ "$old_ollama_url" != "$cfg_ollama_url" && "$cfg_embedding_provider" == "ollama" ]] && changes+=("Ollama URL: $old_ollama_url -> $cfg_ollama_url")
+
+    if [[ ${#changes[@]} -eq 0 ]]; then
+        success "No changes — configuration unchanged"
+        return 0
+    fi
+
+    # Create backup
+    mkdir -p "$CONFIG_DIR"
+    local backup_file="$CONFIG_FILE.backup.$(date +%Y%m%d-%H%M%S)"
+    if [[ -f "$CONFIG_FILE" ]]; then
+        cp "$CONFIG_FILE" "$backup_file"
+    fi
+
+    # Generate new config
+    generate_config_file "$CONFIG_FILE"
+
+    success "Configuration updated"
+    if [[ -f "$backup_file" ]]; then
+        info "Backup: $backup_file"
+    fi
+    echo ""
+
+    info "Changes:"
+    for change in "${changes[@]}"; do
+        info "  $change"
+    done
+    echo ""
+
+    # Warn on dimension change
+    if [[ "$old_vector_dimensions" != "$cfg_vector_dimensions" ]]; then
+        warn "Dimension change detected — re-embed your projects:"
+        info "  codetect embed --force"
+        echo ""
+    fi
+
+    info "Run 'source $CONFIG_FILE' to apply in current shell"
+}
+
 cmd_version() {
     local source_dir="${CODETECT_SOURCE:-$HOME/dev/codetect}"
 
@@ -992,6 +1277,7 @@ cmd_help() {
     echo "  embed [path]    Generate embeddings for semantic search"
     echo "  init [-f]       Create .mcp.json in current directory"
     echo "  doctor          Check installation and dependencies"
+    echo "  reconfigure     Change database, embedding, and model settings"
     echo "  stats           Show index statistics"
     echo "  migrate         Discover existing indexes and register them"
     echo "  daemon <cmd>    Manage background indexing daemon"
@@ -1047,6 +1333,9 @@ main() {
             ;;
         doctor)
             cmd_doctor "$@"
+            ;;
+        reconfigure)
+            cmd_reconfigure "$@"
             ;;
         stats)
             cmd_stats "$@"

@@ -38,6 +38,7 @@ func LoadDatabaseConfigFromEnv() DatabaseConfig {
 	}
 
 	// Check for explicit database type
+	typeExplicitlySet := os.Getenv("CODETECT_DB_TYPE") != ""
 	if dbType := os.Getenv("CODETECT_DB_TYPE"); dbType != "" {
 		switch strings.ToLower(dbType) {
 		case "postgres", "postgresql":
@@ -54,8 +55,9 @@ func LoadDatabaseConfigFromEnv() DatabaseConfig {
 	if dsn := os.Getenv("CODETECT_DB_DSN"); dsn != "" {
 		cfg.DSN = dsn
 
-		// Auto-detect database type from DSN if not explicitly set
-		if cfg.Type == db.DatabaseSQLite && strings.HasPrefix(dsn, "postgres://") {
+		// Auto-detect database type from DSN only when CODETECT_DB_TYPE is not set.
+		// When the user explicitly sets CODETECT_DB_TYPE, respect their choice.
+		if !typeExplicitlySet && strings.HasPrefix(dsn, "postgres://") {
 			cfg.Type = db.DatabasePostgres
 		}
 	}

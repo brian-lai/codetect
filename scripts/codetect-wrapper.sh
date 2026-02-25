@@ -151,7 +151,7 @@ cmd_index() {
     done
 
     echo -e "${CYAN}Indexing symbols in: ${target_dir}${NC}"
-    "$BIN_DIR/codetect-index" index "$target_dir" "${extra_flags[@]}"
+    "$BIN_DIR/codetect-index" index "${extra_flags[@]}" "$target_dir"
     success "Symbol indexing complete"
 }
 

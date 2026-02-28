@@ -157,9 +157,9 @@ else
     echo ""
 fi
 
-# Build
+# Build (clean first to avoid stale Go build cache across version switches)
 echo "Building..."
-make build
+make clean build
 success "Build complete"
 echo ""
 

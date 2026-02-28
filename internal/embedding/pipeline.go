@@ -144,6 +144,12 @@ func (p *Pipeline) EmbedChunks(ctx context.Context, repoRoot string, chunks []Ch
 
 	// 5. Embed new chunks
 	if len(toEmbed) > 0 {
+		// Count unique hashes sent to embed
+		toEmbedUnique := make(map[string]bool)
+		for _, pc := range toEmbed {
+			toEmbedUnique[pc.ContentHash] = true
+		}
+
 		embedStart := time.Now()
 		newEmbeddings, err := p.embedNewChunks(ctx, toEmbed)
 		if err != nil {
@@ -151,12 +157,17 @@ func (p *Pipeline) EmbedChunks(ctx context.Context, repoRoot string, chunks []Ch
 		}
 		result.EmbedTime = time.Since(embedStart)
 
+		// Track chunks that were sent but got nil back (partial failures)
+		result.Errors = len(toEmbedUnique) - len(newEmbeddings)
+
 		// 6. Store in cache
-		cacheStoreStart := time.Now()
-		if err := p.cache.PutBatch(newEmbeddings); err != nil {
-			return nil, fmt.Errorf("cache store failed: %w", err)
+		if len(newEmbeddings) > 0 {
+			cacheStoreStart := time.Now()
+			if err := p.cache.PutBatch(newEmbeddings); err != nil {
+				return nil, fmt.Errorf("cache store failed: %w", err)
+			}
+			result.CacheTime += time.Since(cacheStoreStart)
 		}
-		result.CacheTime += time.Since(cacheStoreStart)
 
 		result.Embedded = len(newEmbeddings)
 	}
@@ -195,6 +206,8 @@ func (p *Pipeline) EmbedChunks(ctx context.Context, repoRoot string, chunks []Ch
 }
 
 // embedNewChunks embeds chunks that weren't found in cache.
+// Returns a map of content hash -> embedding for successfully embedded chunks.
+// Chunks that fail to embed (nil entries from the embedder) are skipped.
 func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (map[string][]float32, error) {
 	if len(chunks) == 0 {
 		return make(map[string][]float32), nil
@@ -231,7 +244,9 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (
 		}
 
 		for j, emb := range embeddings {
-			result[batchHashes[j]] = emb
+			if emb != nil {
+				result[batchHashes[j]] = emb
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@ package embedding
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"codetect/internal/db"
@@ -579,6 +580,170 @@ func TestEmbedChunksTiming(t *testing.T) {
 
 	t.Logf("Timing: Duration=%v, EmbedTime=%v, CacheTime=%v",
 		result.Duration, result.EmbedTime, result.CacheTime)
+}
+
+// failingMockEmbedder returns nil for texts exceeding a configurable character length,
+// simulating what happens when Ollama rejects oversized chunks.
+type failingMockEmbedder struct {
+	maxLen     int // texts longer than this will "fail"
+	dimensions int
+	embedCount int // successfully embedded
+	failCount  int // failed to embed
+}
+
+func newFailingMockEmbedder(dims, maxLen int) *failingMockEmbedder {
+	return &failingMockEmbedder{
+		maxLen:     maxLen,
+		dimensions: dims,
+	}
+}
+
+func (m *failingMockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	result := make([][]float32, len(texts))
+	var failures int
+	for i, text := range texts {
+		if len(text) > m.maxLen {
+			// Simulate failure for oversized text — return nil slot
+			failures++
+			m.failCount++
+			continue
+		}
+		emb := make([]float32, m.dimensions)
+		for j := 0; j < m.dimensions; j++ {
+			emb[j] = float32(len(text)+j) / float32(m.dimensions)
+		}
+		result[i] = emb
+		m.embedCount++
+	}
+	if failures == len(texts) {
+		return nil, fmt.Errorf("all %d texts failed to embed", len(texts))
+	}
+	return result, nil
+}
+
+func (m *failingMockEmbedder) Available() bool     { return true }
+func (m *failingMockEmbedder) ProviderID() string   { return "mock-failing:test" }
+func (m *failingMockEmbedder) Dimensions() int      { return m.dimensions }
+
+// setupTestPipelineWithEmbedder creates a pipeline with a custom embedder for testing.
+func setupTestPipelineWithEmbedder(t *testing.T, embedder Embedder) *Pipeline {
+	t.Helper()
+
+	cfg := db.DefaultConfig(":memory:")
+	database, err := db.Open(cfg)
+	if err != nil {
+		t.Fatalf("opening database: %v", err)
+	}
+
+	t.Cleanup(func() {
+		database.Close()
+	})
+
+	cache, err := NewEmbeddingCache(database, cfg.Dialect(), 768, "test-model")
+	if err != nil {
+		t.Fatalf("creating cache: %v", err)
+	}
+
+	locations, err := NewLocationStore(database, cfg.Dialect())
+	if err != nil {
+		t.Fatalf("creating location store: %v", err)
+	}
+
+	return NewPipeline(cache, locations, embedder)
+}
+
+func TestEmbedChunksPartialFailure(t *testing.T) {
+	// One chunk exceeds the max length (50 chars), 4 are under.
+	embedder := newFailingMockEmbedder(768, 50)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	ctx := context.Background()
+
+	chunks := []Chunk{
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},           // 12 chars - OK
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},           // 12 chars - OK
+		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},           // 12 chars - OK
+		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "func d() {}"},           // 12 chars - OK
+		{Path: "e.go", StartLine: 1, EndLine: 100, Content: "// " + string(make([]byte, 100))}, // >50 chars - FAIL
+	}
+
+	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err != nil {
+		t.Fatalf("EmbedChunks should not return error on partial failure: %v", err)
+	}
+
+	if result.Total != 5 {
+		t.Errorf("Total = %d, want 5", result.Total)
+	}
+	if result.Embedded != 4 {
+		t.Errorf("Embedded = %d, want 4", result.Embedded)
+	}
+	if result.Errors != 1 {
+		t.Errorf("Errors = %d, want 1", result.Errors)
+	}
+
+	// Locations should be saved for the 4 successful chunks
+	locs, _ := pipeline.Locations().GetByRepo("/project")
+	if len(locs) != 5 {
+		t.Errorf("expected 5 locations (all chunks get locations), got %d", len(locs))
+	}
+
+	// Embedder should have embedded 4
+	if embedder.embedCount != 4 {
+		t.Errorf("embedder embed count = %d, want 4", embedder.embedCount)
+	}
+	if embedder.failCount != 1 {
+		t.Errorf("embedder fail count = %d, want 1", embedder.failCount)
+	}
+}
+
+func TestEmbedChunksAllFail(t *testing.T) {
+	// All chunks exceed the max length.
+	embedder := newFailingMockEmbedder(768, 5)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	ctx := context.Background()
+
+	chunks := []Chunk{
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},  // 12 chars > 5
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},  // 12 chars > 5
+	}
+
+	_, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err == nil {
+		t.Fatal("EmbedChunks should return error when all chunks fail")
+	}
+}
+
+func TestEmbedChunksMixedBatches(t *testing.T) {
+	// Use batch size of 2 so chunks spread across multiple batches.
+	// Some chunks in each batch will fail.
+	embedder := newFailingMockEmbedder(768, 20)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.batchSize = 2 // Force small batches
+	ctx := context.Background()
+
+	chunks := []Chunk{
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},                        // 12 chars - OK (batch 1)
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "// long comment that exceeds limit"}, // 34 chars - FAIL (batch 1)
+		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},                        // 12 chars - OK (batch 2)
+		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "// another oversized content here"},  // 34 chars - FAIL (batch 2)
+		{Path: "e.go", StartLine: 1, EndLine: 10, Content: "func e() {}"},                        // 12 chars - OK (batch 3)
+	}
+
+	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err != nil {
+		t.Fatalf("EmbedChunks should not return error on mixed batch failures: %v", err)
+	}
+
+	if result.Total != 5 {
+		t.Errorf("Total = %d, want 5", result.Total)
+	}
+	// 3 successful embeddings across all batches
+	if result.Embedded != 3 {
+		t.Errorf("Embedded = %d, want 3", result.Embedded)
+	}
+	if result.Errors != 2 {
+		t.Errorf("Errors = %d, want 2", result.Errors)
+	}
 }
 
 func BenchmarkEmbedChunks(b *testing.B) {

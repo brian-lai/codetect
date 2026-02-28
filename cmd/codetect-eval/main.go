@@ -182,6 +182,16 @@ Each line should be a JSON object with this structure:
   }
 }
 
+Ground truth best practices:
+- FILES: List ALL valid file locations, not just the first found. If a constant or
+  type is defined in both types.go and store.go, list both files.
+- SYMBOLS: Prefer specific multi-word identifiers over generic names.
+  Good: "ProcessPayment", "NewOAuthClient". Bad: "Register", "Handle", "Process".
+  Avoid single common words that appear everywhere in any answer about the topic.
+- CONTENT: Always populate with 2-3 distinctive phrases a correct answer should
+  contain (e.g. ["JWT verification", "Okta provider"]). This provides scoring
+  resilience when the model paraphrases instead of citing exact function names.
+
 Create 5-10 test cases per category based on this repository's actual code structure.
 Focus on queries that have clear, verifiable answers. Avoid questions that require
 call-graph traversal or reference tracking (codetect does not support these).

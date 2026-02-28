@@ -230,10 +230,10 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 
 	// Per-test breakdown
 	fmt.Fprintln(w, "Per-Test Results:")
-	fmt.Fprintln(w, strings.Repeat("-", 90))
-	fmt.Fprintf(w, "| %-12s | %-10s | %-30s | %-8s | %-8s | %-8s |\n",
-		"ID", "Category", "Description", "MCP F1", "No-MCP", "Winner")
-	fmt.Fprintln(w, strings.Repeat("-", 90))
+	fmt.Fprintln(w, strings.Repeat("-", 100))
+	fmt.Fprintf(w, "| %-12s | %-10s | %-30s | %-8s | %-8s | %-8s | %-5s |\n",
+		"ID", "Category", "Description", "MCP F1", "No-MCP", "Winner", "Notes")
+	fmt.Fprintln(w, strings.Repeat("-", 100))
 
 	for _, cr := range report.Results {
 		desc := cr.Description
@@ -246,15 +246,17 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 		} else if cr.Winner == ModeWithoutMCP {
 			winner = "No-MCP"
 		}
-		fmt.Fprintf(w, "| %-12s | %-10s | %-30s | %7.1f%% | %7.1f%% | %-8s |\n",
+		notes := contentNote(cr.WithMCP, cr.WithoutMCP)
+		fmt.Fprintf(w, "| %-12s | %-10s | %-30s | %7.1f%% | %7.1f%% | %-8s | %-5s |\n",
 			cr.TestCaseID,
 			cr.Category,
 			desc,
 			cr.WithMCP.F1Score*100,
 			cr.WithoutMCP.F1Score*100,
-			winner)
+			winner,
+			notes)
 	}
-	fmt.Fprintln(w, strings.Repeat("-", 90))
+	fmt.Fprintln(w, strings.Repeat("-", 100))
 }
 
 // PrintReportToStdout prints the report to stdout.
@@ -291,6 +293,16 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dms", d.Milliseconds())
 	}
 	return fmt.Sprintf("%.1fs", d.Seconds())
+}
+
+// contentNote returns a short annotation when content matches contributed to scoring.
+// e.g. "+3C" means 3 content items matched (across either mode).
+func contentNote(mcp, noMcp ValidationResult) string {
+	total := len(mcp.ContentFound) + len(noMcp.ContentFound)
+	if total == 0 {
+		return ""
+	}
+	return fmt.Sprintf("+%dC", total)
 }
 
 // calcReduction calculates the percentage reduction from baseline to new value.

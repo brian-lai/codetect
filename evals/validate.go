@@ -56,9 +56,21 @@ func (v *Validator) Validate(tc TestCase, result RunResult) ValidationResult {
 		}
 	}
 
+	// Check content snippets
+	expectedContent := tc.GroundTruth.Content
+	if len(expectedContent) > 0 {
+		for _, snippet := range expectedContent {
+			if strings.Contains(output, strings.ToLower(snippet)) {
+				vr.ContentFound = append(vr.ContentFound, snippet)
+			} else {
+				vr.ContentMissed = append(vr.ContentMissed, snippet)
+			}
+		}
+	}
+
 	// Calculate precision, recall, F1
-	totalExpected := len(expectedFiles) + len(expectedSymbols)
-	totalFound := len(vr.FilesFound) + len(vr.SymbolsFound)
+	totalExpected := len(expectedFiles) + len(expectedSymbols) + len(expectedContent)
+	totalFound := len(vr.FilesFound) + len(vr.SymbolsFound) + len(vr.ContentFound)
 
 	if totalExpected > 0 {
 		vr.Recall = float64(totalFound) / float64(totalExpected)

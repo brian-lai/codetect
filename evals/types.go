@@ -57,10 +57,12 @@ type ValidationResult struct {
 	Precision  float64       `json:"precision"` // Correct items / Total returned
 	Recall     float64       `json:"recall"`    // Correct items / Total expected
 	F1Score    float64       `json:"f1_score"`  // Harmonic mean of precision and recall
-	FilesFound []string      `json:"files_found"`
-	FilesMissed []string     `json:"files_missed"`
-	SymbolsFound []string    `json:"symbols_found"`
-	SymbolsMissed []string   `json:"symbols_missed"`
+	FilesFound    []string `json:"files_found"`
+	FilesMissed   []string `json:"files_missed"`
+	SymbolsFound  []string `json:"symbols_found"`
+	SymbolsMissed []string `json:"symbols_missed"`
+	ContentFound  []string `json:"content_found,omitempty"`
+	ContentMissed []string `json:"content_missed,omitempty"`
 }
 
 // EvalConfig holds configuration for an evaluation run.

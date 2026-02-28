@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -107,12 +108,29 @@ type openAIEmbeddingResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// Embed implements Embedder.Embed - generates embeddings for multiple texts
+// Embed implements Embedder.Embed - generates embeddings for multiple texts.
+// If the batch API call fails (e.g., due to an oversized text), retries each text
+// individually and skips failures. Returns nil entries for failed texts.
 func (c *LiteLLMClient) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
 
+	embeddings, err := c.embedBatch(ctx, texts)
+	if err == nil {
+		return embeddings, nil
+	}
+
+	// Batch failed — fall back to individual embedding
+	slog.Warn("batch embedding failed, retrying individually",
+		"count", len(texts),
+		"error", err)
+
+	return c.embedIndividualFallback(ctx, texts)
+}
+
+// embedBatch sends all texts in a single API call.
+func (c *LiteLLMClient) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	reqBody := openAIEmbeddingRequest{
 		Model: c.model,
 		Input: texts,
@@ -164,6 +182,38 @@ func (c *LiteLLMClient) Embed(ctx context.Context, texts []string) ([][]float32,
 			return nil, fmt.Errorf("invalid index %d in response", item.Index)
 		}
 		embeddings[item.Index] = item.Embedding
+	}
+
+	return embeddings, nil
+}
+
+// embedIndividualFallback retries each text individually, skipping failures.
+// Returns nil entries for texts that fail. Returns error only if ALL texts fail.
+func (c *LiteLLMClient) embedIndividualFallback(ctx context.Context, texts []string) ([][]float32, error) {
+	embeddings := make([][]float32, len(texts))
+	var failures int
+
+	for i, text := range texts {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		emb, err := c.embedBatch(ctx, []string{text})
+		if err != nil {
+			slog.Warn("skipping chunk that failed to embed",
+				"index", i,
+				"text_len", len(text),
+				"error", err)
+			failures++
+			continue // embeddings[i] stays nil
+		}
+		embeddings[i] = emb[0]
+	}
+
+	if failures == len(texts) {
+		return nil, fmt.Errorf("all %d texts failed to embed individually", len(texts))
 	}
 
 	return embeddings, nil

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -198,9 +199,12 @@ func (c *OllamaClient) EmbedBatch(texts []string) ([][]float32, error) {
 	return c.EmbedBatchWithContext(ctx, texts)
 }
 
-// EmbedBatchWithContext generates embeddings for multiple texts with a custom context
+// EmbedBatchWithContext generates embeddings for multiple texts with a custom context.
+// Individual texts that fail to embed are skipped (logged as warnings) and their slot
+// is left nil. Only returns an error if the context is cancelled or ALL texts fail.
 func (c *OllamaClient) EmbedBatchWithContext(ctx context.Context, texts []string) ([][]float32, error) {
 	embeddings := make([][]float32, len(texts))
+	var failures int
 
 	for i, text := range texts {
 		select {
@@ -211,9 +215,18 @@ func (c *OllamaClient) EmbedBatchWithContext(ctx context.Context, texts []string
 
 		emb, err := c.EmbedWithContext(ctx, text)
 		if err != nil {
-			return nil, fmt.Errorf("embedding text %d: %w", i, err)
+			slog.Warn("skipping chunk that failed to embed",
+				"index", i,
+				"text_len", len(text),
+				"error", err)
+			failures++
+			continue // embeddings[i] stays nil
 		}
 		embeddings[i] = emb
+	}
+
+	if failures == len(texts) {
+		return nil, fmt.Errorf("all %d texts failed to embed", len(texts))
 	}
 
 	return embeddings, nil

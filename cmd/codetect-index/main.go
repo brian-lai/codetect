@@ -66,6 +66,7 @@ func runIndex(args []string) {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	force := fs.Bool("force", false, "Force full reindex")
 	fs.BoolVar(force, "f", false, "Short for --force")
+	clearCache := fs.Bool("clear-cache", false, "Clear embedding cache before indexing")
 	useV1 := fs.Bool("v1", false, "Use legacy v1 indexer (ctags-based, deprecated)")
 	verbose := fs.Bool("verbose", false, "Enable verbose output")
 	fs.BoolVar(verbose, "v", false, "Short for --verbose")
@@ -86,7 +87,7 @@ func runIndex(args []string) {
 
 	// Default to v2 indexer (AST-based)
 	if !*useV1 {
-		runIndexV2(absPath, *force, *verbose, *jsonOutput)
+		runIndexV2(absPath, *force, *clearCache, *verbose, *jsonOutput)
 		return
 	}
 
@@ -160,7 +161,7 @@ func runIndex(args []string) {
 
 // runIndexV2 uses the new v2 indexer with Merkle tree change detection,
 // AST-based chunking, and content-addressed embedding cache.
-func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
+func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool) {
 	// Load configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 	embConfig := embedding.LoadConfigFromEnv()
@@ -208,6 +209,21 @@ func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
 		os.Exit(1)
 	}
 	defer idx.Close()
+
+	// Clear embedding cache if requested
+	if clearCache {
+		logger.Warn("clearing embedding cache — all chunks will be re-embedded")
+		if cache := idx.Cache(); cache != nil {
+			if err := cache.Clear(); err != nil {
+				logger.Error("failed to clear embedding cache", "error", err)
+				os.Exit(1)
+			}
+			count, _ := cache.Count()
+			if verbose {
+				logger.Info("embedding cache cleared", "remaining", count)
+			}
+		}
+	}
 
 	// Create progress bar if outputting to terminal and not in verbose mode
 	var progressBar *progressbar.ProgressBar

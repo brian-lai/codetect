@@ -1,27 +1,28 @@
 # Current Work Summary
 
-Fix config bugs (stale env var override, auto-detect logic) and add `codetect reconfigure` command.
+Executing: Legacy Cleanup — Dead Code, Broken Tests, and Architectural Mismatches
 
-**Branch:** `para/config-bugs-and-reconfigure`
-**Master Plan:** context/plans/2026-02-20-config-bugs-and-reconfigure.md
-**Phase:** Complete
+**Branch:** `para/legacy-cleanup`
+**Plan:** context/plans/2026-03-01-legacy-cleanup.md
 
 ## To-Do List
-- [x] Phase 1: Fix auto-detect override in database.go
-- [x] Phase 2: Add unset preamble to config.env generation (installer)
-- [x] Phase 3: Add `codetect reconfigure` command (wrapper script)
-- [x] Phase 4: Enhance `codetect doctor` with config values
+
+- [ ] Delete dead files: `internal/search/retriever.go` and `internal/search/hybrid/` directory
+- [ ] Clean up `internal/search/enrichment.go`: remove `EnrichHybridResults`, `enrichWithScopeInfo`, and `hybrid` import
+- [ ] Fix `internal/tools/config.go`: remove v1 EmbeddingStore creation, pass nil store to Enricher
+- [ ] Fix `internal/tools/symbols.go`: move parameter validation before `SymbolIndex()` call
+- [ ] Fix `internal/search/symbols/astgrep.go`: use `--json=stream` and fix `metaVariables` struct parsing
+- [ ] Run tests and verify all fixes
 
 ## Progress Notes
-- Diagnosed root cause: CODETECT_DB_DSN lingers in env after config.env regeneration
-- database.go auto-detect overrides explicit CODETECT_DB_TYPE=sqlite
-- All 4 phases implemented, tests passing
+
+_Update this section as you complete items._
 
 ---
 
 ```json
 {
-  "active_context": ["context/plans/2026-02-20-config-bugs-and-reconfigure.md"],
+  "active_context": ["context/plans/2026-03-01-legacy-cleanup.md"],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
     "context/summaries/2026-02-01-registry-stats-update-summary.md",
@@ -35,7 +36,8 @@ Fix config bugs (stale env var override, auto-detect logic) and add `codetect re
     "context/summaries/2026-02-18-codetectignore-global-config-summary.md",
     "context/summaries/2026-02-19-eval-cost-report-improvements-summary.md"
   ],
-  "execution_branch": "para/config-bugs-and-reconfigure",
-  "last_updated": "2026-02-20T17:30:00Z"
+  "execution_branch": "para/legacy-cleanup",
+  "execution_started": "2026-03-01T12:00:00Z",
+  "last_updated": "2026-03-01T12:00:00Z"
 }
 ```

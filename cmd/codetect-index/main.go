@@ -1083,10 +1083,11 @@ Usage:
   codetect-index help                      Show this help
 
 Index Options:
-  --force, -f    Force full reindex (default: incremental)
-  --v1           Use legacy v1 indexer (ctags-based, deprecated)
-  --verbose, -v  Enable verbose output
-  --json         Output results as JSON
+  --force, -f      Re-chunk all files and update locations (embedding cache still used)
+  --clear-cache    Clear embedding cache before indexing (forces re-embedding)
+  --v1             Use legacy v1 indexer (ctags-based, deprecated)
+  --verbose, -v    Enable verbose output
+  --json           Output results as JSON
 
 Stats Options:
   --v1           Show v1 index statistics (deprecated)
@@ -1139,10 +1140,17 @@ Install:
   Ubuntu:  apt install universal-ctags (only for --v1 mode)
 
 Examples:
-  # v2 indexing (AST-based, default)
-  codetect-index index .
-  codetect-index embed -j 10
-  codetect-index stats
+  # Incremental index (only changed files, uses cache)
+  codetect index
+
+  # Full re-chunk (all files re-processed, cache still used for embeddings)
+  codetect index --force
+
+  # Re-embed everything (clears cache, then incremental chunk)
+  codetect index --clear-cache
+
+  # Nuclear option: re-chunk all files AND re-embed from scratch
+  codetect index --force --clear-cache
 
   # Legacy v1 indexing (deprecated)
   codetect-index index --v1 .

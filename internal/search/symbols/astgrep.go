@@ -12,10 +12,21 @@ import (
 
 // AstGrepEntry represents a single match from ast-grep JSON output
 type AstGrepEntry struct {
-	Text  string            `json:"text"`
-	Range AstGrepRange      `json:"range"`
-	File  string            `json:"file"`
-	Meta  map[string]string `json:"metaVariables,omitempty"`
+	Text  string           `json:"text"`
+	Range AstGrepRange     `json:"range"`
+	File  string           `json:"file"`
+	Meta  AstGrepMetaVars  `json:"metaVariables,omitempty"`
+}
+
+// AstGrepMetaVars represents the metaVariables structure from ast-grep --json=stream
+type AstGrepMetaVars struct {
+	Single map[string]AstGrepMetaVar `json:"single"`
+}
+
+// AstGrepMetaVar represents a single captured meta-variable
+type AstGrepMetaVar struct {
+	Text  string       `json:"text"`
+	Range AstGrepRange `json:"range"`
 }
 
 // AstGrepRange represents the location of a match
@@ -268,7 +279,7 @@ func RunAstGrep(root string, files []string, language string) ([]Symbol, error) 
 	// Run ast-grep for each pattern type
 	for _, pattern := range langPatterns.Patterns {
 		args := []string{
-			"--json",
+			"--json=stream",
 			"--pattern", pattern.Pattern,
 			"--lang", langPatterns.Language,
 		}
@@ -314,7 +325,10 @@ func RunAstGrep(root string, files []string, language string) ([]Symbol, error) 
 // astGrepEntryToSymbol converts an ast-grep entry to a Symbol
 func astGrepEntryToSymbol(entry AstGrepEntry, kind string, root string) Symbol {
 	// Extract name from meta variables if available
-	name := entry.Meta["NAME"]
+	var name string
+	if mv, ok := entry.Meta.Single["NAME"]; ok {
+		name = mv.Text
+	}
 	if name == "" {
 		// Fallback: try to extract from first line of match
 		lines := strings.Split(entry.Text, "\n")

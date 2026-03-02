@@ -50,6 +50,20 @@ func registerSymbols(server *mcp.Server, config *Config) {
 			mode = m
 		}
 
+		// Validate mode and mode-specific parameters before touching the index
+		switch mode {
+		case "find":
+			if name, ok := args["name"].(string); !ok || name == "" {
+				return nil, fmt.Errorf("name is required for find mode")
+			}
+		case "list":
+			if path, ok := args["path"].(string); !ok || path == "" {
+				return nil, fmt.Errorf("path is required for list mode")
+			}
+		default:
+			return nil, fmt.Errorf("invalid mode %q: use find or list", mode)
+		}
+
 		if config.Pool == nil {
 			return nil, fmt.Errorf("resource pool not initialized")
 		}

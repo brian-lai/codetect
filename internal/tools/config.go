@@ -1,13 +1,8 @@
 package tools
 
 import (
-	"fmt"
 	"os"
-	"path/filepath"
 
-	"codetect/internal/datadir"
-	"codetect/internal/db"
-	"codetect/internal/embedding"
 	"codetect/internal/search"
 )
 
@@ -48,62 +43,16 @@ func DefaultConfigWithEnrichment() *Config {
 
 	pool := NewResourcePool(repoRoot)
 
-	enricher, err := createDefaultEnricher()
-	if err != nil {
-		return &Config{Pool: pool}
-	}
-
 	return &Config{
-		Enricher: enricher,
+		Enricher: createDefaultEnricher(),
 		Pool:     pool,
 	}
 }
 
-// createDefaultEnricher attempts to create an enricher with default settings.
-// Opens the embedding store from .codetect/index.db and creates an enricher
-// with 3 lines of context before/after matches, enrichment enabled by default.
-func createDefaultEnricher() (*search.Enricher, error) {
-	// Get current working directory as repo root
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	// Build path to embedding store — respect CODETECT_DB_PATH if set
-	var dbPath string
-	if envPath := os.Getenv("CODETECT_DB_PATH"); envPath != "" {
-		dbPath = envPath
-	} else {
-		dd, err := datadir.ForRepoNoMigrate(repoRoot)
-		if err != nil {
-			return nil, fmt.Errorf("resolving data directory: %w", err)
-		}
-		dbPath = filepath.Join(dd, "index.db")
-	}
-
-	// Check if database exists
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("index database not found at %s (run 'codetect-index index' first)", dbPath)
-	}
-
-	// Open SQLite database
-	database, err := db.Open(db.DefaultConfig(dbPath))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	// Create embedding store
-	embStore, err := embedding.NewEmbeddingStore(database, repoRoot)
-	if err != nil {
-		database.Close()
-		return nil, fmt.Errorf("failed to create embedding store: %w", err)
-	}
-
-	// Create enricher with defaults:
-	// - 3 lines before match
-	// - 3 lines after match
-	// - includeDefaults: true (enrich by default, can override with include_context=false)
-	enricher := search.NewEnricher(embStore, 3, 3, true)
-
-	return enricher, nil
+// createDefaultEnricher creates an enricher with default settings.
+// The store is nil because v2 indexing writes to embedding_cache/embedding_locations
+// tables, not the v1 embeddings table. Scope enrichment is gracefully skipped;
+// context line extraction (the primary enrichment feature) works without a store.
+func createDefaultEnricher() *search.Enricher {
+	return search.NewEnricher(nil, 3, 3, true)
 }

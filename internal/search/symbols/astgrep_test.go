@@ -176,8 +176,10 @@ func TestAstGrepEntryToSymbol(t *testing.T) {
 			End:   AstGrepPosition{Line: 12, Column: 1},
 		},
 		File: "/path/to/project/main.go",
-		Meta: map[string]string{
-			"NAME": "MyFunction",
+		Meta: AstGrepMetaVars{
+			Single: map[string]AstGrepMetaVar{
+				"NAME": {Text: "MyFunction"},
+			},
 		},
 	}
 
@@ -205,7 +207,7 @@ func TestAstGrepEntryToSymbolWithoutMetaName(t *testing.T) {
 		Text:  "function getUserData() {",
 		Range: AstGrepRange{Start: AstGrepPosition{Line: 5}},
 		File:  "script.js",
-		Meta:  map[string]string{}, // No NAME in meta
+		Meta:  AstGrepMetaVars{}, // No NAME in meta
 	}
 
 	symbol := astGrepEntryToSymbol(entry, "function", ".")

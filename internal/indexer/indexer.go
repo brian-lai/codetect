@@ -38,6 +38,7 @@ type Indexer struct {
 	vectorIndex   embedding.VectorIndex
 	embedder      embedding.Embedder
 	pipeline      *embedding.Pipeline
+	failureStore  *embedding.FailureStore
 
 	// Database
 	database db.DB
@@ -66,6 +67,9 @@ type Config struct {
 	// Pipeline settings
 	BatchSize  int // Batch size for embedding API calls
 	MaxWorkers int // Max concurrent embedding workers
+
+	// Token limit for embedding chunks (0 = use default)
+	MaxTokens int
 
 	// Ignore patterns (from .gitignore)
 	IgnorePatterns []string
@@ -213,6 +217,12 @@ func (idx *Indexer) initComponents() error {
 		idx.embedder = &embedding.NullEmbedder{}
 	}
 
+	// Create failure store for persisting embedding failures
+	idx.failureStore, err = embedding.NewFailureStore(idx.database, idx.dialect)
+	if err != nil {
+		return fmt.Errorf("creating failure store: %w", err)
+	}
+
 	// Create pipeline
 	idx.pipeline = embedding.NewPipeline(
 		idx.cache,
@@ -220,6 +230,7 @@ func (idx *Indexer) initComponents() error {
 		idx.embedder,
 		embedding.WithBatchSize(idx.config.BatchSize),
 		embedding.WithMaxWorkers(idx.config.MaxWorkers),
+		embedding.WithFailureStore(idx.failureStore),
 	)
 
 	return nil
@@ -403,8 +414,14 @@ func (idx *Indexer) processBatch(ctx context.Context, files []string, opts Index
 			continue
 		}
 
-		// Use AST chunker
-		astChunks, err := idx.astChunker.ChunkFile(ctx, relPath, content)
+		// Use AST chunker with token-aware options
+		chunkOpts := chunker.DefaultChunkOptions()
+		if idx.config.MaxTokens > 0 {
+			chunkOpts.MaxTokens = idx.config.MaxTokens
+		} else {
+			chunkOpts.MaxTokens = chunker.DefaultMaxTokens
+		}
+		astChunks, err := idx.astChunker.ChunkFileWithOptions(ctx, relPath, content, chunkOpts)
 		if err != nil {
 			if opts.Verbose {
 				idx.logger.Debug("chunk error", "path", relPath, "error", err)
@@ -582,4 +599,9 @@ func (idx *Indexer) Cache() *embedding.EmbeddingCache {
 // May be nil if no vector index is available.
 func (idx *Indexer) VectorIndex() embedding.VectorIndex {
 	return idx.vectorIndex
+}
+
+// FailureStore returns the failure store for external use.
+func (idx *Indexer) FailureStore() *embedding.FailureStore {
+	return idx.failureStore
 }

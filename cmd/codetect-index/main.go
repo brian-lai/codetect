@@ -46,6 +46,9 @@ func main() {
 	case "stats":
 		runStats(os.Args[2:])
 
+	case "doctor":
+		runDoctor(os.Args[2:])
+
 	case "version":
 		fmt.Printf("codetect-index v%s\n", version)
 
@@ -884,15 +887,184 @@ func getDBSize(dbPath string) int64 {
 	return info.Size()
 }
 
+func runDoctor(args []string) {
+	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+	jsonOutput := fs.Bool("json", false, "Output results as JSON")
+	fs.Parse(args)
+
+	path := "."
+	if fs.NArg() > 0 {
+		path = fs.Arg(0)
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		logger.Error("invalid path", "error", err)
+		os.Exit(1)
+	}
+
+	type DoctorResult struct {
+		OllamaAvailable bool   `json:"ollama_available"`
+		ModelAvailable  bool   `json:"model_available,omitempty"`
+		Model           string `json:"model,omitempty"`
+		IndexExists     bool   `json:"index_exists"`
+		FailedChunks    int    `json:"failed_chunks"`
+		AffectedFiles   int    `json:"affected_files"`
+		Issues          []string `json:"issues,omitempty"`
+	}
+
+	result := DoctorResult{}
+	var issues []string
+
+	// Load embedding config
+	embConfig := embedding.LoadConfigFromEnv()
+
+	// Check Ollama availability
+	if embConfig.Provider == embedding.ProviderOllama {
+		result.Model = embConfig.Model
+		client := embedding.NewOllamaClient(
+			embedding.WithBaseURL(embConfig.OllamaURL),
+			embedding.WithModel(embConfig.Model),
+		)
+		result.OllamaAvailable = client.Available()
+		if !result.OllamaAvailable {
+			issues = append(issues, "Ollama is not running. Install from https://ollama.ai and start it.")
+		} else {
+			result.ModelAvailable = client.ModelAvailable()
+			if !result.ModelAvailable {
+				issues = append(issues, fmt.Sprintf("Model %q is not available. Run: ollama pull %s", embConfig.Model, embConfig.Model))
+			}
+		}
+	}
+
+	// Check index and failed chunks
+	dbConfig := config.LoadDatabaseConfigFromEnv()
+	cfg := &indexer.Config{
+		DBType:            string(dbConfig.Type),
+		Dimensions:        dbConfig.VectorDimensions,
+		EmbeddingProvider: "off",
+		EmbeddingModel:    embConfig.Model,
+	}
+
+	if dbConfig.Type == db.DatabasePostgres {
+		cfg.DSN = dbConfig.DSN
+	} else {
+		dd, err := datadir.ForRepoNoMigrate(absPath)
+		if err != nil {
+			if !*jsonOutput {
+				fmt.Println("No index found for this directory.")
+			}
+			result.Issues = issues
+			if *jsonOutput {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				enc.Encode(result)
+			}
+			return
+		}
+		cfg.DBPath = filepath.Join(dd, "index.db")
+	}
+
+	idx, err := indexer.New(absPath, cfg)
+	if err != nil {
+		if !*jsonOutput {
+			fmt.Println("No index found. Run 'codetect-index index' first.")
+		}
+		result.Issues = issues
+		if *jsonOutput {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(result)
+		}
+		return
+	}
+	defer idx.Close()
+	result.IndexExists = true
+
+	// Check for failed chunks
+	if fs := idx.FailureStore(); fs != nil {
+		summary, err := fs.GetFailureSummary(absPath)
+		if err == nil && summary != nil {
+			result.FailedChunks = summary.TotalFailures
+			result.AffectedFiles = len(summary.AffectedFiles)
+
+			if summary.TotalFailures > 0 {
+				issues = append(issues,
+					fmt.Sprintf("%d chunks failed to embed in %d files",
+						summary.TotalFailures, len(summary.AffectedFiles)))
+
+				if !*jsonOutput {
+					fmt.Printf("\nAffected files:\n")
+					for _, f := range summary.AffectedFiles {
+						fmt.Printf("  - %s\n", f)
+					}
+				}
+			}
+		}
+	}
+
+	result.Issues = issues
+
+	if *jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(result)
+		return
+	}
+
+	// Human-readable output
+	fmt.Println("codetect doctor")
+	fmt.Println("===============")
+
+	if embConfig.Provider == embedding.ProviderOllama {
+		if result.OllamaAvailable {
+			fmt.Println("Ollama:     OK")
+		} else {
+			fmt.Println("Ollama:     NOT RUNNING")
+		}
+		if result.ModelAvailable {
+			fmt.Printf("Model:      %s (available)\n", result.Model)
+		} else if result.OllamaAvailable {
+			fmt.Printf("Model:      %s (NOT FOUND)\n", result.Model)
+		}
+	} else {
+		fmt.Printf("Provider:   %s\n", embConfig.Provider)
+	}
+
+	if result.IndexExists {
+		fmt.Println("Index:      OK")
+	} else {
+		fmt.Println("Index:      NOT FOUND")
+	}
+
+	if result.FailedChunks > 0 {
+		fmt.Printf("Failures:   %d chunks in %d files\n", result.FailedChunks, result.AffectedFiles)
+		fmt.Println("\nRemediation:")
+		fmt.Println("  Re-index with: codetect-index index --force")
+	} else if result.IndexExists {
+		fmt.Println("Failures:   none")
+	}
+
+	if len(issues) > 0 {
+		fmt.Println("\nIssues:")
+		for _, issue := range issues {
+			fmt.Printf("  - %s\n", issue)
+		}
+	} else {
+		fmt.Println("\nAll checks passed.")
+	}
+}
+
 func printUsage() {
 	fmt.Println(`codetect-index - Codebase indexer for codetect MCP
 
 Usage:
-  codetect-index index [options] [path]   Index symbols (default: v2 AST-based)
-  codetect-index embed [options] [path]   Generate embeddings
-  codetect-index stats [options] [path]   Show index statistics
-  codetect-index version                  Print version
-  codetect-index help                     Show this help
+  codetect-index index [options] [path]    Index symbols (default: v2 AST-based)
+  codetect-index embed [options] [path]    Generate embeddings
+  codetect-index stats [options] [path]    Show index statistics
+  codetect-index doctor [options] [path]   Check system health and failed chunks
+  codetect-index version                   Print version
+  codetect-index help                      Show this help
 
 Index Options:
   --force, -f    Force full reindex (default: incremental)

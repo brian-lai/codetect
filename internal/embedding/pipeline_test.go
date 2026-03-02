@@ -3,6 +3,7 @@ package embedding
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"codetect/internal/db"
@@ -654,6 +655,8 @@ func setupTestPipelineWithEmbedder(t *testing.T, embedder Embedder) *Pipeline {
 
 func TestEmbedChunksPartialFailure(t *testing.T) {
 	// One chunk exceeds the max length (50 chars), 4 are under.
+	// The oversized chunk will be recovered via recursive sub-chunking:
+	// 103 chars → split into ~51 char halves → split again into ~25 char quarters → embed OK.
 	embedder := newFailingMockEmbedder(768, 50)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
 	ctx := context.Background()
@@ -663,7 +666,7 @@ func TestEmbedChunksPartialFailure(t *testing.T) {
 		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},           // 12 chars - OK
 		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},           // 12 chars - OK
 		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "func d() {}"},           // 12 chars - OK
-		{Path: "e.go", StartLine: 1, EndLine: 100, Content: "// " + string(make([]byte, 100))}, // >50 chars - FAIL
+		{Path: "e.go", StartLine: 1, EndLine: 100, Content: "// " + string(make([]byte, 100))}, // >50 chars - sub-chunked
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -674,48 +677,55 @@ func TestEmbedChunksPartialFailure(t *testing.T) {
 	if result.Total != 5 {
 		t.Errorf("Total = %d, want 5", result.Total)
 	}
-	if result.Embedded != 4 {
-		t.Errorf("Embedded = %d, want 4", result.Embedded)
+	// All 5 should be embedded now (4 direct + 1 recovered via sub-chunking)
+	if result.Embedded != 5 {
+		t.Errorf("Embedded = %d, want 5", result.Embedded)
 	}
-	if result.Errors != 1 {
-		t.Errorf("Errors = %d, want 1", result.Errors)
+	if result.Truncated != 1 {
+		t.Errorf("Truncated = %d, want 1 (one chunk recovered via sub-chunking)", result.Truncated)
+	}
+	if result.Errors != 0 {
+		t.Errorf("Errors = %d, want 0", result.Errors)
 	}
 
-	// Locations should be saved for the 4 successful chunks
+	// All locations should be saved
 	locs, _ := pipeline.Locations().GetByRepo("/project")
 	if len(locs) != 5 {
-		t.Errorf("expected 5 locations (all chunks get locations), got %d", len(locs))
-	}
-
-	// Embedder should have embedded 4
-	if embedder.embedCount != 4 {
-		t.Errorf("embedder embed count = %d, want 4", embedder.embedCount)
-	}
-	if embedder.failCount != 1 {
-		t.Errorf("embedder fail count = %d, want 1", embedder.failCount)
+		t.Errorf("expected 5 locations, got %d", len(locs))
 	}
 }
 
 func TestEmbedChunksAllFail(t *testing.T) {
-	// All chunks exceed the max length.
+	// All chunks exceed the max length, and sub-chunking recovers them.
+	// With maxLen=5, texts like "func a() {}" (12 chars) get sub-chunked
+	// into progressively smaller pieces until they fit.
 	embedder := newFailingMockEmbedder(768, 5)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
 	ctx := context.Background()
 
 	chunks := []Chunk{
-		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},  // 12 chars > 5
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},  // 12 chars > 5
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},  // 12 chars > 5, but sub-chunks will fit
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},  // 12 chars > 5, but sub-chunks will fit
 	}
 
-	_, err := pipeline.EmbedChunks(ctx, "/project", chunks)
-	if err == nil {
-		t.Fatal("EmbedChunks should return error when all chunks fail")
+	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err != nil {
+		t.Fatalf("EmbedChunks should succeed via sub-chunking: %v", err)
+	}
+
+	// Both chunks should be recovered via sub-chunking
+	if result.Truncated != 2 {
+		t.Errorf("Truncated = %d, want 2", result.Truncated)
+	}
+	if result.Embedded != 2 {
+		t.Errorf("Embedded = %d, want 2", result.Embedded)
 	}
 }
 
 func TestEmbedChunksMixedBatches(t *testing.T) {
 	// Use batch size of 2 so chunks spread across multiple batches.
-	// Some chunks in each batch will fail.
+	// Some chunks in each batch will initially fail but get recovered
+	// via sub-chunking (34 char strings split into ~17 char halves which fit under 20).
 	embedder := newFailingMockEmbedder(768, 20)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
 	pipeline.batchSize = 2 // Force small batches
@@ -723,9 +733,9 @@ func TestEmbedChunksMixedBatches(t *testing.T) {
 
 	chunks := []Chunk{
 		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},                        // 12 chars - OK (batch 1)
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "// long comment that exceeds limit"}, // 34 chars - FAIL (batch 1)
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "// long comment that exceeds limit"}, // 34 chars - sub-chunked
 		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},                        // 12 chars - OK (batch 2)
-		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "// another oversized content here"},  // 34 chars - FAIL (batch 2)
+		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "// another oversized content here"},  // 34 chars - sub-chunked
 		{Path: "e.go", StartLine: 1, EndLine: 10, Content: "func e() {}"},                        // 12 chars - OK (batch 3)
 	}
 
@@ -737,12 +747,211 @@ func TestEmbedChunksMixedBatches(t *testing.T) {
 	if result.Total != 5 {
 		t.Errorf("Total = %d, want 5", result.Total)
 	}
-	// 3 successful embeddings across all batches
-	if result.Embedded != 3 {
-		t.Errorf("Embedded = %d, want 3", result.Embedded)
+	// All 5 should be embedded (3 direct + 2 recovered via sub-chunking)
+	if result.Embedded != 5 {
+		t.Errorf("Embedded = %d, want 5", result.Embedded)
 	}
-	if result.Errors != 2 {
-		t.Errorf("Errors = %d, want 2", result.Errors)
+	if result.Truncated != 2 {
+		t.Errorf("Truncated = %d, want 2 (two chunks recovered via sub-chunking)", result.Truncated)
+	}
+	if result.Errors != 0 {
+		t.Errorf("Errors = %d, want 0", result.Errors)
+	}
+}
+
+func TestSubChunkRecovery(t *testing.T) {
+	// Create an embedder that fails on texts > 30 chars
+	// A 60-char text should be split into two ~30-char halves that succeed
+	embedder := newFailingMockEmbedder(768, 30)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	ctx := context.Background()
+
+	// 45 chars — too big for direct embed, but halves (~22 chars) will fit
+	bigContent := "line one of the big chunk\nline two of the chunk"
+	chunks := []Chunk{
+		{Path: "big.go", StartLine: 1, EndLine: 10, Content: bigContent},
+	}
+
+	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err != nil {
+		t.Fatalf("EmbedChunks failed: %v", err)
+	}
+
+	if result.Truncated != 1 {
+		t.Errorf("Truncated = %d, want 1", result.Truncated)
+	}
+	if result.FailedChunks != 0 {
+		t.Errorf("FailedChunks = %d, want 0", result.FailedChunks)
+	}
+	if result.Embedded != 1 {
+		t.Errorf("Embedded = %d, want 1 (recovered via sub-chunk representative)", result.Embedded)
+	}
+}
+
+// alwaysFailEmbedder returns error for every embed call.
+type alwaysFailEmbedder struct {
+	dimensions int
+}
+
+func (m *alwaysFailEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, fmt.Errorf("always fail: %d texts rejected", len(texts))
+}
+func (m *alwaysFailEmbedder) Available() bool   { return true }
+func (m *alwaysFailEmbedder) ProviderID() string { return "mock-always-fail:test" }
+func (m *alwaysFailEmbedder) Dimensions() int    { return m.dimensions }
+
+func TestSubChunkTrueFailure(t *testing.T) {
+	// Embedder that fails on EVERY call — sub-chunking can't help
+	embedder := &alwaysFailEmbedder{dimensions: 768}
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	ctx := context.Background()
+
+	chunks := []Chunk{
+		{Path: "fail.go", StartLine: 1, EndLine: 10, Content: "func fail() {}"},
+	}
+
+	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err != nil {
+		t.Fatalf("EmbedChunks should not return error (failures are tracked): %v", err)
+	}
+	// The chunk should be recorded as a true failure
+	if result.FailedChunks != 1 {
+		t.Errorf("FailedChunks = %d, want 1", result.FailedChunks)
+	}
+	if result.Embedded != 0 {
+		t.Errorf("Embedded = %d, want 0", result.Embedded)
+	}
+}
+
+func TestFailureStorePersistence(t *testing.T) {
+	cfg := db.DefaultConfig(":memory:")
+	database, err := db.Open(cfg)
+	if err != nil {
+		t.Fatalf("opening database: %v", err)
+	}
+	defer database.Close()
+
+	fs, err := NewFailureStore(database, cfg.Dialect())
+	if err != nil {
+		t.Fatalf("creating failure store: %v", err)
+	}
+
+	// Record a failure
+	err = fs.RecordFailure("/project", "big.go", 1, 100,
+		"very long content here", "embedding failed", "ollama:nomic-embed-text", 3)
+	if err != nil {
+		t.Fatalf("recording failure: %v", err)
+	}
+
+	// Get failures
+	failures, err := fs.GetFailures("/project")
+	if err != nil {
+		t.Fatalf("getting failures: %v", err)
+	}
+	if len(failures) != 1 {
+		t.Fatalf("expected 1 failure, got %d", len(failures))
+	}
+
+	f := failures[0]
+	if f.Path != "big.go" {
+		t.Errorf("Path = %q, want %q", f.Path, "big.go")
+	}
+	if f.StartLine != 1 {
+		t.Errorf("StartLine = %d, want 1", f.StartLine)
+	}
+	if f.EndLine != 100 {
+		t.Errorf("EndLine = %d, want 100", f.EndLine)
+	}
+	if f.ContentLength != 22 {
+		t.Errorf("ContentLength = %d, want 22", f.ContentLength)
+	}
+	if f.EstimatedTokens <= 0 {
+		t.Errorf("EstimatedTokens should be > 0, got %d", f.EstimatedTokens)
+	}
+	if f.MaxDepthReached != 3 {
+		t.Errorf("MaxDepthReached = %d, want 3", f.MaxDepthReached)
+	}
+
+	// Count
+	count, err := fs.CountFailures("/project")
+	if err != nil {
+		t.Fatalf("counting failures: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("count = %d, want 1", count)
+	}
+
+	// Summary
+	summary, err := fs.GetFailureSummary("/project")
+	if err != nil {
+		t.Fatalf("getting summary: %v", err)
+	}
+	if summary.TotalFailures != 1 {
+		t.Errorf("TotalFailures = %d, want 1", summary.TotalFailures)
+	}
+	if len(summary.AffectedFiles) != 1 || summary.AffectedFiles[0] != "big.go" {
+		t.Errorf("AffectedFiles = %v, want [big.go]", summary.AffectedFiles)
+	}
+
+	// Clear
+	err = fs.ClearFailures("/project")
+	if err != nil {
+		t.Fatalf("clearing failures: %v", err)
+	}
+	count, _ = fs.CountFailures("/project")
+	if count != 0 {
+		t.Errorf("count after clear = %d, want 0", count)
+	}
+}
+
+func TestPipelineWithFailureStore(t *testing.T) {
+	// Set up a pipeline with a failure store where chunks are too big
+	// and sub-chunking also fails, so failures get persisted.
+	cfg := db.DefaultConfig(":memory:")
+	database, err := db.Open(cfg)
+	if err != nil {
+		t.Fatalf("opening database: %v", err)
+	}
+	defer database.Close()
+
+	cache, _ := NewEmbeddingCache(database, cfg.Dialect(), 768, "test-model")
+	locations, _ := NewLocationStore(database, cfg.Dialect())
+	failStore, _ := NewFailureStore(database, cfg.Dialect())
+
+	// Embedder that only accepts texts <= 5 chars
+	embedder := newFailingMockEmbedder(768, 5)
+
+	pipeline := NewPipeline(cache, locations, embedder,
+		WithFailureStore(failStore))
+
+	ctx := context.Background()
+
+	// A chunk with short content that succeeds
+	// and one chunk that's too long and will fail even after sub-chunking at depth 3
+	// (content is all one character repeated, so splits always produce >5 char pieces)
+	chunks := []Chunk{
+		{Path: "ok.go", StartLine: 1, EndLine: 1, Content: "ab"},
+		{Path: "fail.go", StartLine: 1, EndLine: 50, Content: strings.Repeat("x", 100)},
+	}
+
+	// The batch embed will fail because the 100-char chunk fails,
+	// and the 2-char chunk is in the same batch — but the embedder returns
+	// nil for the failing one and succeeds for the short one.
+	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
+	if err != nil {
+		t.Fatalf("EmbedChunks failed: %v", err)
+	}
+
+	// The 100-char chunk sub-chunks into 50-char halves, then 25-char quarters, then ~12-char eighths.
+	// All still > 5 chars, so all fail. The chunk is a true failure.
+	if result.FailedChunks != 1 {
+		t.Errorf("FailedChunks = %d, want 1", result.FailedChunks)
+	}
+
+	// Check failure was persisted
+	failures, _ := failStore.GetFailures("/project")
+	if len(failures) != 1 {
+		t.Errorf("expected 1 persisted failure, got %d", len(failures))
 	}
 }
 

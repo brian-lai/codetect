@@ -5,7 +5,6 @@ import (
 
 	"codetect/internal/embedding"
 	"codetect/internal/fusion"
-	"codetect/internal/search/hybrid"
 	"codetect/internal/search/keyword"
 )
 
@@ -28,77 +27,6 @@ func NewEnricher(store *embedding.EmbeddingStore, contextBefore, contextAfter in
 		contextAfter:    contextAfter,
 		includeDefaults: includeDefaults,
 	}
-}
-
-// EnrichHybridResults enriches hybrid search results with scope info and context lines.
-// If includeContext is false, skips enrichment. If nil, uses enricher default.
-func (e *Enricher) EnrichHybridResults(results []hybrid.Result, includeContext *bool) error {
-	// Determine if we should enrich
-	shouldEnrich := e.includeDefaults
-	if includeContext != nil {
-		shouldEnrich = *includeContext
-	}
-
-	if !shouldEnrich || len(results) == 0 {
-		return nil
-	}
-
-	extractor := NewContextExtractor(e.contextBefore, e.contextAfter)
-
-	for i := range results {
-		result := &results[i]
-
-		// Get scope info from embeddings if this is a semantic match
-		if result.Source == "semantic" || result.Source == "both" {
-			if err := e.enrichWithScopeInfo(result); err != nil {
-				// Log but don't fail - continue with other results
-				// Scope info is optional enhancement
-			}
-		}
-
-		// Extract context lines from file
-		matchLine := result.StartLine
-		if result.MatchLine > 0 {
-			matchLine = result.MatchLine
-		}
-
-		before, after, err := extractor.ExtractContext(result.Path, matchLine)
-		if err != nil {
-			// Log but continue - context is optional
-			continue
-		}
-
-		result.ContextBefore = before
-		result.ContextAfter = after
-	}
-
-	return nil
-}
-
-// enrichWithScopeInfo populates scope fields from embedding store.
-func (e *Enricher) enrichWithScopeInfo(result *hybrid.Result) error {
-	if e.store == nil {
-		return fmt.Errorf("embedding store not available")
-	}
-
-	// Query embeddings for this file location
-	embeddings, err := e.store.GetByPath(result.Path)
-	if err != nil {
-		return err
-	}
-
-	// Find embedding that overlaps with this result
-	for _, emb := range embeddings {
-		if result.StartLine >= emb.StartLine && result.StartLine <= emb.EndLine {
-			// Found matching embedding
-			result.ParentScope = emb.ParentScope
-			result.ScopeKind = emb.ScopeKind
-			result.ReceiverType = emb.ReceiverType
-			return nil
-		}
-	}
-
-	return nil // No matching embedding found
 }
 
 // EnrichKeywordResults enriches keyword search results with scope info and context lines.

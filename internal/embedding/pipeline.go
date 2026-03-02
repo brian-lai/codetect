@@ -208,6 +208,7 @@ func (p *Pipeline) EmbedChunks(ctx context.Context, repoRoot string, chunks []Ch
 // embedNewChunks embeds chunks that weren't found in cache.
 // Returns a map of content hash -> embedding for successfully embedded chunks.
 // Chunks that fail to embed (nil entries from the embedder) are skipped.
+// Batch-level failures are tolerated — only returns error if all chunks fail.
 func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (map[string][]float32, error) {
 	if len(chunks) == 0 {
 		return make(map[string][]float32), nil
@@ -227,8 +228,9 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (
 		contents = append(contents, content)
 	}
 
-	// Embed in batches
+	// Embed in batches, tolerating per-batch failures
 	result := make(map[string][]float32)
+	var lastErr error
 	for i := 0; i < len(contents); i += p.batchSize {
 		end := i + p.batchSize
 		if end > len(contents) {
@@ -240,7 +242,8 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (
 
 		embeddings, err := p.embedder.Embed(ctx, batchContents)
 		if err != nil {
-			return nil, fmt.Errorf("embedding batch %d-%d: %w", i, end, err)
+			lastErr = fmt.Errorf("embedding batch %d-%d: %w", i, end, err)
+			continue
 		}
 
 		for j, emb := range embeddings {
@@ -248,6 +251,11 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (
 				result[batchHashes[j]] = emb
 			}
 		}
+	}
+
+	// Only return error if no embeddings succeeded at all
+	if len(result) == 0 && lastErr != nil {
+		return nil, lastErr
 	}
 
 	return result, nil

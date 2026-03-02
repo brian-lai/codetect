@@ -5,33 +5,44 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"time"
 )
 
 // EmbedResult contains statistics from an embedding operation.
 type EmbedResult struct {
-	Total       int           `json:"total"`        // Total chunks processed
-	CacheHits   int           `json:"cache_hits"`   // Embeddings found in cache
-	Embedded    int           `json:"embedded"`     // New embeddings generated
-	Skipped     int           `json:"skipped"`      // Chunks skipped (e.g., empty)
-	Errors      int           `json:"errors"`       // Chunks that failed
-	Duration    time.Duration `json:"duration"`     // Total processing time
-	EmbedTime   time.Duration `json:"embed_time"`   // Time spent on embedding API
-	CacheTime   time.Duration `json:"cache_time"`   // Time spent on cache operations
-	HitRate     float64       `json:"hit_rate"`     // Cache hit percentage
-	ChunksPerSec float64      `json:"chunks_per_sec"` // Throughput
+	Total        int           `json:"total"`          // Total chunks processed
+	CacheHits    int           `json:"cache_hits"`     // Embeddings found in cache
+	Embedded     int           `json:"embedded"`       // New embeddings generated
+	Skipped      int           `json:"skipped"`        // Chunks skipped (e.g., empty)
+	Errors       int           `json:"errors"`         // Chunks that failed
+	Truncated    int           `json:"truncated"`      // Chunks recovered via sub-chunking
+	FailedChunks int           `json:"failed_chunks"`  // Chunks that failed even after sub-chunking
+	Duration     time.Duration `json:"duration"`       // Total processing time
+	EmbedTime    time.Duration `json:"embed_time"`     // Time spent on embedding API
+	CacheTime    time.Duration `json:"cache_time"`     // Time spent on cache operations
+	HitRate      float64       `json:"hit_rate"`       // Cache hit percentage
+	ChunksPerSec float64       `json:"chunks_per_sec"` // Throughput
 }
+
+const (
+	// maxSubChunkDepth is the maximum recursion depth for sub-chunking.
+	// Depth 3 → up to 2^3 = 8 sub-chunks per original chunk.
+	maxSubChunkDepth = 3
+)
 
 // Pipeline provides a cache-aware embedding pipeline.
 // It coordinates between the embedding cache, location store, and embedding provider.
 type Pipeline struct {
-	cache     *EmbeddingCache
-	locations *LocationStore
-	embedder  Embedder
+	cache        *EmbeddingCache
+	locations    *LocationStore
+	embedder     Embedder
+	failureStore *FailureStore
 
 	// Configuration
-	batchSize int
+	batchSize  int
 	maxWorkers int
 }
 
@@ -44,6 +55,13 @@ func WithBatchSize(size int) PipelineOption {
 		if size > 0 {
 			p.batchSize = size
 		}
+	}
+}
+
+// WithFailureStore sets the failure store for persisting embedding failures.
+func WithFailureStore(fs *FailureStore) PipelineOption {
+	return func(p *Pipeline) {
+		p.failureStore = fs
 	}
 }
 
@@ -151,13 +169,15 @@ func (p *Pipeline) EmbedChunks(ctx context.Context, repoRoot string, chunks []Ch
 		}
 
 		embedStart := time.Now()
-		newEmbeddings, err := p.embedNewChunks(ctx, toEmbed)
+		newEmbeddings, eStats, err := p.embedNewChunks(ctx, toEmbed, repoRoot)
 		if err != nil {
 			return nil, fmt.Errorf("embedding failed: %w", err)
 		}
 		result.EmbedTime = time.Since(embedStart)
 
-		// Track chunks that were sent but got nil back (partial failures)
+		// Track sub-chunking recovery and true failures
+		result.Truncated = eStats.Recovered
+		result.FailedChunks = eStats.Failed
 		result.Errors = len(toEmbedUnique) - len(newEmbeddings)
 
 		// 6. Store in cache
@@ -205,19 +225,28 @@ func (p *Pipeline) EmbedChunks(ctx context.Context, repoRoot string, chunks []Ch
 	return result, nil
 }
 
+// embedStats tracks sub-chunking outcomes from embedNewChunks.
+type embedStats struct {
+	Recovered int // hashes recovered via sub-chunking
+	Failed    int // hashes that failed even after sub-chunking
+}
+
 // embedNewChunks embeds chunks that weren't found in cache.
 // Returns a map of content hash -> embedding for successfully embedded chunks.
-// Chunks that fail to embed (nil entries from the embedder) are skipped.
-// Batch-level failures are tolerated — only returns error if all chunks fail.
-func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (map[string][]float32, error) {
+// Chunks that fail direct embedding are retried via recursive sub-chunking.
+// The first sub-chunk's embedding is used as representative for the original chunk.
+func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, repoRoot string) (map[string][]float32, *embedStats, error) {
+	stats := &embedStats{}
 	if len(chunks) == 0 {
-		return make(map[string][]float32), nil
+		return make(map[string][]float32), stats, nil
 	}
 
 	// Deduplicate by hash (multiple chunks may have same content)
 	hashToContent := make(map[string]string)
+	hashToChunk := make(map[string]PipelineChunk)
 	for _, pc := range chunks {
 		hashToContent[pc.ContentHash] = pc.Content
+		hashToChunk[pc.ContentHash] = pc
 	}
 
 	// Convert to slices for batch embedding
@@ -230,7 +259,8 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (
 
 	// Embed in batches, tolerating per-batch failures
 	result := make(map[string][]float32)
-	var lastErr error
+	var failedHashes []string
+
 	for i := 0; i < len(contents); i += p.batchSize {
 		end := i + p.batchSize
 		if end > len(contents) {
@@ -242,23 +272,125 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk) (
 
 		embeddings, err := p.embedder.Embed(ctx, batchContents)
 		if err != nil {
-			lastErr = fmt.Errorf("embedding batch %d-%d: %w", i, end, err)
+			// Entire batch failed — queue all for sub-chunking recovery
+			slog.Debug("batch embedding failed, queuing for sub-chunking",
+				"batch", fmt.Sprintf("%d-%d", i, end),
+				"error", err)
+			failedHashes = append(failedHashes, batchHashes...)
 			continue
 		}
 
 		for j, emb := range embeddings {
 			if emb != nil {
 				result[batchHashes[j]] = emb
+			} else {
+				failedHashes = append(failedHashes, batchHashes[j])
 			}
 		}
 	}
 
-	// Only return error if no embeddings succeeded at all
-	if len(result) == 0 && lastErr != nil {
-		return nil, lastErr
+	// Try recursive sub-chunking for failed embeddings
+	for _, hash := range failedHashes {
+		content := hashToContent[hash]
+		subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
+		if len(subEmbeddings) > 0 {
+			// Use first sub-chunk's embedding as representative
+			result[hash] = subEmbeddings[0]
+			stats.Recovered++
+			slog.Info("recovered chunk via sub-chunking",
+				"hash", hash[:12],
+				"sub_chunks", len(subEmbeddings),
+				"content_len", len(content))
+		} else {
+			// True failure — persist if we have a failure store
+			stats.Failed++
+			pc := hashToChunk[hash]
+			slog.Warn("chunk failed even after sub-chunking",
+				"path", pc.Path,
+				"lines", fmt.Sprintf("%d-%d", pc.StartLine, pc.EndLine),
+				"content_len", len(content),
+				"estimated_tokens", EstimateTokens(content))
+
+			if p.failureStore != nil {
+				model := p.embedder.ProviderID()
+				_ = p.failureStore.RecordFailure(
+					repoRoot, pc.Path, pc.StartLine, pc.EndLine,
+					content, "embedding failed after sub-chunking",
+					model, maxSubChunkDepth,
+				)
+			}
+		}
 	}
 
-	return result, nil
+	return result, stats, nil
+}
+
+// subChunkAndEmbed recursively splits text in half and tries to embed each half.
+// Returns all successful embeddings. Returns nil if nothing can be embedded.
+func (p *Pipeline) subChunkAndEmbed(ctx context.Context, text string, depth int) [][]float32 {
+	if depth >= maxSubChunkDepth || len(text) == 0 {
+		return nil
+	}
+
+	// Split at nearest newline to the midpoint
+	mid := len(text) / 2
+	splitIdx := mid
+
+	// Search for nearest newline around midpoint
+	leftNL := strings.LastIndex(text[:mid], "\n")
+	rightNL := strings.Index(text[mid:], "\n")
+	if rightNL >= 0 {
+		rightNL += mid
+	}
+
+	if leftNL >= 0 && rightNL >= 0 {
+		// Pick the one closer to midpoint
+		if mid-leftNL <= rightNL-mid {
+			splitIdx = leftNL + 1
+		} else {
+			splitIdx = rightNL + 1
+		}
+	} else if leftNL >= 0 {
+		splitIdx = leftNL + 1
+	} else if rightNL >= 0 {
+		splitIdx = rightNL + 1
+	}
+
+	// Ensure we don't create empty halves
+	if splitIdx <= 0 || splitIdx >= len(text) {
+		splitIdx = mid
+	}
+
+	firstHalf := text[:splitIdx]
+	secondHalf := text[splitIdx:]
+
+	var result [][]float32
+
+	// Try embedding first half
+	if len(firstHalf) > 0 {
+		embs, err := p.embedder.Embed(ctx, []string{firstHalf})
+		if err == nil && len(embs) > 0 && embs[0] != nil {
+			result = append(result, embs[0])
+		} else {
+			// Recurse on first half
+			subResult := p.subChunkAndEmbed(ctx, firstHalf, depth+1)
+			result = append(result, subResult...)
+		}
+	}
+
+	// Try embedding second half
+	if len(secondHalf) > 0 {
+		embs, err := p.embedder.Embed(ctx, []string{secondHalf})
+		if err == nil && len(embs) > 0 && embs[0] != nil {
+			result = append(result, embs[0])
+		} else {
+			// Recurse on second half
+			subResult := p.subChunkAndEmbed(ctx, secondHalf, depth+1)
+			result = append(result, subResult...)
+		}
+	}
+
+	return result
 }
 
 // EmbedFile processes a single file through the pipeline.
@@ -350,6 +482,8 @@ func (p *Pipeline) IncrementalUpdate(ctx context.Context, repoRoot string, files
 		totalResult.Embedded += result.Embedded
 		totalResult.Skipped += result.Skipped
 		totalResult.Errors += result.Errors
+		totalResult.Truncated += result.Truncated
+		totalResult.FailedChunks += result.FailedChunks
 		totalResult.EmbedTime += result.EmbedTime
 		totalResult.CacheTime += result.CacheTime
 	}
@@ -456,7 +590,7 @@ func (p *Pipeline) ParallelEmbedChunks(ctx context.Context, repoRoot string, chu
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				embeddings, err := p.embedNewChunks(ctx, batch)
+				embeddings, _, err := p.embedNewChunks(ctx, batch, repoRoot)
 				if err != nil {
 					errors <- err
 					return
@@ -623,4 +757,9 @@ func (p *Pipeline) Locations() *LocationStore {
 // Embedder returns the underlying embedder.
 func (p *Pipeline) Embedder() Embedder {
 	return p.embedder
+}
+
+// FailureStore returns the underlying failure store (may be nil).
+func (p *Pipeline) FailureStore() *FailureStore {
+	return p.failureStore
 }

@@ -214,6 +214,71 @@ func TestDefaultChunkerConfig(t *testing.T) {
 	}
 }
 
+func TestChunkByLinesTokenAware(t *testing.T) {
+	// Create lines that are very long (1000 chars each)
+	// With 30-line MaxChunkLines, a chunk could be 30000 chars = ~8571 tokens
+	// With MaxTokens=100, that exceeds the limit, so chunks should be smaller
+	longLine := strings.Repeat("x", 1000)
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = longLine
+	}
+
+	t.Run("no token limit uses line limit", func(t *testing.T) {
+		config := ChunkerConfig{
+			MaxChunkLines: 30,
+			ChunkOverlap:  2,
+			MaxTokens:     0, // no limit
+		}
+		chunks := chunkByLines("test.go", lines, config)
+		if len(chunks) != 1 {
+			t.Errorf("expected 1 chunk (20 lines < 30 max), got %d", len(chunks))
+		}
+	})
+
+	t.Run("token limit shrinks chunks", func(t *testing.T) {
+		config := ChunkerConfig{
+			MaxChunkLines: 30,
+			ChunkOverlap:  2,
+			MaxTokens:     1000, // ~3500 chars = ~3.5 lines of 1000 chars each
+		}
+		chunks := chunkByLines("test.go", lines, config)
+		if len(chunks) < 2 {
+			t.Errorf("expected multiple chunks with token limit, got %d", len(chunks))
+		}
+		// Verify no chunk exceeds token limit
+		for _, chunk := range chunks {
+			if ExceedsTokenLimit(chunk.Content, 1000) {
+				t.Errorf("chunk at lines %d-%d exceeds token limit: %d chars",
+					chunk.StartLine, chunk.EndLine, len(chunk.Content))
+			}
+		}
+	})
+}
+
+func TestSplitLargeChunkTokenAware(t *testing.T) {
+	// Create lines that make symbol-boundary chunks too large for tokens
+	longLine := strings.Repeat("y", 500)
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = longLine
+	}
+
+	config := ChunkerConfig{
+		MaxChunkLines: 30,
+		ChunkOverlap:  5,
+		MaxTokens:     1000, // ~3500 chars
+	}
+
+	chunks := splitLargeChunk("test.go", lines, 1, 100, "function", config)
+	for _, chunk := range chunks {
+		if ExceedsTokenLimit(chunk.Content, config.MaxTokens) {
+			t.Errorf("chunk at lines %d-%d exceeds token limit: %d chars, ~%d tokens",
+				chunk.StartLine, chunk.EndLine, len(chunk.Content), EstimateTokens(chunk.Content))
+		}
+	}
+}
+
 func TestTruncateSnippet(t *testing.T) {
 	tests := []struct {
 		name   string

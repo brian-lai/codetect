@@ -32,6 +32,7 @@ type Chunk struct {
 type ChunkerConfig struct {
 	MaxChunkLines int
 	ChunkOverlap  int
+	MaxTokens     int // 0 means no token limit (backward compat)
 }
 
 // DefaultChunkerConfig returns the default chunker configuration
@@ -143,6 +144,14 @@ func splitLargeChunk(path string, lines []string, startLine, endLine int, kind s
 			chunkEnd = endLine
 		}
 
+		// Shrink chunk end if content would exceed token limit
+		if config.MaxTokens > 0 {
+			for chunkEnd > current && ExceedsTokenLimit(
+				strings.Join(lines[current-1:chunkEnd], "\n"), config.MaxTokens) {
+				chunkEnd--
+			}
+		}
+
 		chunk := createChunk(path, lines, current, chunkEnd, kind)
 		chunks = append(chunks, chunk)
 
@@ -216,8 +225,17 @@ func chunkByLines(path string, lines []string, config ChunkerConfig) []Chunk {
 			end = len(lines)
 		}
 
-		// Skip if too small
-		if end-current >= MinChunkLines {
+		// Shrink end line-by-line if content would exceed token limit
+		tokenLimited := false
+		if config.MaxTokens > 0 {
+			for end > current+1 && ExceedsTokenLimit(strings.Join(lines[current:end], "\n"), config.MaxTokens) {
+				end--
+				tokenLimited = true
+			}
+		}
+
+		// Skip if too small (but always allow token-limited chunks to be created)
+		if end-current >= MinChunkLines || (tokenLimited && end > current) {
 			chunk := Chunk{
 				Path:      path,
 				StartLine: current + 1, // 1-indexed
@@ -234,7 +252,13 @@ func chunkByLines(path string, lines []string, config ChunkerConfig) []Chunk {
 		}
 
 		// Move to next chunk with overlap
-		nextCurrent := end - config.ChunkOverlap
+		var nextCurrent int
+		if tokenLimited && end-current <= config.ChunkOverlap {
+			// Token-limited tiny chunks: skip overlap to make progress
+			nextCurrent = end
+		} else {
+			nextCurrent = end - config.ChunkOverlap
+		}
 		if nextCurrent <= current {
 			// Ensure we always make progress
 			nextCurrent = current + 1

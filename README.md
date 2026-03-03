@@ -63,7 +63,7 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Yes | Keyword search |
 | [Ollama](https://ollama.ai) | No | Semantic search (local embeddings) |
 
-**Note:** v3 uses built-in tree-sitter parsers for symbol extraction. No external ctags dependency required.
+**Note:** v3 uses ast-grep for symbol extraction. No external ctags dependency required.
 
 ## CLI Commands
 
@@ -79,6 +79,11 @@ codetect migrate     # Discover existing indexes and register them
 codetect update      # Update to latest version
 codetect help        # Show all commands
 ```
+
+**Index flags:**
+- `--force, -f` — Re-chunk all files and update locations (embedding cache still used)
+- `--clear-cache` — Clear embedding cache before indexing (forces re-embedding)
+- `--force --clear-cache` — Nuclear option: re-chunk everything AND re-embed from scratch
 
 **Indexer features:**
 - `codetect index` handles both symbol indexing and embedding in one step
@@ -261,7 +266,7 @@ See [MCP Compatibility](docs/mcp-compatibility.md) for details and roadmap for n
 
 - [x] MCP stdio server
 - [x] Keyword search via ripgrep
-- [x] Symbol indexing (AST-based via tree-sitter)
+- [x] Symbol indexing (AST-based via ast-grep)
 - [x] Semantic search via Ollama
 - [x] Hybrid search with cross-encoder reranking
 - [x] Global installation

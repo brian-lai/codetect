@@ -26,7 +26,7 @@ import (
 
 var logger *slog.Logger
 
-const version = "3.0.0"
+const version = "3.5.0"
 
 func main() {
 	logger = logging.Default("codetect-index")

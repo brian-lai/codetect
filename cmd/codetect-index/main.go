@@ -26,7 +26,7 @@ import (
 
 var logger *slog.Logger
 
-const version = "3.0.0"
+const version = "3.5.0"
 
 func main() {
 	logger = logging.Default("codetect-index")
@@ -66,6 +66,7 @@ func runIndex(args []string) {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	force := fs.Bool("force", false, "Force full reindex")
 	fs.BoolVar(force, "f", false, "Short for --force")
+	clearCache := fs.Bool("clear-cache", false, "Clear embedding cache before indexing")
 	useV1 := fs.Bool("v1", false, "Use legacy v1 indexer (ctags-based, deprecated)")
 	verbose := fs.Bool("verbose", false, "Enable verbose output")
 	fs.BoolVar(verbose, "v", false, "Short for --verbose")
@@ -86,7 +87,7 @@ func runIndex(args []string) {
 
 	// Default to v2 indexer (AST-based)
 	if !*useV1 {
-		runIndexV2(absPath, *force, *verbose, *jsonOutput)
+		runIndexV2(absPath, *force, *clearCache, *verbose, *jsonOutput)
 		return
 	}
 
@@ -160,7 +161,7 @@ func runIndex(args []string) {
 
 // runIndexV2 uses the new v2 indexer with Merkle tree change detection,
 // AST-based chunking, and content-addressed embedding cache.
-func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
+func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool) {
 	// Load configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 	embConfig := embedding.LoadConfigFromEnv()
@@ -208,6 +209,21 @@ func runIndexV2(absPath string, force, verbose, jsonOutput bool) {
 		os.Exit(1)
 	}
 	defer idx.Close()
+
+	// Clear embedding cache if requested
+	if clearCache {
+		logger.Warn("clearing embedding cache — all chunks will be re-embedded")
+		if cache := idx.Cache(); cache != nil {
+			if err := cache.Clear(); err != nil {
+				logger.Error("failed to clear embedding cache", "error", err)
+				os.Exit(1)
+			}
+			count, _ := cache.Count()
+			if verbose {
+				logger.Info("embedding cache cleared", "remaining", count)
+			}
+		}
+	}
 
 	// Create progress bar if outputting to terminal and not in verbose mode
 	var progressBar *progressbar.ProgressBar
@@ -1067,10 +1083,11 @@ Usage:
   codetect-index help                      Show this help
 
 Index Options:
-  --force, -f    Force full reindex (default: incremental)
-  --v1           Use legacy v1 indexer (ctags-based, deprecated)
-  --verbose, -v  Enable verbose output
-  --json         Output results as JSON
+  --force, -f      Re-chunk all files and update locations (embedding cache still used)
+  --clear-cache    Clear embedding cache before indexing (forces re-embedding)
+  --v1             Use legacy v1 indexer (ctags-based, deprecated)
+  --verbose, -v    Enable verbose output
+  --json           Output results as JSON
 
 Stats Options:
   --v1           Show v1 index statistics (deprecated)
@@ -1123,10 +1140,17 @@ Install:
   Ubuntu:  apt install universal-ctags (only for --v1 mode)
 
 Examples:
-  # v2 indexing (AST-based, default)
-  codetect-index index .
-  codetect-index embed -j 10
-  codetect-index stats
+  # Incremental index (only changed files, uses cache)
+  codetect index
+
+  # Full re-chunk (all files re-processed, cache still used for embeddings)
+  codetect index --force
+
+  # Re-embed everything (clears cache, then incremental chunk)
+  codetect index --clear-cache
+
+  # Nuclear option: re-chunk all files AND re-embed from scratch
+  codetect index --force --clear-cache
 
   # Legacy v1 indexing (deprecated)
   codetect-index index --v1 .

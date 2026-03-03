@@ -474,6 +474,16 @@ func (c *EmbeddingCache) DeleteBatch(hashes []string) error {
 	return err
 }
 
+// Clear removes all entries from the cache.
+func (c *EmbeddingCache) Clear() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	tableName := c.tableName()
+	_, err := c.database.Exec(fmt.Sprintf("DELETE FROM %s", tableName))
+	return err
+}
+
 // Count returns the number of entries in the cache.
 func (c *EmbeddingCache) Count() (int, error) {
 	c.mu.RLock()

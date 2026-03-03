@@ -27,14 +27,21 @@ cmd/
 └── migrate-to-postgres/# Database migration utility
 
 internal/
+├── chunker/           # AST-based code chunking (tree-sitter)
 ├── config/            # Configuration management
 ├── daemon/            # Background daemon logic
+├── datadir/           # Centralized data directory resolver (~/.codetect/projects/)
 ├── db/                # Database adapters (SQLite, PostgreSQL)
-├── embedding/         # Embedding generation (Ollama, LiteLLM)
+├── embedding/         # Embedding generation, semantic search, vector indexing, caching
+├── fusion/            # Reciprocal Rank Fusion for combining ranked result lists
+├── indexer/           # v2 indexing pipeline (Merkle detection, chunking, embedding)
+├── logging/           # Structured logging (slog-based, configurable level/format)
 ├── mcp/               # MCP server implementation
+├── merkle/            # Merkle tree change detection for incremental indexing
 ├── registry/          # Project registry
-├── search/            # Search logic (keyword, semantic, hybrid)
-└── tools/             # Utility functions
+├── rerank/            # Cross-encoder reranking for search results
+├── search/            # Search logic (keyword, symbols, file search, result enrichment)
+└── tools/             # MCP tool handlers (search_keyword, get_file, symbols, hybrid_search_v2)
 
 context/
 ├── plans/             # Pre-work planning documents
@@ -51,7 +58,10 @@ context/
 - `internal/db/sqlite.go`: SQLite adapter for symbols and embeddings
 - `internal/db/postgres.go`: PostgreSQL adapter with pgvector support
 - `internal/embedding/provider.go`: Embedding provider abstraction
-- `internal/search/semantic.go`: Semantic search implementation
+- `internal/embedding/search.go`: Semantic search implementation
+- `internal/embedding/cache.go`: Content-addressed embedding cache
+- `internal/indexer/indexer.go`: v2 indexing pipeline
+- `internal/merkle/merkle.go`: Merkle tree change detection
 - `Makefile`: Build, test, and development commands
 - `install.sh`: Interactive installation script
 - `docker-compose.yml`: PostgreSQL + pgvector setup

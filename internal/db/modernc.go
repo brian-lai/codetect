@@ -36,6 +36,12 @@ func OpenModernc(cfg Config) (*ModerncDB, error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
+	// In-memory databases: each sql.Open connection gets a separate database.
+	// Limit to 1 connection so all queries share the same in-memory instance.
+	if cfg.Path == ":memory:" {
+		db.SetMaxOpenConns(1)
+	}
+
 	// Enable WAL mode for better concurrent performance
 	if cfg.EnableWAL && cfg.Path != ":memory:" {
 		if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {

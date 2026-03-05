@@ -524,7 +524,7 @@ type ChunkOptions struct {
 	FallbackChunkSize int    // Lines per chunk in fallback mode
 	FallbackOverlap   int    // Overlap lines in fallback mode
 	MaxTokens        int     // 0 means no token limit (backward compat)
-	CharsPerToken    float64 // 0 means use default (3.5); set to 1.5 for LiteLLM/OpenAI
+	CharsPerToken    float64 // 0 means use default (2.5); set to 1.0 for LiteLLM/OpenAI
 }
 
 // DefaultChunkOptions returns the default chunking options.

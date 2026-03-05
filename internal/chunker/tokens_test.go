@@ -15,7 +15,7 @@ func TestChunkerEstimateTokens(t *testing.T) {
 		{"empty", "", 0, 0},
 		{"short", "hello", 1, 3},
 		{"code", "func main() {}", 3, 6},
-		{"1000 chars", strings.Repeat("a", 1000), 250, 350},
+		{"1000 chars", strings.Repeat("a", 1000), 380, 420},
 	}
 
 	for _, tt := range tests {
@@ -38,11 +38,11 @@ func TestChunkerEstimateTokensWithRatio(t *testing.T) {
 		wantMax       int
 	}{
 		{"empty", "", 3.5, 0, 0},
-		{"default ratio", strings.Repeat("a", 350), 3.5, 100, 100},
-		{"litellm ratio", strings.Repeat("a", 150), 1.5, 100, 100},
-		{"1000 chars ollama", strings.Repeat("a", 1000), 3.5, 285, 286},
-		{"1000 chars litellm", strings.Repeat("a", 1000), 1.5, 666, 667},
-		{"zero ratio uses default", strings.Repeat("a", 350), 0, 100, 100},
+		{"default ratio", strings.Repeat("a", 250), 2.5, 100, 100},
+		{"litellm ratio", strings.Repeat("a", 100), 1.0, 100, 100},
+		{"1000 chars ollama", strings.Repeat("a", 1000), 2.5, 400, 400},
+		{"1000 chars litellm", strings.Repeat("a", 1000), 1.0, 1000, 1000},
+		{"zero ratio uses default", strings.Repeat("a", 250), 0, 100, 100},
 	}
 
 	for _, tt := range tests {
@@ -58,8 +58,8 @@ func TestChunkerEstimateTokensWithRatio(t *testing.T) {
 
 func TestChunkerMaxCharsForTokens(t *testing.T) {
 	got := MaxCharsForTokens(100)
-	if got != 350 {
-		t.Errorf("MaxCharsForTokens(100) = %d, want 350", got)
+	if got != 250 {
+		t.Errorf("MaxCharsForTokens(100) = %d, want 250", got)
 	}
 	got = MaxCharsForTokens(0)
 	if got != 0 {
@@ -76,11 +76,11 @@ func TestChunkerMaxCharsForTokensWithRatio(t *testing.T) {
 	}{
 		{"zero tokens", 0, 3.5, 0},
 		{"negative tokens", -1, 1.5, 0},
-		{"ollama 100", 100, 3.5, 350},
-		{"litellm 100", 100, 1.5, 150},
-		{"ollama 7500", 7500, 3.5, 26250},
-		{"litellm 7500", 7500, 1.5, 11250},
-		{"zero ratio uses default", 100, 0, 350},
+		{"ollama 100", 100, 2.5, 250},
+		{"litellm 100", 100, 1.0, 100},
+		{"ollama 7500", 7500, 2.5, 18750},
+		{"litellm 7500", 7500, 1.0, 7500},
+		{"zero ratio uses default", 100, 0, 250},
 	}
 
 	for _, tt := range tests {
@@ -95,11 +95,11 @@ func TestChunkerMaxCharsForTokensWithRatio(t *testing.T) {
 }
 
 func TestChunkerExceedsTokenLimit(t *testing.T) {
-	// 400 chars ≈ 115 tokens, which exceeds 100
+	// 400 chars ÷ 2.5 = 160 tokens, which exceeds 100
 	if !ExceedsTokenLimit(strings.Repeat("a", 400), 100) {
 		t.Error("expected 400 chars to exceed 100 token limit")
 	}
-	// 200 chars ≈ 57 tokens, under 100
+	// 200 chars ÷ 2.5 = 80 tokens, under 100
 	if ExceedsTokenLimit(strings.Repeat("a", 200), 100) {
 		t.Error("expected 200 chars to not exceed 100 token limit")
 	}
@@ -110,26 +110,26 @@ func TestChunkerExceedsTokenLimit(t *testing.T) {
 }
 
 func TestChunkerExceedsTokenLimitWithRatio(t *testing.T) {
-	// With LiteLLM ratio (1.5): 200 chars = 134 tokens > 100
-	if !ExceedsTokenLimitWithRatio(strings.Repeat("a", 200), 100, 1.5) {
-		t.Error("expected 200 chars to exceed 100 token limit with ratio 1.5")
+	// With LiteLLM ratio (1.0): 200 chars = 200 tokens > 100
+	if !ExceedsTokenLimitWithRatio(strings.Repeat("a", 200), 100, 1.0) {
+		t.Error("expected 200 chars to exceed 100 token limit with ratio 1.0")
 	}
-	// With Ollama ratio (3.5): 200 chars = 58 tokens < 100
-	if ExceedsTokenLimitWithRatio(strings.Repeat("a", 200), 100, 3.5) {
-		t.Error("expected 200 chars to not exceed 100 token limit with ratio 3.5")
+	// With Ollama ratio (2.5): 200 chars = 80 tokens < 100
+	if ExceedsTokenLimitWithRatio(strings.Repeat("a", 200), 100, 2.5) {
+		t.Error("expected 200 chars to not exceed 100 token limit with ratio 2.5")
 	}
 	// Zero limit means no limit regardless of ratio
-	if ExceedsTokenLimitWithRatio(strings.Repeat("a", 10000), 0, 1.5) {
+	if ExceedsTokenLimitWithRatio(strings.Repeat("a", 10000), 0, 1.0) {
 		t.Error("expected zero limit to mean no limit")
 	}
 }
 
 func TestChunkerProviderConstants(t *testing.T) {
-	if DefaultCharsPerTokenOllama != 3.5 {
-		t.Errorf("DefaultCharsPerTokenOllama = %f, want 3.5", DefaultCharsPerTokenOllama)
+	if DefaultCharsPerTokenOllama != 2.5 {
+		t.Errorf("DefaultCharsPerTokenOllama = %f, want 2.5", DefaultCharsPerTokenOllama)
 	}
-	if DefaultCharsPerTokenLiteLLM != 1.5 {
-		t.Errorf("DefaultCharsPerTokenLiteLLM = %f, want 1.5", DefaultCharsPerTokenLiteLLM)
+	if DefaultCharsPerTokenLiteLLM != 1.0 {
+		t.Errorf("DefaultCharsPerTokenLiteLLM = %f, want 1.0", DefaultCharsPerTokenLiteLLM)
 	}
 	// LiteLLM ratio should be stricter (lower) than Ollama
 	if DefaultCharsPerTokenLiteLLM >= DefaultCharsPerTokenOllama {

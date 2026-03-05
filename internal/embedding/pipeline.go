@@ -44,7 +44,7 @@ type Pipeline struct {
 	// Configuration
 	batchSize     int
 	maxWorkers    int
-	charsPerToken float64 // 0 means use default (3.5)
+	charsPerToken float64 // 0 means use default (2.5)
 }
 
 // PipelineOption configures a Pipeline.
@@ -67,7 +67,7 @@ func WithFailureStore(fs *FailureStore) PipelineOption {
 }
 
 // WithCharsPerToken sets the chars/token ratio for token estimation.
-// Use DefaultCharsPerTokenLiteLLM (1.5) for OpenAI/LiteLLM providers.
+// Use DefaultCharsPerTokenLiteLLM (1.0) for OpenAI/LiteLLM providers.
 func WithCharsPerToken(ratio float64) PipelineOption {
 	return func(p *Pipeline) {
 		if ratio > 0 {
@@ -268,32 +268,42 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 		contents = append(contents, content)
 	}
 
-	// Embed in batches, tolerating per-batch failures
+	// Pre-embed guard: route oversized chunks directly to sub-chunking
+	// instead of truncating them (which would lose data).
 	result := make(map[string][]float32)
-	var failedHashes []string
+	var failedHashes []string     // failed during batch embed — will retry via sub-chunking
+	var trulyFailedHashes []string // already tried sub-chunking and failed
+	maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
 
-	for i := 0; i < len(contents); i += p.batchSize {
+	var normalHashes []string
+	var normalContents []string
+	for idx, content := range contents {
+		if maxChars > 0 && len(content) > maxChars {
+			slog.Info("sub-chunking oversized chunk before embedding",
+				"hash", hashes[idx][:12], "content_len", len(content), "max_chars", maxChars)
+			subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
+			if len(subEmbeddings) > 0 {
+				result[hashes[idx]] = subEmbeddings[0]
+				stats.Recovered++
+			} else {
+				trulyFailedHashes = append(trulyFailedHashes, hashes[idx])
+			}
+		} else {
+			normalHashes = append(normalHashes, hashes[idx])
+			normalContents = append(normalContents, content)
+		}
+	}
+
+	// Embed normal-sized chunks in batches, tolerating per-batch failures
+	for i := 0; i < len(normalContents); i += p.batchSize {
 		end := i + p.batchSize
-		if end > len(contents) {
-			end = len(contents)
+		if end > len(normalContents) {
+			end = len(normalContents)
 		}
 
 		batchContents := make([]string, end-i)
-		copy(batchContents, contents[i:end])
-		batchHashes := hashes[i:end]
-
-		// Pre-embed truncation guard: truncate any chunk that still exceeds
-		// the token limit (e.g., gap/fallback chunks from the AST chunker).
-		maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
-		if maxChars > 0 {
-			for j, content := range batchContents {
-				if len(content) > maxChars {
-					slog.Warn("truncating oversized chunk before embedding",
-						"hash", batchHashes[j][:12], "content_len", len(content), "max_chars", maxChars)
-					batchContents[j] = content[:maxChars]
-				}
-			}
-		}
+		copy(batchContents, normalContents[i:end])
+		batchHashes := normalHashes[i:end]
 
 		embeddings, err := p.embedder.Embed(ctx, batchContents)
 		if err != nil {
@@ -314,7 +324,7 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 		}
 	}
 
-	// Try recursive sub-chunking for failed embeddings
+	// Try recursive sub-chunking for chunks that failed during batch embedding
 	for _, hash := range failedHashes {
 		content := hashToContent[hash]
 		subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
@@ -327,23 +337,28 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 				"sub_chunks", len(subEmbeddings),
 				"content_len", len(content))
 		} else {
-			// True failure — persist if we have a failure store
-			stats.Failed++
-			pc := hashToChunk[hash]
-			slog.Warn("chunk failed even after sub-chunking",
-				"path", pc.Path,
-				"lines", fmt.Sprintf("%d-%d", pc.StartLine, pc.EndLine),
-				"content_len", len(content),
-				"estimated_tokens", EstimateTokens(content))
+			trulyFailedHashes = append(trulyFailedHashes, hash)
+		}
+	}
 
-			if p.failureStore != nil {
-				model := p.embedder.ProviderID()
-				_ = p.failureStore.RecordFailure(
-					repoRoot, pc.Path, pc.StartLine, pc.EndLine,
-					content, "embedding failed after sub-chunking",
-					model, maxSubChunkDepth,
-				)
-			}
+	// Record true failures (failed even after sub-chunking)
+	for _, hash := range trulyFailedHashes {
+		stats.Failed++
+		content := hashToContent[hash]
+		pc := hashToChunk[hash]
+		slog.Warn("chunk failed even after sub-chunking",
+			"path", pc.Path,
+			"lines", fmt.Sprintf("%d-%d", pc.StartLine, pc.EndLine),
+			"content_len", len(content),
+			"estimated_tokens", EstimateTokens(content))
+
+		if p.failureStore != nil {
+			model := p.embedder.ProviderID()
+			_ = p.failureStore.RecordFailure(
+				repoRoot, pc.Path, pc.StartLine, pc.EndLine,
+				content, "embedding failed after sub-chunking",
+				model, maxSubChunkDepth,
+			)
 		}
 	}
 

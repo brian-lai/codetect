@@ -162,6 +162,7 @@ install: build
 	@cp $(MIGRATE) $(BIN_DIR)/migrate-to-postgres
 	@cp scripts/codetect-wrapper.sh $(BIN_DIR)/codetect
 	@chmod +x $(BIN_DIR)/codetect $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres
+	@codesign --sign - --force $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres 2>/dev/null || true
 	@cp templates/mcp.json $(SHARE_DIR)/templates/
 	@echo ""
 	@echo "✓ Installed to $(PREFIX)"

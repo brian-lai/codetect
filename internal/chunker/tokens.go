@@ -11,19 +11,20 @@ const (
 
 	// CharsPerToken is a conservative estimate for code (Ollama default).
 	// Kept for backward compatibility; prefer the provider-specific constants.
-	CharsPerToken = 3.5
+	CharsPerToken = 2.5
 
 	// DefaultCharsPerTokenOllama is the chars/token ratio for Ollama models.
-	// Code averages ~3.5 characters per token with SentencePiece tokenizers.
-	DefaultCharsPerTokenOllama = 3.5
+	// Empirically, code can tokenize at ~2.5 chars/token with SentencePiece;
+	// previous value of 3.5 allowed chunks that exceeded the 8192-token context.
+	DefaultCharsPerTokenOllama = 2.5
 
 	// DefaultCharsPerTokenLiteLLM is the chars/token ratio for LiteLLM/OpenAI models.
-	// OpenAI's tiktoken produces ~1.3 chars/token for code; 1.5 adds headroom.
-	DefaultCharsPerTokenLiteLLM = 1.5
+	// OpenAI's tiktoken produces ~1.28 chars/token for code; 1.0 ensures safety.
+	DefaultCharsPerTokenLiteLLM = 1.0
 )
 
 // EstimateTokens returns an approximate token count for the given text
-// using the default chars/token ratio (3.5).
+// using the default chars/token ratio (2.5).
 func EstimateTokens(text string) int {
 	return EstimateTokensWithRatio(text, CharsPerToken)
 }
@@ -40,7 +41,7 @@ func EstimateTokensWithRatio(text string, charsPerToken float64) int {
 }
 
 // MaxCharsForTokens returns the maximum character count that fits within
-// the given token budget using the default chars/token ratio (3.5).
+// the given token budget using the default chars/token ratio (2.5).
 func MaxCharsForTokens(maxTokens int) int {
 	return MaxCharsForTokensWithRatio(maxTokens, CharsPerToken)
 }
@@ -57,7 +58,7 @@ func MaxCharsForTokensWithRatio(maxTokens int, charsPerToken float64) int {
 }
 
 // ExceedsTokenLimit returns true if the text is estimated to exceed
-// the given token limit using the default chars/token ratio (3.5).
+// the given token limit using the default chars/token ratio (2.5).
 func ExceedsTokenLimit(text string, maxTokens int) bool {
 	return ExceedsTokenLimitWithRatio(text, maxTokens, CharsPerToken)
 }

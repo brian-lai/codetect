@@ -8,36 +8,63 @@ const (
 	// 7500 provides ~9% headroom for tokenization variance.
 	DefaultMaxTokens = 7500
 
-	// CharsPerToken is a conservative estimate for code.
-	// Code averages ~3.5 characters per token across common tokenizers
-	// (BPE, SentencePiece). This is conservative — natural language is
-	// closer to 4 chars/token, but code has more short identifiers and
-	// operators that tokenize less efficiently.
+	// CharsPerToken is a conservative estimate for code (Ollama default).
+	// Kept for backward compatibility; prefer the provider-specific constants.
 	CharsPerToken = 3.5
+
+	// DefaultCharsPerTokenOllama is the chars/token ratio for Ollama models.
+	// Code averages ~3.5 characters per token with SentencePiece tokenizers.
+	DefaultCharsPerTokenOllama = 3.5
+
+	// DefaultCharsPerTokenLiteLLM is the chars/token ratio for LiteLLM/OpenAI models.
+	// OpenAI's tiktoken produces ~1.3 chars/token for code; 1.5 adds headroom.
+	DefaultCharsPerTokenLiteLLM = 1.5
 )
 
-// EstimateTokens returns an approximate token count for the given text.
+// EstimateTokens returns an approximate token count for the given text
+// using the default chars/token ratio (3.5).
 func EstimateTokens(text string) int {
+	return EstimateTokensWithRatio(text, CharsPerToken)
+}
+
+// EstimateTokensWithRatio returns an approximate token count using the given ratio.
+func EstimateTokensWithRatio(text string, charsPerToken float64) int {
 	if len(text) == 0 {
 		return 0
 	}
-	return int(math.Ceil(float64(len(text)) / CharsPerToken))
+	if charsPerToken <= 0 {
+		charsPerToken = CharsPerToken
+	}
+	return int(math.Ceil(float64(len(text)) / charsPerToken))
 }
 
 // MaxCharsForTokens returns the maximum character count that fits within
-// the given token budget.
+// the given token budget using the default chars/token ratio (3.5).
 func MaxCharsForTokens(maxTokens int) int {
+	return MaxCharsForTokensWithRatio(maxTokens, CharsPerToken)
+}
+
+// MaxCharsForTokensWithRatio returns the max char count for the given ratio.
+func MaxCharsForTokensWithRatio(maxTokens int, charsPerToken float64) int {
 	if maxTokens <= 0 {
 		return 0
 	}
-	return int(float64(maxTokens) * CharsPerToken)
+	if charsPerToken <= 0 {
+		charsPerToken = CharsPerToken
+	}
+	return int(float64(maxTokens) * charsPerToken)
 }
 
 // ExceedsTokenLimit returns true if the text is estimated to exceed
-// the given token limit.
+// the given token limit using the default chars/token ratio (3.5).
 func ExceedsTokenLimit(text string, maxTokens int) bool {
+	return ExceedsTokenLimitWithRatio(text, maxTokens, CharsPerToken)
+}
+
+// ExceedsTokenLimitWithRatio checks the limit using the given ratio.
+func ExceedsTokenLimitWithRatio(text string, maxTokens int, charsPerToken float64) bool {
 	if maxTokens <= 0 {
 		return false
 	}
-	return EstimateTokens(text) > maxTokens
+	return EstimateTokensWithRatio(text, charsPerToken) > maxTokens
 }

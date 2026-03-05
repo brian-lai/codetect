@@ -223,7 +223,14 @@ func (idx *Indexer) initComponents() error {
 		return fmt.Errorf("creating failure store: %w", err)
 	}
 
-	// Create pipeline
+	// Create pipeline with provider-aware chars/token ratio
+	var charsPerToken float64
+	switch idx.config.EmbeddingProvider {
+	case "litellm":
+		charsPerToken = embedding.DefaultCharsPerTokenLiteLLM
+	default:
+		charsPerToken = embedding.DefaultCharsPerTokenOllama
+	}
 	idx.pipeline = embedding.NewPipeline(
 		idx.cache,
 		idx.locations,
@@ -231,6 +238,7 @@ func (idx *Indexer) initComponents() error {
 		embedding.WithBatchSize(idx.config.BatchSize),
 		embedding.WithMaxWorkers(idx.config.MaxWorkers),
 		embedding.WithFailureStore(idx.failureStore),
+		embedding.WithCharsPerToken(charsPerToken),
 	)
 
 	return nil
@@ -420,6 +428,13 @@ func (idx *Indexer) processBatch(ctx context.Context, files []string, opts Index
 			chunkOpts.MaxTokens = idx.config.MaxTokens
 		} else {
 			chunkOpts.MaxTokens = chunker.DefaultMaxTokens
+		}
+		// Set chars/token ratio based on embedding provider
+		switch idx.config.EmbeddingProvider {
+		case "litellm":
+			chunkOpts.CharsPerToken = chunker.DefaultCharsPerTokenLiteLLM
+		default:
+			chunkOpts.CharsPerToken = chunker.DefaultCharsPerTokenOllama
 		}
 		astChunks, err := idx.astChunker.ChunkFileWithOptions(ctx, relPath, content, chunkOpts)
 		if err != nil {

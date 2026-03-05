@@ -7,10 +7,10 @@ import (
 
 func TestEstimateTokens(t *testing.T) {
 	tests := []struct {
-		name     string
-		text     string
-		wantMin  int
-		wantMax  int
+		name    string
+		text    string
+		wantMin int
+		wantMax int
 	}{
 		{"empty", "", 0, 0},
 		{"short", "hello", 1, 3},
@@ -30,6 +30,33 @@ func TestEstimateTokens(t *testing.T) {
 	}
 }
 
+func TestEstimateTokensWithRatio(t *testing.T) {
+	tests := []struct {
+		name          string
+		text          string
+		charsPerToken float64
+		wantMin       int
+		wantMax       int
+	}{
+		{"empty", "", 3.5, 0, 0},
+		{"default ratio", strings.Repeat("a", 350), 3.5, 100, 100},
+		{"litellm ratio", strings.Repeat("a", 150), 1.5, 100, 100},
+		{"1000 chars ollama", strings.Repeat("a", 1000), 3.5, 285, 286},
+		{"1000 chars litellm", strings.Repeat("a", 1000), 1.5, 666, 667},
+		{"zero ratio uses default", strings.Repeat("a", 350), 0, 100, 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EstimateTokensWithRatio(tt.text, tt.charsPerToken)
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("EstimateTokensWithRatio(%d chars, %.1f) = %d, want [%d, %d]",
+					len(tt.text), tt.charsPerToken, got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
 func TestMaxCharsForTokens(t *testing.T) {
 	tests := []struct {
 		maxTokens int
@@ -37,7 +64,7 @@ func TestMaxCharsForTokens(t *testing.T) {
 	}{
 		{0, 0},
 		{-1, 0},
-		{100, 350},   // 100 * 3.5
+		{100, 350},    // 100 * 3.5
 		{7500, 26250}, // 7500 * 3.5
 	}
 
@@ -46,6 +73,33 @@ func TestMaxCharsForTokens(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("MaxCharsForTokens(%d) = %d, want %d", tt.maxTokens, got, tt.want)
 		}
+	}
+}
+
+func TestMaxCharsForTokensWithRatio(t *testing.T) {
+	tests := []struct {
+		name          string
+		maxTokens     int
+		charsPerToken float64
+		want          int
+	}{
+		{"zero tokens", 0, 3.5, 0},
+		{"negative tokens", -1, 1.5, 0},
+		{"ollama 100", 100, 3.5, 350},
+		{"litellm 100", 100, 1.5, 150},
+		{"ollama 7500", 7500, 3.5, 26250},
+		{"litellm 7500", 7500, 1.5, 11250},
+		{"zero ratio uses default", 100, 0, 350},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MaxCharsForTokensWithRatio(tt.maxTokens, tt.charsPerToken)
+			if got != tt.want {
+				t.Errorf("MaxCharsForTokensWithRatio(%d, %.1f) = %d, want %d",
+					tt.maxTokens, tt.charsPerToken, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -74,6 +128,21 @@ func TestExceedsTokenLimit(t *testing.T) {
 	}
 }
 
+func TestExceedsTokenLimitWithRatio(t *testing.T) {
+	// With LiteLLM ratio (1.5): 200 chars = 134 tokens > 100
+	if !ExceedsTokenLimitWithRatio(strings.Repeat("a", 200), 100, 1.5) {
+		t.Error("expected 200 chars to exceed 100 token limit with ratio 1.5")
+	}
+	// With Ollama ratio (3.5): 200 chars = 58 tokens < 100
+	if ExceedsTokenLimitWithRatio(strings.Repeat("a", 200), 100, 3.5) {
+		t.Error("expected 200 chars to not exceed 100 token limit with ratio 3.5")
+	}
+	// Zero limit means no limit regardless of ratio
+	if ExceedsTokenLimitWithRatio(strings.Repeat("a", 10000), 0, 1.5) {
+		t.Error("expected zero limit to mean no limit")
+	}
+}
+
 func TestDefaultMaxTokens(t *testing.T) {
 	// Verify DefaultMaxTokens provides headroom under 8192
 	if DefaultMaxTokens >= 8192 {
@@ -81,5 +150,18 @@ func TestDefaultMaxTokens(t *testing.T) {
 	}
 	if DefaultMaxTokens < 7000 {
 		t.Errorf("DefaultMaxTokens = %d, too conservative (< 7000)", DefaultMaxTokens)
+	}
+}
+
+func TestProviderConstants(t *testing.T) {
+	if DefaultCharsPerTokenOllama != 3.5 {
+		t.Errorf("DefaultCharsPerTokenOllama = %f, want 3.5", DefaultCharsPerTokenOllama)
+	}
+	if DefaultCharsPerTokenLiteLLM != 1.5 {
+		t.Errorf("DefaultCharsPerTokenLiteLLM = %f, want 1.5", DefaultCharsPerTokenLiteLLM)
+	}
+	// LiteLLM ratio should be stricter (lower) than Ollama
+	if DefaultCharsPerTokenLiteLLM >= DefaultCharsPerTokenOllama {
+		t.Error("LiteLLM ratio should be stricter (lower) than Ollama")
 	}
 }

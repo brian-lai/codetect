@@ -17,7 +17,7 @@ import (
 // semantic code search.
 type V2SemanticSearcher struct {
 	cache       *EmbeddingCache
-	locations   *LocationStore
+	locations   LocationAccess
 	vectorIndex VectorIndex
 	embedder    Embedder
 	repoRoot    string
@@ -49,7 +49,7 @@ type V2SearchResponse struct {
 // If vectorIndex is nil, a brute-force index will be created from the cache.
 func NewV2SemanticSearcher(
 	cache *EmbeddingCache,
-	locations *LocationStore,
+	locations LocationAccess,
 	embedder Embedder,
 	repoRoot string,
 	vectorIndex VectorIndex,

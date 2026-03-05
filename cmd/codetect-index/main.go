@@ -165,6 +165,7 @@ func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool) {
 	// Load configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 	embConfig := embedding.LoadConfigFromEnv()
+	privacyConfig := config.LoadPrivacyConfigFromEnv()
 
 	// Build indexer config
 	cfg := &indexer.Config{
@@ -177,6 +178,7 @@ func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool) {
 		LiteLLMKey:        embConfig.LiteLLMKey,
 		BatchSize:         32,
 		MaxWorkers:        4,
+		HashPaths:         privacyConfig.HashPaths,
 	}
 
 	// Set database path/DSN

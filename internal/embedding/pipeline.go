@@ -784,6 +784,13 @@ func detectLanguage(path string) string {
 	}
 }
 
+// SetMaxWorkers updates the maximum number of concurrent embedding workers.
+func (p *Pipeline) SetMaxWorkers(workers int) {
+	if workers > 0 {
+		p.maxWorkers = workers
+	}
+}
+
 // Cache returns the underlying embedding cache.
 func (p *Pipeline) Cache() *EmbeddingCache {
 	return p.cache

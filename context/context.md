@@ -1,33 +1,29 @@
 # Current Work Summary
 
-Executing: Add `--clear-cache` flag and update index documentation
+LiteLLM config setup complete.
 
-**Branch:** `para/clear-cache-and-docs`
-**Plan:** context/plans/2026-03-02-clear-cache-and-docs.md
+**Plan:** context/plans/2026-03-04-litellm-config-setup.md
 
 ## To-Do List
 
-- [x] Add `Clear()` method to `EmbeddingCache`
-- [x] Add `--clear-cache` flag to `cmd/codetect-index/main.go` and wire into v2 path
-- [x] Update `printUsage()` help text to clarify `--force` vs `--clear-cache` with examples
-- [x] Documentation audit fix-up:
-  - [x] Fix CLAUDE.md structure tree (add 8 missing packages)
-  - [x] Fix CLAUDE.md Key Files (replace nonexistent semantic.go with actual files)
-  - [x] Fix CLAUDE.md search/ description
-  - [x] Update codetect-index version constant to 3.5.0
-  - [x] Fix README.md tree-sitter → ast-grep claims
-  - [x] Add --force/--clear-cache docs to README.md CLI section
+- [x] Back up current config.env
+- [x] Update ~/.config/codetect/config.env with LiteLLM settings
+- [x] Source and verify configuration
+- [x] Test LiteLLM endpoint connectivity and embedding generation
 
 ## Progress Notes
 
-- All --clear-cache items committed on prior commits
-- Documentation audit complete: CLAUDE.md, README.md, and version constant all updated
+- Backed up to `~/.config/codetect/config.env.backup.pre-litellm`
+- Updated config: switched from Ollama (nomic-embed-text, 768-dim) to LiteLLM (text-embedding-3-small, 1536-dim)
+- Health check: ✅ LiteLLM at https://litellm.justworksai.net responds with auth
+- Embedding test: ✅ text-embedding-3-small returns 1536-dim vectors
+- **Note:** Existing embeddings are 768-dim. Run `codetect index --clear-cache` to re-embed with new provider.
 
 ---
 
 ```json
 {
-  "active_context": ["context/plans/2026-03-02-clear-cache-and-docs.md"],
+  "active_context": ["context/plans/2026-03-04-litellm-config-setup.md"],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
     "context/summaries/2026-02-01-registry-stats-update-summary.md",
@@ -42,8 +38,6 @@ Executing: Add `--clear-cache` flag and update index documentation
     "context/summaries/2026-02-19-eval-cost-report-improvements-summary.md",
     "context/summaries/2026-03-01-legacy-cleanup-summary.md"
   ],
-  "execution_branch": "para/clear-cache-and-docs",
-  "execution_started": "2026-03-02T13:30:00Z",
-  "last_updated": "2026-03-02T13:30:00Z"
+  "last_updated": "2026-03-04T00:00:00Z"
 }
 ```

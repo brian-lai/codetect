@@ -81,8 +81,9 @@ func (s *scopeStack) currentReceiverType() string {
 // It splits code at natural AST boundaries (functions, classes, methods) to
 // produce more semantically coherent chunks for embedding.
 type ASTChunker struct {
-	OverlapLines int // Lines of context to include from adjacent chunks (for future use)
-	maxTokens    int // set per-call from ChunkOptions; 0 means no limit
+	OverlapLines int     // Lines of context to include from adjacent chunks (for future use)
+	maxTokens    int     // set per-call from ChunkOptions; 0 means no limit
+	charsPerToken float64 // set per-call from ChunkOptions; 0 means use default (3.5)
 }
 
 // NewASTChunker creates a new ASTChunker with default settings.
@@ -164,24 +165,26 @@ func (c *ASTChunker) walkTree(node *sitter.Node, content []byte, path string, co
 		// Create chunk with parent scope from stack
 		chunk := c.nodeToChunk(node, content, path, config, stack)
 		if chunk.LineCount() > 0 {
-			*chunks = append(*chunks, chunk)
-
-			// Mark bytes as covered
-			for i := int(node.StartByte()); i < int(node.EndByte()); i++ {
-				covered[i] = true
+			// Check if chunk is too large (by chars or tokens)
+			tokenMaxChars := 0
+			if c.maxTokens > 0 {
+				tokenMaxChars = MaxCharsForTokensWithRatio(c.maxTokens, c.charsPerToken)
 			}
-		}
+			isOversized := len(chunk.Content) > config.MaxChunkSize ||
+				(tokenMaxChars > 0 && len(chunk.Content) > tokenMaxChars)
 
-		// If chunk is too large (by chars or tokens), recursively chunk children
-		// This handles nested structures like methods inside classes
-		tokenMaxChars := 0
-		if c.maxTokens > 0 {
-			tokenMaxChars = MaxCharsForTokens(c.maxTokens)
-		}
-		if len(chunk.Content) > config.MaxChunkSize || (tokenMaxChars > 0 && len(chunk.Content) > tokenMaxChars) {
-			for i := 0; i < int(node.ChildCount()); i++ {
-				child := node.Child(i)
-				c.walkTree(child, content, path, config, splitNodes, chunks, covered, stack)
+			if isOversized {
+				// Recurse into children only; gap-fill handles uncovered regions
+				for i := 0; i < int(node.ChildCount()); i++ {
+					child := node.Child(i)
+					c.walkTree(child, content, path, config, splitNodes, chunks, covered, stack)
+				}
+			} else {
+				*chunks = append(*chunks, chunk)
+				// Mark bytes as covered
+				for i := int(node.StartByte()); i < int(node.EndByte()); i++ {
+					covered[i] = true
+				}
 			}
 		}
 		return
@@ -514,13 +517,14 @@ func sortChunks(chunks []Chunk) {
 
 // ChunkFileWithOptions allows customization of chunking behavior.
 type ChunkOptions struct {
-	MaxChunkSize     int  // Override default max chunk size
-	IncludeGaps      bool // Include gap chunks for uncovered regions
-	FallbackEnabled  bool // Enable fallback for unsupported languages
-	ComputeHashes    bool // Compute content hashes
-	FallbackChunkSize int // Lines per chunk in fallback mode
-	FallbackOverlap   int // Overlap lines in fallback mode
-	MaxTokens        int  // 0 means no token limit (backward compat)
+	MaxChunkSize     int     // Override default max chunk size
+	IncludeGaps      bool    // Include gap chunks for uncovered regions
+	FallbackEnabled  bool    // Enable fallback for unsupported languages
+	ComputeHashes    bool    // Compute content hashes
+	FallbackChunkSize int    // Lines per chunk in fallback mode
+	FallbackOverlap   int    // Overlap lines in fallback mode
+	MaxTokens        int     // 0 means no token limit (backward compat)
+	CharsPerToken    float64 // 0 means use default (3.5); set to 1.5 for LiteLLM/OpenAI
 }
 
 // DefaultChunkOptions returns the default chunking options.
@@ -551,8 +555,9 @@ func (c *ASTChunker) ChunkFileWithOptions(ctx context.Context, path string, cont
 		effectiveConfig.MaxChunkSize = opts.MaxChunkSize
 	}
 
-	// Set token limit for this call
+	// Set token limit and chars/token ratio for this call
 	c.maxTokens = opts.MaxTokens
+	c.charsPerToken = opts.CharsPerToken
 
 	// Parse with tree-sitter
 	parser := sitter.NewParser()

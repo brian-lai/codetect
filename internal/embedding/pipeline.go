@@ -42,8 +42,9 @@ type Pipeline struct {
 	failureStore *FailureStore
 
 	// Configuration
-	batchSize  int
-	maxWorkers int
+	batchSize     int
+	maxWorkers    int
+	charsPerToken float64 // 0 means use default (3.5)
 }
 
 // PipelineOption configures a Pipeline.
@@ -62,6 +63,16 @@ func WithBatchSize(size int) PipelineOption {
 func WithFailureStore(fs *FailureStore) PipelineOption {
 	return func(p *Pipeline) {
 		p.failureStore = fs
+	}
+}
+
+// WithCharsPerToken sets the chars/token ratio for token estimation.
+// Use DefaultCharsPerTokenLiteLLM (1.5) for OpenAI/LiteLLM providers.
+func WithCharsPerToken(ratio float64) PipelineOption {
+	return func(p *Pipeline) {
+		if ratio > 0 {
+			p.charsPerToken = ratio
+		}
 	}
 }
 
@@ -267,8 +278,22 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 			end = len(contents)
 		}
 
-		batchContents := contents[i:end]
+		batchContents := make([]string, end-i)
+		copy(batchContents, contents[i:end])
 		batchHashes := hashes[i:end]
+
+		// Pre-embed truncation guard: truncate any chunk that still exceeds
+		// the token limit (e.g., gap/fallback chunks from the AST chunker).
+		maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
+		if maxChars > 0 {
+			for j, content := range batchContents {
+				if len(content) > maxChars {
+					slog.Warn("truncating oversized chunk before embedding",
+						"hash", batchHashes[j][:12], "content_len", len(content), "max_chars", maxChars)
+					batchContents[j] = content[:maxChars]
+				}
+			}
+		}
 
 		embeddings, err := p.embedder.Embed(ctx, batchContents)
 		if err != nil {

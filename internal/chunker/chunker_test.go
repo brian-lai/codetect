@@ -1168,6 +1168,119 @@ func b() {}
 }
 
 // =============================================================================
+// Oversized Parent Chunk Tests
+// =============================================================================
+
+func TestWalkTreeSkipsOversizedParent(t *testing.T) {
+	// Create a Go file with a large function containing nested inner functions.
+	// The outer function exceeds MaxChunkSize, so it should NOT appear in output.
+	// Only the inner (smaller) children should be emitted; gap-fill covers the rest.
+	var builder strings.Builder
+	builder.WriteString("package main\n\n")
+
+	// Large outer function (~60 lines, well over 500 chars)
+	builder.WriteString("func bigFunction() {\n")
+	for i := 0; i < 50; i++ {
+		builder.WriteString("\t// line padding to make this function very large\n")
+	}
+	builder.WriteString("}\n\n")
+
+	// Small function that fits
+	builder.WriteString("func smallFunction() {\n")
+	builder.WriteString("\tx := 1\n")
+	builder.WriteString("\t_ = x\n")
+	builder.WriteString("}\n")
+
+	content := builder.String()
+
+	chunker := NewASTChunker()
+	opts := ChunkOptions{
+		MaxChunkSize:    500,
+		IncludeGaps:     true,
+		FallbackEnabled: true,
+		ComputeHashes:   true,
+	}
+
+	chunks, err := chunker.ChunkFileWithOptions(context.Background(), "test.go", []byte(content), opts)
+	if err != nil {
+		t.Fatalf("ChunkFileWithOptions failed: %v", err)
+	}
+
+	// No split-node chunk (non-gap) should exceed 500 chars.
+	// Gap chunks may be larger — they are handled by the pipeline's truncation guard.
+	for i, c := range chunks {
+		if c.NodeType != "gap" && len(c.Content) > 500 {
+			t.Errorf("chunk %d exceeds MaxChunkSize: %d chars (type=%s, lines=%d-%d)",
+				i, len(c.Content), c.NodeType, c.StartLine, c.EndLine)
+		}
+	}
+
+	// The oversized bigFunction should NOT appear as a function_declaration chunk
+	bigChunks := filterChunks(chunks, func(c Chunk) bool {
+		return c.NodeType == "function_declaration" && c.NodeName == "bigFunction"
+	})
+	if len(bigChunks) != 0 {
+		t.Errorf("expected oversized bigFunction to be skipped, got %d chunks", len(bigChunks))
+	}
+
+	// The small function should still appear
+	smallChunks := filterChunks(chunks, func(c Chunk) bool {
+		return c.NodeName == "smallFunction"
+	})
+	if len(smallChunks) != 1 {
+		t.Errorf("expected 1 smallFunction chunk, got %d", len(smallChunks))
+	}
+}
+
+func TestWalkTreeSkipsOversizedByTokenLimit(t *testing.T) {
+	// Create a function that fits within MaxChunkSize (chars) but exceeds
+	// the token limit when using a tight chars/token ratio (like LiteLLM).
+	var builder strings.Builder
+	builder.WriteString("package main\n\n")
+
+	// Function with ~500 chars of content — fits 2000 char limit
+	// but with ratio 1.5, 500 chars = ~333 tokens > 100 token limit
+	builder.WriteString("func mediumFunction() {\n")
+	for i := 0; i < 20; i++ {
+		builder.WriteString("\tfmt.Println(\"test\")\n")
+	}
+	builder.WriteString("}\n")
+
+	content := builder.String()
+
+	chunker := NewASTChunker()
+	opts := ChunkOptions{
+		MaxChunkSize:    2000, // chars limit won't trigger
+		MaxTokens:       100,  // token limit will trigger with ratio 1.5
+		CharsPerToken:   1.5,
+		IncludeGaps:     true,
+		FallbackEnabled: true,
+		ComputeHashes:   true,
+	}
+
+	chunks, err := chunker.ChunkFileWithOptions(context.Background(), "test.go", []byte(content), opts)
+	if err != nil {
+		t.Fatalf("ChunkFileWithOptions failed: %v", err)
+	}
+
+	// The function chunk itself should NOT appear (it exceeds token limit)
+	funcChunks := filterChunks(chunks, func(c Chunk) bool {
+		return c.NodeType == "function_declaration" && c.NodeName == "mediumFunction"
+	})
+	if len(funcChunks) != 0 {
+		t.Errorf("expected oversized function to be skipped, but got %d chunks", len(funcChunks))
+		for _, c := range funcChunks {
+			t.Logf("  chunk: %d chars, lines %d-%d", len(c.Content), c.StartLine, c.EndLine)
+		}
+	}
+
+	// But we should still get gap chunks covering the content
+	if len(chunks) == 0 {
+		t.Error("expected at least some gap/child chunks, got 0")
+	}
+}
+
+// =============================================================================
 // Benchmark Tests
 // =============================================================================
 

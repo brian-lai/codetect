@@ -221,6 +221,17 @@ codetect embed
 
 For large codebases, PostgreSQL + pgvector provides massive performance improvements through HNSW indexing. See [PostgreSQL Setup Guide](docs/postgres-setup.md) for detailed installation and migration instructions.
 
+### Privacy
+
+For enterprise/cloud scenarios where a centralized index could be shared, enable path hashing to store file paths as opaque SHA-256 hashes in the database:
+
+```bash
+export CODETECT_HASH_PATHS=true
+codetect index --clear-cache --force  # Re-index with hashed paths
+```
+
+A local sidecar file (`path_map.json`) maintains the reverse mapping so search results still return real paths.
+
 See [Installation Guide](docs/installation.md#configuration) for all configuration options.
 
 ## Performance Evaluation

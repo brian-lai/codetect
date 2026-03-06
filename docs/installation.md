@@ -397,6 +397,7 @@ codetect doctor
 | `CODETECT_LITELLM_API_KEY` | API key for LiteLLM | (none) |
 | `CODETECT_EMBEDDING_MODEL` | Override the embedding model | (provider default) |
 | `CODETECT_EMBEDDING_DIMENSIONS` | Override embedding dimensions | (model default) |
+| `CODETECT_HASH_PATHS` | SHA-256 hash file paths at rest in the DB | `false` |
 
 ### Examples
 

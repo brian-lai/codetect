@@ -320,6 +320,9 @@ CODETECT_EMBEDDING_MODEL=bge-m3      # Model override (provider-specific)
 # Logging
 CODETECT_LOG_LEVEL=info              # debug, info, warn, error
 CODETECT_LOG_FORMAT=text             # text (default), json
+
+# Privacy
+CODETECT_HASH_PATHS=false            # SHA-256 hash file paths at rest (default: false)
 ```
 
 ### Project Config (`.codetect.yaml`)

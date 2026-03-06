@@ -126,6 +126,7 @@ make clean                    # Clean build artifacts
 - `CODETECT_LITELLM_API_KEY` - API key for LiteLLM/OpenAI
 - `CODETECT_DB_TYPE` - `sqlite` (default) or `postgres`
 - `CODETECT_DB_DSN` - PostgreSQL connection string
+- `CODETECT_HASH_PATHS` - SHA-256 hash file paths at rest (`false` default)
 
 **Project Config (`.codetect.yaml`):**
 ```yaml

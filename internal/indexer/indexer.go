@@ -409,17 +409,19 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 
 	// 4. Compute concurrency profile and apply it
 	profile := ComputeConcurrency(
-		len(filesToProcess),
+		newTree.FileCount,
 		idx.config.EmbeddingProvider,
 		idx.config.Parallel,
 	)
 	idx.pipeline.SetMaxWorkers(profile.EmbedWorkers)
-	idx.logger.Info("concurrency profile",
-		"tier", profile.Tier,
-		"embed_workers", profile.EmbedWorkers,
-		"chunk_workers", profile.ChunkWorkers,
-		"batch_size", profile.FileBatchSize,
-		"files", len(filesToProcess))
+	if opts.Verbose {
+		idx.logger.Info("concurrency profile",
+			"tier", profile.Tier,
+			"embed_workers", profile.EmbedWorkers,
+			"chunk_workers", profile.ChunkWorkers,
+			"batch_size", profile.FileBatchSize,
+			"files", newTree.FileCount)
+	}
 
 	// 5. Process files in batches
 	batchSize := profile.FileBatchSize

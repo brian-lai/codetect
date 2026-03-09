@@ -1,3 +1,10 @@
+---
+title: Migration Guide
+layout: default
+parent: Getting Started
+nav_order: 3
+---
+
 # Migration Guide
 
 ## v2.x → v3.0.0

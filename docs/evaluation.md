@@ -1,3 +1,10 @@
+---
+title: Evaluation Guide
+layout: default
+parent: Performance
+nav_order: 2
+---
+
 # Performance Evaluation Guide
 
 codetect includes a comprehensive evaluation tool to measure the performance improvement of MCP tools vs. standard CLI tools (grep, find, etc.) when working with Claude Code.

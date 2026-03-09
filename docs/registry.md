@@ -1,3 +1,10 @@
+---
+title: Project Registry
+layout: default
+parent: Configuration
+nav_order: 3
+---
+
 # Project Registry Guide
 
 The codetect registry is a centralized tracking system for all indexed projects on your machine.

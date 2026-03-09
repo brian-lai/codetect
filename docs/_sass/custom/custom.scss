@@ -1,0 +1,8 @@
+// Custom overrides for just-the-docs dark theme
+// Landing page styles are in assets/css/custom.css (standalone)
+// This file handles just-the-docs documentation page overrides
+
+// Slightly tighter code blocks
+.highlight pre {
+  border-radius: 6px;
+}

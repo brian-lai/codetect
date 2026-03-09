@@ -1,3 +1,10 @@
+---
+title: .codetectignore Guide
+layout: default
+parent: Getting Started
+nav_order: 2
+---
+
 # .codetectignore Guide
 
 ## Overview

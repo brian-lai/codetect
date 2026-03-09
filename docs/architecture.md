@@ -1,3 +1,10 @@
+---
+title: Architecture (v3)
+layout: default
+parent: Architecture
+nav_order: 1
+---
+
 # codetect Architecture
 
 > **Version:** v3.0.0

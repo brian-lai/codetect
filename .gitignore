@@ -30,3 +30,7 @@ Thumbs.db
 
 .claude
 .mcp.json
+
+# Jekyll
+docs/_site/
+docs/.jekyll-cache/

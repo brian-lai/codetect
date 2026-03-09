@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page.title }} | {{ site.title }}</title>
+  <meta name="description" content="{{ site.description }}">
+
+  {% include head_custom.html %}
+
+  <link rel="stylesheet" href="{{ '/assets/css/custom.css' | relative_url }}">
+</head>
+<body class="landing-page">
+  <header class="landing-nav">
+    <div class="landing-nav-inner">
+      <a href="{{ '/' | relative_url }}" class="landing-logo">codetect</a>
+      <nav class="landing-nav-links">
+        <a href="{{ '/getting-started/' | relative_url }}">Docs</a>
+        <a href="{{ '/performance/' | relative_url }}">Performance</a>
+        <a href="https://github.com/brian-lai/codetect" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-inner">
+        <h1 class="hero-title">codetect</h1>
+        <p class="hero-tagline">Fast, token-efficient codebase search for every LLM.</p>
+        <p class="hero-subtitle">A local MCP server that brings Cursor-like performance to Claude Code and any LLM tool through intelligent codebase indexing.</p>
+
+        <div class="hero-metrics">
+          <div class="metric">
+            <span class="metric-value">85.7%</span>
+            <span class="metric-label">Accuracy</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value">0%</span>
+            <span class="metric-label">Token Overhead</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value">4</span>
+            <span class="metric-label">MCP Tools</span>
+          </div>
+        </div>
+
+        <div class="hero-cta">
+          <a href="{{ '/getting-started/' | relative_url }}" class="btn btn-primary">Get Started</a>
+          <a href="https://github.com/brian-lai/codetect" class="btn btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+      <div class="features-inner">
+        <h2 class="section-title">4 Tools. Complete Codebase Access.</h2>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h3>search_keyword</h3>
+            <p>Fast regex search powered by ripgrep with configurable detail levels &mdash; minimal, standard, or rich context.</p>
+          </div>
+          <div class="feature-card">
+            <h3>get_file</h3>
+            <p>Read any file with optional line-range slicing. Retrieves exactly the code you need without wasting tokens.</p>
+          </div>
+          <div class="feature-card">
+            <h3>symbols</h3>
+            <p>Symbol lookup and file definition listing. Find functions, classes, and types instantly with <code>mode=find</code> or <code>mode=list</code>.</p>
+          </div>
+          <div class="feature-card">
+            <h3>hybrid_search_v2</h3>
+            <p>Combined keyword + semantic search with cross-encoder reranking. Ask natural language questions about your codebase.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Start -->
+    <section class="quickstart">
+      <div class="quickstart-inner">
+        <h2 class="section-title">Get Running in 3 Steps</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <h3>Install</h3>
+            <div class="code-block">
+              <pre><code>git clone https://github.com/brian-lai/codetect.git
+cd codetect
+./install.sh</code></pre>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <h3>Index your project</h3>
+            <div class="code-block">
+              <pre><code>cd /path/to/your/project
+codetect init      # Creates .mcp.json
+codetect index     # Index symbols + embeddings</code></pre>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <h3>Search</h3>
+            <div class="code-block">
+              <pre><code># Start Claude Code — codetect tools are
+# automatically available via MCP
+claude</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compatibility -->
+    <section class="compatibility">
+      <div class="compatibility-inner">
+        <h2 class="section-title">Works With Any MCP Client</h2>
+        <table class="compat-table">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>MCP Support</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Claude Code</td>
+              <td>Native</td>
+              <td class="status-full">Full Support</td>
+            </tr>
+            <tr>
+              <td>Claude Desktop</td>
+              <td>Native</td>
+              <td class="status-full">Full Support</td>
+            </tr>
+            <tr>
+              <td>Cursor</td>
+              <td>Native</td>
+              <td class="status-full">Full Support</td>
+            </tr>
+            <tr>
+              <td>Windsurf</td>
+              <td>Native</td>
+              <td class="status-full">Full Support</td>
+            </tr>
+            <tr>
+              <td>VS Code + Continue</td>
+              <td>Plugin</td>
+              <td class="status-full">Full Support</td>
+            </tr>
+            <tr>
+              <td>Zed</td>
+              <td>Native</td>
+              <td class="status-full">Full Support</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    <div class="landing-footer-inner">
+      <div class="footer-links">
+        <a href="{{ '/getting-started/' | relative_url }}">Documentation</a>
+        <a href="https://github.com/brian-lai/codetect" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/brian-lai/codetect/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+      <p class="footer-copy">Built for developers who want fast, private codebase search.</p>
+    </div>
+  </footer>
+</body>
+</html>

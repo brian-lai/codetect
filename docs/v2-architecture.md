@@ -1,3 +1,10 @@
+---
+title: v2 Architecture
+layout: default
+parent: Architecture
+nav_order: 2
+---
+
 # codetect v2.0.0 Architecture
 
 This document describes the technical architecture of codetect v2.0.0.

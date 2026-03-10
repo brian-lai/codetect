@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	ignore "github.com/sabhiram/go-gitignore"
@@ -71,8 +72,48 @@ type Config struct {
 	// Token limit for embedding chunks (0 = use default)
 	MaxTokens int
 
+	// Parallel is the user-specified concurrency override (--parallel/-j flag).
+	// 0 means auto-detect from repo size; >0 overrides both embed and chunk workers.
+	Parallel int
+
 	// Ignore patterns (from .gitignore)
 	IgnorePatterns []string
+}
+
+// ConcurrencyProfile controls parallelism for the indexing pipeline.
+type ConcurrencyProfile struct {
+	EmbedWorkers  int    // concurrent embedding workers
+	ChunkWorkers  int    // concurrent file reading + chunking goroutines
+	FileBatchSize int    // files per batch
+	Tier          string // "small", "medium", or "large" (for logging)
+}
+
+// ComputeConcurrency returns a ConcurrencyProfile based on repo size,
+// embedding provider, and optional user override.
+func ComputeConcurrency(fileCount int, provider string, userOverride int) ConcurrencyProfile {
+	var p ConcurrencyProfile
+
+	switch {
+	case fileCount >= 5000:
+		p = ConcurrencyProfile{EmbedWorkers: 8, ChunkWorkers: 8, FileBatchSize: 500, Tier: "large"}
+	case fileCount >= 500:
+		p = ConcurrencyProfile{EmbedWorkers: 4, ChunkWorkers: 4, FileBatchSize: 200, Tier: "medium"}
+	default:
+		p = ConcurrencyProfile{EmbedWorkers: 2, ChunkWorkers: 2, FileBatchSize: 100, Tier: "small"}
+	}
+
+	// LiteLLM handles batching server-side; fewer client workers avoids contention
+	if provider == "litellm" {
+		p.EmbedWorkers = max(1, p.EmbedWorkers/2)
+	}
+
+	// User override takes precedence
+	if userOverride > 0 {
+		p.EmbedWorkers = userOverride
+		p.ChunkWorkers = userOverride
+	}
+
+	return p
 }
 
 // DefaultConfig returns the default indexer configuration.
@@ -366,8 +407,24 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 	}
 	result.FilesDeleted = len(filesToDelete)
 
-	// 4. Process files in batches
-	batchSize := 100
+	// 4. Compute concurrency profile and apply it
+	profile := ComputeConcurrency(
+		newTree.FileCount,
+		idx.config.EmbeddingProvider,
+		idx.config.Parallel,
+	)
+	idx.pipeline.SetMaxWorkers(profile.EmbedWorkers)
+	if opts.Verbose {
+		idx.logger.Info("concurrency profile",
+			"tier", profile.Tier,
+			"embed_workers", profile.EmbedWorkers,
+			"chunk_workers", profile.ChunkWorkers,
+			"batch_size", profile.FileBatchSize,
+			"files", newTree.FileCount)
+	}
+
+	// 5. Process files in batches
+	batchSize := profile.FileBatchSize
 	totalBatches := (len(filesToProcess) + batchSize - 1) / batchSize
 	for i := 0; i < len(filesToProcess); i += batchSize {
 		end := min(i+batchSize, len(filesToProcess))
@@ -378,7 +435,7 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 			opts.Progress("Processing files", batchNum, totalBatches)
 		}
 
-		batchResult, err := idx.processBatch(ctx, batch, opts)
+		batchResult, err := idx.processBatch(ctx, batch, opts, profile.ChunkWorkers)
 		if err != nil {
 			idx.logger.Warn("batch processing error", "error", err)
 			continue
@@ -390,7 +447,7 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 		result.ChunksEmbedded += batchResult.ChunksEmbedded
 	}
 
-	// 5. Save Merkle tree
+	// 6. Save Merkle tree
 	if opts.Progress != nil {
 		opts.Progress("Saving index", 1, 1)
 	}
@@ -402,58 +459,88 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 	return result, nil
 }
 
-// processBatch processes a batch of files.
-func (idx *Indexer) processBatch(ctx context.Context, files []string, opts IndexOptions) (*IndexResult, error) {
+// processBatch processes a batch of files with parallel chunking.
+func (idx *Indexer) processBatch(ctx context.Context, files []string, opts IndexOptions, chunkWorkers int) (*IndexResult, error) {
 	result := &IndexResult{}
 
-	// Chunk all files using AST chunker
+	if chunkWorkers < 1 {
+		chunkWorkers = 1
+	}
+
+	type chunkResult struct {
+		chunks []embedding.Chunk
+	}
+
+	resultCh := make(chan chunkResult, len(files))
+	sem := make(chan struct{}, chunkWorkers)
+	var wg sync.WaitGroup
+
+	for _, relPath := range files {
+		wg.Add(1)
+		go func(rp string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			fullPath := filepath.Join(idx.repoPath, rp)
+			content, err := os.ReadFile(fullPath)
+			if err != nil {
+				if opts.Verbose {
+					idx.logger.Debug("skipping file", "path", rp, "error", err)
+				}
+				return
+			}
+
+			// Create per-goroutine chunker to avoid data race on mutable fields
+			localChunker := chunker.NewASTChunker()
+
+			// Use AST chunker with token-aware options
+			chunkOpts := chunker.DefaultChunkOptions()
+			if idx.config.MaxTokens > 0 {
+				chunkOpts.MaxTokens = idx.config.MaxTokens
+			} else {
+				chunkOpts.MaxTokens = chunker.DefaultMaxTokens
+			}
+			// Set chars/token ratio based on embedding provider
+			switch idx.config.EmbeddingProvider {
+			case "litellm":
+				chunkOpts.CharsPerToken = chunker.DefaultCharsPerTokenLiteLLM
+			default:
+				chunkOpts.CharsPerToken = chunker.DefaultCharsPerTokenOllama
+			}
+			astChunks, err := localChunker.ChunkFileWithOptions(ctx, rp, content, chunkOpts)
+			if err != nil {
+				if opts.Verbose {
+					idx.logger.Debug("chunk error", "path", rp, "error", err)
+				}
+				return
+			}
+
+			var local []embedding.Chunk
+			for _, ac := range astChunks {
+				local = append(local, embedding.Chunk{
+					Path:      ac.Path,
+					StartLine: ac.StartLine,
+					EndLine:   ac.EndLine,
+					Content:   ac.Content,
+					Kind:      ac.NodeType,
+				})
+			}
+			if len(local) > 0 {
+				resultCh <- chunkResult{chunks: local}
+			}
+		}(relPath)
+	}
+
+	// Close channel once all goroutines finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
 	var allChunks []embedding.Chunk
-	for i, relPath := range files {
-		if opts.Progress != nil {
-			opts.Progress("Chunking files", i+1, len(files))
-		}
-
-		fullPath := filepath.Join(idx.repoPath, relPath)
-		content, err := os.ReadFile(fullPath)
-		if err != nil {
-			if opts.Verbose {
-				idx.logger.Debug("skipping file", "path", relPath, "error", err)
-			}
-			continue
-		}
-
-		// Use AST chunker with token-aware options
-		chunkOpts := chunker.DefaultChunkOptions()
-		if idx.config.MaxTokens > 0 {
-			chunkOpts.MaxTokens = idx.config.MaxTokens
-		} else {
-			chunkOpts.MaxTokens = chunker.DefaultMaxTokens
-		}
-		// Set chars/token ratio based on embedding provider
-		switch idx.config.EmbeddingProvider {
-		case "litellm":
-			chunkOpts.CharsPerToken = chunker.DefaultCharsPerTokenLiteLLM
-		default:
-			chunkOpts.CharsPerToken = chunker.DefaultCharsPerTokenOllama
-		}
-		astChunks, err := idx.astChunker.ChunkFileWithOptions(ctx, relPath, content, chunkOpts)
-		if err != nil {
-			if opts.Verbose {
-				idx.logger.Debug("chunk error", "path", relPath, "error", err)
-			}
-			continue
-		}
-
-		// Convert chunker.Chunk to embedding.Chunk
-		for _, ac := range astChunks {
-			allChunks = append(allChunks, embedding.Chunk{
-				Path:      ac.Path,
-				StartLine: ac.StartLine,
-				EndLine:   ac.EndLine,
-				Content:   ac.Content,
-				Kind:      ac.NodeType, // Map NodeType to Kind
-			})
-		}
+	for cr := range resultCh {
+		allChunks = append(allChunks, cr.chunks...)
 	}
 
 	result.ChunksCreated = len(allChunks)
@@ -462,8 +549,8 @@ func (idx *Indexer) processBatch(ctx context.Context, files []string, opts Index
 		return result, nil
 	}
 
-	// Process through embedding pipeline
-	embedResult, err := idx.pipeline.EmbedChunks(ctx, idx.repoPath, allChunks)
+	// Process through embedding pipeline (parallel)
+	embedResult, err := idx.pipeline.ParallelEmbedChunks(ctx, idx.repoPath, allChunks)
 	if err != nil {
 		return nil, fmt.Errorf("embedding chunks: %w", err)
 	}

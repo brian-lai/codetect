@@ -71,6 +71,8 @@ func runIndex(args []string) {
 	verbose := fs.Bool("verbose", false, "Enable verbose output")
 	fs.BoolVar(verbose, "v", false, "Short for --verbose")
 	jsonOutput := fs.Bool("json", false, "Output results as JSON")
+	parallel := fs.Int("parallel", 0, "Number of parallel workers (0 = auto)")
+	fs.IntVar(parallel, "j", 0, "Short for --parallel")
 	fs.Parse(args)
 
 	path := "."
@@ -87,7 +89,7 @@ func runIndex(args []string) {
 
 	// Default to v2 indexer (AST-based)
 	if !*useV1 {
-		runIndexV2(absPath, *force, *clearCache, *verbose, *jsonOutput)
+		runIndexV2(absPath, *force, *clearCache, *verbose, *jsonOutput, *parallel)
 		return
 	}
 
@@ -161,7 +163,7 @@ func runIndex(args []string) {
 
 // runIndexV2 uses the new v2 indexer with Merkle tree change detection,
 // AST-based chunking, and content-addressed embedding cache.
-func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool) {
+func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool, parallel int) {
 	// Load configuration from environment
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 	embConfig := embedding.LoadConfigFromEnv()
@@ -179,6 +181,7 @@ func runIndexV2(absPath string, force, clearCache, verbose, jsonOutput bool) {
 		BatchSize:         32,
 		MaxWorkers:        4,
 		HashPaths:         privacyConfig.HashPaths,
+		Parallel:          parallel,
 	}
 
 	// Set database path/DSN
@@ -1090,6 +1093,7 @@ Index Options:
   --v1             Use legacy v1 indexer (ctags-based, deprecated)
   --verbose, -v    Enable verbose output
   --json           Output results as JSON
+  --parallel, -j   Number of parallel workers (0 = auto-detect from repo size)
 
 Stats Options:
   --v1           Show v1 index statistics (deprecated)

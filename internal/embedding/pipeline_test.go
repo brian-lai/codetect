@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"codetect/internal/db"
@@ -11,7 +12,7 @@ import (
 
 // mockEmbedder is a test embedder that generates deterministic embeddings
 type mockEmbedder struct {
-	embedCount int
+	embedCount atomic.Int64
 	dimensions int
 	available  bool
 }
@@ -24,7 +25,7 @@ func newMockEmbedder(dims int) *mockEmbedder {
 }
 
 func (m *mockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	m.embedCount += len(texts)
+	m.embedCount.Add(int64(len(texts)))
 	result := make([][]float32, len(texts))
 	for i, text := range texts {
 		// Generate deterministic embedding based on text
@@ -105,8 +106,8 @@ func TestEmbedChunksAllNew(t *testing.T) {
 	if result.CacheHits != 0 {
 		t.Errorf("CacheHits = %d, want 0", result.CacheHits)
 	}
-	if embedder.embedCount != 3 {
-		t.Errorf("embedder called %d times, want 3", embedder.embedCount)
+	if embedder.embedCount.Load() != 3 {
+		t.Errorf("embedder called %d times, want 3", embedder.embedCount.Load())
 	}
 }
 
@@ -125,7 +126,7 @@ func TestEmbedChunksWithCacheHits(t *testing.T) {
 		t.Fatalf("first EmbedChunks failed: %v", err)
 	}
 
-	initialEmbedCount := embedder.embedCount
+	initialEmbedCount := embedder.embedCount.Load()
 
 	// Second embedding with same content - should hit cache
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -140,8 +141,8 @@ func TestEmbedChunksWithCacheHits(t *testing.T) {
 	if result.Embedded != 0 {
 		t.Errorf("Embedded = %d, want 0", result.Embedded)
 	}
-	if embedder.embedCount != initialEmbedCount {
-		t.Errorf("embedder called unexpectedly: %d -> %d", initialEmbedCount, embedder.embedCount)
+	if embedder.embedCount.Load() != initialEmbedCount {
+		t.Errorf("embedder called unexpectedly: %d -> %d", initialEmbedCount, embedder.embedCount.Load())
 	}
 }
 
@@ -158,7 +159,7 @@ func TestEmbedChunksPartialCache(t *testing.T) {
 		t.Fatalf("first EmbedChunks failed: %v", err)
 	}
 
-	embedder.embedCount = 0 // Reset counter
+	embedder.embedCount.Store(0) // Reset counter
 
 	// Second batch with one existing and one new
 	secondBatch := []Chunk{
@@ -178,8 +179,8 @@ func TestEmbedChunksPartialCache(t *testing.T) {
 	if result.Embedded != 1 {
 		t.Errorf("Embedded = %d, want 1", result.Embedded)
 	}
-	if embedder.embedCount != 1 {
-		t.Errorf("embedder called %d times, want 1", embedder.embedCount)
+	if embedder.embedCount.Load() != 1 {
+		t.Errorf("embedder called %d times, want 1", embedder.embedCount.Load())
 	}
 }
 
@@ -200,8 +201,8 @@ func TestEmbedChunksDuplicateContent(t *testing.T) {
 	}
 
 	// Should only embed once despite 3 chunks
-	if embedder.embedCount != 1 {
-		t.Errorf("embedder called %d times, want 1", embedder.embedCount)
+	if embedder.embedCount.Load() != 1 {
+		t.Errorf("embedder called %d times, want 1", embedder.embedCount.Load())
 	}
 	if result.Total != 3 {
 		t.Errorf("Total = %d, want 3", result.Total)
@@ -257,8 +258,8 @@ func TestEmbedChunksSkipsEmpty(t *testing.T) {
 	if result.Skipped != 1 {
 		t.Errorf("Skipped = %d, want 1", result.Skipped)
 	}
-	if embedder.embedCount != 2 {
-		t.Errorf("embedder called %d times, want 2", embedder.embedCount)
+	if embedder.embedCount.Load() != 2 {
+		t.Errorf("embedder called %d times, want 2", embedder.embedCount.Load())
 	}
 }
 
@@ -353,7 +354,7 @@ func TestIncrementalUpdate(t *testing.T) {
 		t.Fatalf("initial EmbedChunks failed: %v", err)
 	}
 
-	embedder.embedCount = 0 // Reset counter
+	embedder.embedCount.Store(0) // Reset counter
 
 	// Incremental update with one unchanged and one changed file
 	files := map[string][]Chunk{
@@ -435,8 +436,8 @@ func TestParallelEmbedChunks(t *testing.T) {
 
 	// All unique contents should be embedded
 	// Note: The actual number of embed calls may vary due to batching
-	if embedder.embedCount < 10 {
-		t.Errorf("embedder called %d times, want at least 10", embedder.embedCount)
+	if embedder.embedCount.Load() < 10 {
+		t.Errorf("embedder called %d times, want at least 10", embedder.embedCount.Load())
 	}
 }
 

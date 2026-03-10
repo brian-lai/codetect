@@ -621,6 +621,86 @@ func function%d() {
 	}
 }
 
+func TestComputeConcurrency(t *testing.T) {
+	tests := []struct {
+		name          string
+		fileCount     int
+		provider      string
+		userOverride  int
+		wantEmbed     int
+		wantChunk     int
+		wantBatch     int
+		wantTier      string
+	}{
+		// Tier boundaries
+		{
+			name: "zero files is small", fileCount: 0, provider: "ollama",
+			wantEmbed: 2, wantChunk: 2, wantBatch: 100, wantTier: "small",
+		},
+		{
+			name: "499 files is small", fileCount: 499, provider: "ollama",
+			wantEmbed: 2, wantChunk: 2, wantBatch: 100, wantTier: "small",
+		},
+		{
+			name: "500 files is medium", fileCount: 500, provider: "ollama",
+			wantEmbed: 4, wantChunk: 4, wantBatch: 200, wantTier: "medium",
+		},
+		{
+			name: "4999 files is medium", fileCount: 4999, provider: "ollama",
+			wantEmbed: 4, wantChunk: 4, wantBatch: 200, wantTier: "medium",
+		},
+		{
+			name: "5000 files is large", fileCount: 5000, provider: "ollama",
+			wantEmbed: 8, wantChunk: 8, wantBatch: 500, wantTier: "large",
+		},
+		{
+			name: "10000 files is large", fileCount: 10000, provider: "ollama",
+			wantEmbed: 8, wantChunk: 8, wantBatch: 500, wantTier: "large",
+		},
+		// LiteLLM halving
+		{
+			name: "litellm medium halves embed workers", fileCount: 500, provider: "litellm",
+			wantEmbed: 2, wantChunk: 4, wantBatch: 200, wantTier: "medium",
+		},
+		{
+			name: "litellm large halves embed workers", fileCount: 5000, provider: "litellm",
+			wantEmbed: 4, wantChunk: 8, wantBatch: 500, wantTier: "large",
+		},
+		{
+			name: "litellm small halves embed workers", fileCount: 10, provider: "litellm",
+			wantEmbed: 1, wantChunk: 2, wantBatch: 100, wantTier: "small",
+		},
+		// User override
+		{
+			name: "user override sets both workers", fileCount: 10, provider: "ollama", userOverride: 16,
+			wantEmbed: 16, wantChunk: 16, wantBatch: 100, wantTier: "small",
+		},
+		// Override takes precedence over LiteLLM halving
+		{
+			name: "user override with litellm ignores halving", fileCount: 500, provider: "litellm", userOverride: 12,
+			wantEmbed: 12, wantChunk: 12, wantBatch: 200, wantTier: "medium",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := ComputeConcurrency(tc.fileCount, tc.provider, tc.userOverride)
+			if p.EmbedWorkers != tc.wantEmbed {
+				t.Errorf("EmbedWorkers = %d, want %d", p.EmbedWorkers, tc.wantEmbed)
+			}
+			if p.ChunkWorkers != tc.wantChunk {
+				t.Errorf("ChunkWorkers = %d, want %d", p.ChunkWorkers, tc.wantChunk)
+			}
+			if p.FileBatchSize != tc.wantBatch {
+				t.Errorf("FileBatchSize = %d, want %d", p.FileBatchSize, tc.wantBatch)
+			}
+			if p.Tier != tc.wantTier {
+				t.Errorf("Tier = %q, want %q", p.Tier, tc.wantTier)
+			}
+		})
+	}
+}
+
 // itoa converts int to string
 func itoa(n int) string {
 	if n == 0 {

@@ -102,6 +102,7 @@ func (p *ResourcePool) v2IndexerLocked() (*indexer.Indexer, error) {
 
 	dbConfig := config.LoadDatabaseConfigFromEnv()
 	embConfig := embedding.LoadConfigFromEnv()
+	privacyConfig := config.LoadPrivacyConfigFromEnv()
 
 	cfg := &indexer.Config{
 		DBType:            string(dbConfig.Type),
@@ -113,6 +114,7 @@ func (p *ResourcePool) v2IndexerLocked() (*indexer.Indexer, error) {
 		LiteLLMKey:        embConfig.LiteLLMKey,
 		BatchSize:         32,
 		MaxWorkers:        4,
+		HashPaths:         privacyConfig.HashPaths,
 	}
 
 	if dbConfig.Type == dbpkg.DatabasePostgres {

@@ -26,8 +26,9 @@ type FailedChunk struct {
 
 // FailureStore persists embedding failures for visibility and diagnosis.
 type FailureStore struct {
-	database db.DB
-	dialect  db.Dialect
+	database   db.DB
+	dialect    db.Dialect
+	pathMapper *PathMapper // optional; when non-nil, paths are hashed at rest
 }
 
 // NewFailureStore creates a new FailureStore and ensures the schema exists.
@@ -69,6 +70,12 @@ func (fs *FailureStore) ensureSchema() error {
 	return err
 }
 
+// SetPathMapper enables path hashing for the failure store.
+// When set, repo_root and path are hashed on write and resolved on read.
+func (fs *FailureStore) SetPathMapper(pm *PathMapper) {
+	fs.pathMapper = pm
+}
+
 // RecordFailure persists a failed chunk.
 func (fs *FailureStore) RecordFailure(repoRoot, path string, startLine, endLine int, content, errMsg, model string, maxDepth int) error {
 	query := `INSERT INTO failed_chunks
@@ -79,8 +86,14 @@ func (fs *FailureStore) RecordFailure(repoRoot, path string, startLine, endLine 
 	contentLen := len(content)
 	tokens := EstimateTokens(content)
 
+	storeRepo, storePath := repoRoot, path
+	if fs.pathMapper != nil {
+		storeRepo = fs.pathMapper.HashPath(repoRoot)
+		storePath = fs.pathMapper.HashPath(path)
+	}
+
 	_, err := fs.database.Exec(query,
-		repoRoot, path, startLine, endLine,
+		storeRepo, storePath, startLine, endLine,
 		contentHash, contentLen, tokens,
 		errMsg, model, maxDepth,
 	)
@@ -93,7 +106,12 @@ func (fs *FailureStore) GetFailures(repoRoot string) ([]FailedChunk, error) {
 		content_length, estimated_tokens, error_message, model, max_depth_reached, created_at
 		FROM failed_chunks WHERE repo_root = ? ORDER BY created_at DESC`
 
-	rows, err := fs.database.Query(query, repoRoot)
+	queryRepo := repoRoot
+	if fs.pathMapper != nil {
+		queryRepo = fs.pathMapper.HashPath(repoRoot)
+	}
+
+	rows, err := fs.database.Query(query, queryRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +127,14 @@ func (fs *FailureStore) GetFailures(repoRoot string) ([]FailedChunk, error) {
 		); err != nil {
 			return nil, err
 		}
+		if fs.pathMapper != nil {
+			if real, ok := fs.pathMapper.ResolvePath(f.RepoRoot); ok {
+				f.RepoRoot = real
+			}
+			if real, ok := fs.pathMapper.ResolvePath(f.Path); ok {
+				f.Path = real
+			}
+		}
 		failures = append(failures, f)
 	}
 	return failures, rows.Err()
@@ -116,16 +142,24 @@ func (fs *FailureStore) GetFailures(repoRoot string) ([]FailedChunk, error) {
 
 // ClearFailures removes all failure records for a repository.
 func (fs *FailureStore) ClearFailures(repoRoot string) error {
+	queryRepo := repoRoot
+	if fs.pathMapper != nil {
+		queryRepo = fs.pathMapper.HashPath(repoRoot)
+	}
 	_, err := fs.database.Exec(
-		`DELETE FROM failed_chunks WHERE repo_root = ?`, repoRoot,
+		`DELETE FROM failed_chunks WHERE repo_root = ?`, queryRepo,
 	)
 	return err
 }
 
 // CountFailures returns the number of failed chunks for a repository.
 func (fs *FailureStore) CountFailures(repoRoot string) (int, error) {
+	queryRepo := repoRoot
+	if fs.pathMapper != nil {
+		queryRepo = fs.pathMapper.HashPath(repoRoot)
+	}
 	row := fs.database.QueryRow(
-		`SELECT COUNT(*) FROM failed_chunks WHERE repo_root = ?`, repoRoot,
+		`SELECT COUNT(*) FROM failed_chunks WHERE repo_root = ?`, queryRepo,
 	)
 	var count int
 	err := row.Scan(&count)
@@ -145,8 +179,13 @@ func (fs *FailureStore) GetFailureSummary(repoRoot string) (*FailureSummary, err
 		return nil, err
 	}
 
+	queryRepo := repoRoot
+	if fs.pathMapper != nil {
+		queryRepo = fs.pathMapper.HashPath(repoRoot)
+	}
+
 	rows, err := fs.database.Query(
-		`SELECT DISTINCT path FROM failed_chunks WHERE repo_root = ? ORDER BY path`, repoRoot,
+		`SELECT DISTINCT path FROM failed_chunks WHERE repo_root = ? ORDER BY path`, queryRepo,
 	)
 	if err != nil {
 		return nil, err
@@ -158,6 +197,11 @@ func (fs *FailureStore) GetFailureSummary(repoRoot string) (*FailureSummary, err
 		var path string
 		if err := rows.Scan(&path); err != nil {
 			return nil, err
+		}
+		if fs.pathMapper != nil {
+			if real, ok := fs.pathMapper.ResolvePath(path); ok {
+				path = real
+			}
 		}
 		files = append(files, path)
 	}

@@ -35,11 +35,12 @@ type Indexer struct {
 	merkleBuilder *merkle.Builder
 	astChunker    *chunker.ASTChunker
 	cache         *embedding.EmbeddingCache
-	locations     *embedding.LocationStore
+	locations     embedding.LocationAccess
 	vectorIndex   embedding.VectorIndex
 	embedder      embedding.Embedder
 	pipeline      *embedding.Pipeline
 	failureStore  *embedding.FailureStore
+	pathMapper    *embedding.PathMapper // non-nil when HashPaths is enabled
 
 	// Database
 	database db.DB
@@ -78,6 +79,9 @@ type Config struct {
 
 	// Ignore patterns (from .gitignore)
 	IgnorePatterns []string
+
+	// HashPaths enables SHA-256 hashing of file paths at rest in the DB.
+	HashPaths bool
 }
 
 // ConcurrencyProfile controls parallelism for the indexing pipeline.
@@ -238,9 +242,22 @@ func (idx *Indexer) initComponents() error {
 		return fmt.Errorf("creating embedding cache: %w", err)
 	}
 
-	idx.locations, err = embedding.NewLocationStore(idx.database, idx.dialect)
+	locationStore, err := embedding.NewLocationStore(idx.database, idx.dialect)
 	if err != nil {
 		return fmt.Errorf("creating location store: %w", err)
+	}
+
+	// Optionally wrap with path hashing
+	if idx.config.HashPaths {
+		mapperPath := filepath.Join(idx.dataDir, "path_map.json")
+		idx.pathMapper, err = embedding.NewPathMapper(mapperPath)
+		if err != nil {
+			return fmt.Errorf("creating path mapper: %w", err)
+		}
+		idx.locations = embedding.NewHashingLocationStore(locationStore, idx.pathMapper)
+		idx.logger.Info("path hashing enabled", "mapper", mapperPath)
+	} else {
+		idx.locations = locationStore
 	}
 
 	// Vector index (create brute force as fallback)
@@ -262,6 +279,9 @@ func (idx *Indexer) initComponents() error {
 	idx.failureStore, err = embedding.NewFailureStore(idx.database, idx.dialect)
 	if err != nil {
 		return fmt.Errorf("creating failure store: %w", err)
+	}
+	if idx.pathMapper != nil {
+		idx.failureStore.SetPathMapper(idx.pathMapper)
 	}
 
 	// Create pipeline with provider-aware chars/token ratio
@@ -308,6 +328,11 @@ func (idx *Indexer) createEmbedder() (embedding.Embedder, error) {
 
 // Close releases all resources.
 func (idx *Indexer) Close() error {
+	if idx.pathMapper != nil {
+		if err := idx.pathMapper.Flush(); err != nil {
+			idx.logger.Warn("failed to flush path mapper on close", "error", err)
+		}
+	}
 	if idx.database != nil {
 		return idx.database.Close()
 	}
@@ -687,8 +712,9 @@ func (idx *Indexer) Pipeline() *embedding.Pipeline {
 	return idx.pipeline
 }
 
-// Locations returns the location store for external use.
-func (idx *Indexer) Locations() *embedding.LocationStore {
+// Locations returns the location access for external use.
+// When HashPaths is enabled, this returns a HashingLocationStore.
+func (idx *Indexer) Locations() embedding.LocationAccess {
 	return idx.locations
 }
 

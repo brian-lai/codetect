@@ -37,7 +37,7 @@ const (
 // It coordinates between the embedding cache, location store, and embedding provider.
 type Pipeline struct {
 	cache        *EmbeddingCache
-	locations    *LocationStore
+	locations    LocationAccess
 	embedder     Embedder
 	failureStore *FailureStore
 
@@ -86,7 +86,7 @@ func WithMaxWorkers(workers int) PipelineOption {
 }
 
 // NewPipeline creates a new embedding pipeline.
-func NewPipeline(cache *EmbeddingCache, locations *LocationStore, embedder Embedder, opts ...PipelineOption) *Pipeline {
+func NewPipeline(cache *EmbeddingCache, locations LocationAccess, embedder Embedder, opts ...PipelineOption) *Pipeline {
 	p := &Pipeline{
 		cache:      cache,
 		locations:  locations,
@@ -797,7 +797,7 @@ func (p *Pipeline) Cache() *EmbeddingCache {
 }
 
 // Locations returns the underlying location store.
-func (p *Pipeline) Locations() *LocationStore {
+func (p *Pipeline) Locations() LocationAccess {
 	return p.locations
 }
 

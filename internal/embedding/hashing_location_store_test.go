@@ -307,7 +307,6 @@ func TestHashingStore_UnresolvableHashes(t *testing.T) {
 	}
 }
 
-
 // TestHashingStore_ImplementsLocationAccess verifies the interface is satisfied.
 func TestHashingStore_ImplementsLocationAccess(t *testing.T) {
 	hashing, _ := setupHashingStore(t)

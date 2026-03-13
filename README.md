@@ -25,7 +25,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and [Migration Guide](docs/
 - **`search_keyword`** - Fast regex search powered by ripgrep, with `detail` levels (minimal/standard/rich)
 - **`get_file`** - File reading with optional line-range slicing
 - **`symbols`** - Symbol lookup and file definition listing (`mode=find` or `mode=list`)
-- **`hybrid_search_v2`** - Combined keyword + semantic search with cross-encoder reranking and `detail` levels
+- **`hybrid_search_v2`** - Combined keyword + semantic search with reranking and `detail` levels
 
 ## Quick Start
 
@@ -150,7 +150,7 @@ Parameters: `mode` (`find`/`list`, required), `name` (for find), `kind` (for fin
 
 ### hybrid_search_v2
 
-Combined keyword + semantic search with cross-encoder reranking:
+Combined keyword + semantic search with reranking:
 
 ```json
 {"query": "authentication", "top_k": 10, "detail": "standard"}
@@ -279,7 +279,7 @@ See [MCP Compatibility](docs/mcp-compatibility.md) for details and roadmap for n
 - [x] Keyword search via ripgrep
 - [x] Symbol indexing (AST-based via ast-grep)
 - [x] Semantic search via Ollama
-- [x] Hybrid search with cross-encoder reranking
+- [x] Hybrid search with reranking
 - [x] Global installation
 - [x] Background indexing daemon
 - [x] Project registry

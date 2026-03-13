@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `symbols` tool with `mode=find` (search by name) and `mode=list` (list file definitions)
 - Connection pooling via `ResourcePool` for shared DB/embedding connections
 - Snippet length budgeting based on result count
-- Cross-encoder reranking support in `hybrid_search_v2`
+- Reranking support in `hybrid_search_v2`
 
 ### Changed
 

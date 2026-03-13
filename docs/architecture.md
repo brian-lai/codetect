@@ -562,7 +562,7 @@ Commands:
 - [x] **Merkle trees** - Sub-second change detection for large repos
 - [x] **AST-aware indexing** - Parse syntax trees directly (no ctags)
 - [x] **Hybrid ranking** - Reciprocal rank fusion of keyword + semantic scores
-- [x] **Reranking models** - Post-filter results with cross-encoder
+- [x] **Reranking models** - Post-filter results with embedding similarity
 - [x] **Connection pooling** - Shared DB/embedding connections via `ResourcePool`
 - [x] **Token-efficient design** - `detail` parameter, response budgeting, compressed descriptions
 

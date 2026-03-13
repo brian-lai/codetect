@@ -39,7 +39,7 @@ type RetrieverConfig struct {
 	TimeoutMs int `yaml:"timeout_ms"`
 }
 
-// RerankerConfig configures cross-encoder reranking behavior.
+// RerankerConfig configures reranking behavior.
 type RerankerConfig struct {
 	// Enabled determines whether reranking is performed.
 	// Default: false (reranking adds latency)

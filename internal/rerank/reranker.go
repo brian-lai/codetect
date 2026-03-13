@@ -1,6 +1,6 @@
-// Package rerank provides cross-encoder reranking capabilities.
+// Package rerank provides reranking capabilities.
 // Reranking takes the top candidates from retrieval and rescores them
-// using a more expensive but accurate cross-encoder model.
+// using embedding similarity for relevance scoring.
 package rerank
 
 import (
@@ -17,7 +17,7 @@ import (
 	"codetect/internal/fusion"
 )
 
-// Reranker uses a cross-encoder model to rerank search results.
+// Reranker rescores search results using embedding similarity.
 type Reranker struct {
 	provider RerankerProvider
 	config   config.RerankerConfig
@@ -73,7 +73,7 @@ type RerankResult struct {
 	Duration time.Duration
 }
 
-// Rerank reorders results using cross-encoder scores.
+// Rerank reorders results using reranker scores.
 // If reranking is disabled or fails, returns the original results.
 //
 // The contents map provides the document content for each result ID.

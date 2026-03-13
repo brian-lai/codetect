@@ -39,7 +39,7 @@ internal/
 ├── mcp/               # MCP server implementation
 ├── merkle/            # Merkle tree change detection for incremental indexing
 ├── registry/          # Project registry
-├── rerank/            # Cross-encoder reranking for search results
+├── rerank/            # Reranking for search results
 ├── search/            # Search logic (keyword, symbols, file search, result enrichment)
 └── tools/             # MCP tool handlers (search_keyword, get_file, symbols, hybrid_search_v2)
 

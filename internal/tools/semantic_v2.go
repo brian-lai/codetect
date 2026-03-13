@@ -42,7 +42,7 @@ func registerHybridSearchV2(server *mcp.Server, toolConfig *Config) {
 				},
 				"rerank": {
 					Type:        "boolean",
-					Description: "Enable cross-encoder reranking (default: false)",
+					Description: "Enable reranking (default: false)",
 				},
 				"detail": {
 					Type:        "string",

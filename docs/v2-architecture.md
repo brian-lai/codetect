@@ -455,7 +455,7 @@ USING hnsw (embedding vector_cosine_ops);
 
 - [ ] **Incremental embedding** - Only re-embed changed chunks
 - [ ] **Multi-language AST chunking** - Expand beyond Go/Python/JavaScript
-- [ ] **Reranking models** - Post-filter results with cross-encoder
+- [ ] **Reranking models** - Post-filter results with reranking
 - [ ] **Query expansion** - Automatic synonym expansion for semantic search
 - [ ] **Configuration file** - Project-level `.codetect.yaml`
 - [ ] **HTTP API** - Alternative to MCP for non-MCP tools

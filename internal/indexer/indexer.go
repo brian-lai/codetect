@@ -328,6 +328,11 @@ func (idx *Indexer) createEmbedder() (embedding.Embedder, error) {
 
 // Close releases all resources.
 func (idx *Indexer) Close() error {
+	if idx.pathMapper != nil {
+		if err := idx.pathMapper.Flush(); err != nil {
+			idx.logger.Warn("failed to flush path mapper on close", "error", err)
+		}
+	}
 	if idx.database != nil {
 		return idx.database.Close()
 	}

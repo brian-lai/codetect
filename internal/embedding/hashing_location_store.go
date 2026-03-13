@@ -23,7 +23,10 @@ func NewHashingLocationStore(inner *LocationStore, mapper *PathMapper) *HashingL
 func (h *HashingLocationStore) SaveLocation(loc ChunkLocation) error {
 	loc.RepoRoot = h.mapper.HashPath(loc.RepoRoot)
 	loc.Path = h.mapper.HashPath(loc.Path)
-	return h.inner.SaveLocation(loc)
+	if err := h.inner.SaveLocation(loc); err != nil {
+		return err
+	}
+	return h.mapper.Flush()
 }
 
 func (h *HashingLocationStore) SaveLocationsBatch(locs []ChunkLocation) error {
@@ -105,9 +108,8 @@ func (h *HashingLocationStore) ListPaths(repoRoot string) ([]string, error) {
 	for _, hp := range hashedPaths {
 		if real, ok := h.mapper.ResolvePath(hp); ok {
 			resolved = append(resolved, real)
-		} else {
-			resolved = append(resolved, hp) // pass through if unresolvable
 		}
+		// Skip unresolvable hashes to prevent leaking hashed data
 	}
 	return resolved, nil
 }
@@ -152,16 +154,21 @@ func (h *HashingLocationStore) GetOrphanedHashes(allCacheHashes []string) ([]str
 // --- Internal helpers ---
 
 // resolveLocations resolves hashed repo_root and path back to real paths.
+// Locations where either field cannot be resolved are filtered out to prevent
+// leaking hashed data.
 func (h *HashingLocationStore) resolveLocations(locs []ChunkLocation) []ChunkLocation {
-	for i := range locs {
-		if real, ok := h.mapper.ResolvePath(locs[i].RepoRoot); ok {
-			locs[i].RepoRoot = real
+	resolved := make([]ChunkLocation, 0, len(locs))
+	for _, loc := range locs {
+		realRepo, repoOK := h.mapper.ResolvePath(loc.RepoRoot)
+		realPath, pathOK := h.mapper.ResolvePath(loc.Path)
+		if !repoOK || !pathOK {
+			continue
 		}
-		if real, ok := h.mapper.ResolvePath(locs[i].Path); ok {
-			locs[i].Path = real
-		}
+		loc.RepoRoot = realRepo
+		loc.Path = realPath
+		resolved = append(resolved, loc)
 	}
-	return locs
+	return resolved
 }
 
 // Mapper returns the underlying PathMapper (used by FailureStore integration).

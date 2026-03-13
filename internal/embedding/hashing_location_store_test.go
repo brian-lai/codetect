@@ -258,6 +258,55 @@ func TestHashingStore_CountAndStats(t *testing.T) {
 	}
 }
 
+// TestHashingStore_UnresolvableHashes verifies that ListPaths and GetByRepo
+// silently drop entries when the PathMapper can't resolve hashes (e.g. sidecar
+// file was lost or recreated empty).
+func TestHashingStore_UnresolvableHashes(t *testing.T) {
+	// 1. Save locations via the normal hashing store to populate the DB
+	hashing, inner := setupHashingStore(t)
+
+	locs := []ChunkLocation{
+		{RepoRoot: "/repo", Path: "a.go", StartLine: 1, EndLine: 10, ContentHash: "h1", NodeType: "function", Language: "go"},
+		{RepoRoot: "/repo", Path: "b.go", StartLine: 1, EndLine: 20, ContentHash: "h2", NodeType: "class", Language: "go"},
+	}
+	if err := hashing.SaveLocationsBatch(locs); err != nil {
+		t.Fatalf("SaveLocationsBatch: %v", err)
+	}
+
+	// 2. Create a fresh PathMapper (empty — simulates sidecar loss)
+	dir := t.TempDir()
+	emptyMapper, err := NewPathMapper(filepath.Join(dir, "empty_map.json"))
+	if err != nil {
+		t.Fatalf("NewPathMapper (empty): %v", err)
+	}
+
+	// 3. Wrap the same inner store with the empty mapper
+	orphaned := NewHashingLocationStore(inner, emptyMapper)
+
+	// We need to hash the repo root so the query reaches the DB rows.
+	// The original store hashed "/repo"; we must query with that same hash.
+	// Since the empty mapper doesn't know "/repo", HashPath will produce the
+	// same deterministic SHA-256, so the DB query still matches.
+
+	// 4. ListPaths — expects empty (hashes can't be resolved)
+	paths, err := orphaned.ListPaths("/repo")
+	if err != nil {
+		t.Fatalf("ListPaths: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Errorf("ListPaths: expected 0 resolved paths, got %d: %v", len(paths), paths)
+	}
+
+	// 5. GetByRepo — expects empty (unresolvable locations filtered)
+	results, err := orphaned.GetByRepo("/repo")
+	if err != nil {
+		t.Fatalf("GetByRepo: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("GetByRepo: expected 0 resolved locations, got %d", len(results))
+	}
+}
+
 // TestHashingStore_ImplementsLocationAccess verifies the interface is satisfied.
 func TestHashingStore_ImplementsLocationAccess(t *testing.T) {
 	hashing, _ := setupHashingStore(t)

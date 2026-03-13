@@ -1,3 +1,10 @@
+---
+title: Embedding Models
+layout: default
+parent: Configuration
+nav_order: 2
+---
+
 # Embedding Model Comparison and Selection Guide
 
 This document explains our research into embedding models for code search, presents empirical data from the MTEB leaderboard, and provides recommendations for selecting the optimal embedding model for your use case.

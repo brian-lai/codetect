@@ -1,3 +1,10 @@
+---
+title: PostgreSQL Setup
+layout: default
+parent: Configuration
+nav_order: 1
+---
+
 # PostgreSQL + pgvector Setup Guide
 
 This guide covers setting up PostgreSQL with pgvector for scalable vector similarity search in codetect.

@@ -1,3 +1,10 @@
+---
+title: Installation Guide
+layout: default
+parent: Getting Started
+nav_order: 1
+---
+
 # Installation Guide
 
 This guide covers all installation methods for codetect.

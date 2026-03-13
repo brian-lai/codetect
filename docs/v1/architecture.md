@@ -1,3 +1,9 @@
+---
+title: v1 Architecture (Legacy)
+layout: default
+nav_exclude: true
+---
+
 # codetect v1 Architecture (Legacy)
 
 > ⚠️ **DEPRECATED**: v1 architecture is deprecated and will be removed in v3.0.0

@@ -1,3 +1,10 @@
+---
+title: Benchmarks
+layout: default
+parent: Performance
+nav_order: 1
+---
+
 # Performance Benchmarks
 
 This document explains codetect's performance benchmarking methodology, how to run benchmarks, and how to interpret results.

@@ -1,3 +1,9 @@
+---
+title: v1 Commands (Legacy)
+layout: default
+nav_exclude: true
+---
+
 # codetect v1 Commands (Legacy)
 
 > ⚠️ **DEPRECATED**: v1 commands are deprecated and will be removed in v3.0.0

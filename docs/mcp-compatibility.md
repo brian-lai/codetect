@@ -1,3 +1,10 @@
+---
+title: MCP Compatibility
+layout: default
+parent: Architecture
+nav_order: 3
+---
+
 # MCP Compatibility & Multi-Tool Support
 
 This document outlines codetect's compatibility with MCP (Model Context Protocol) clients and plans for supporting other CLI-based LLM tools.

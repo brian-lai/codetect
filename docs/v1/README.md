@@ -1,3 +1,9 @@
+---
+title: v1 Overview (Legacy)
+layout: default
+nav_exclude: true
+---
+
 # codetect v1 (Legacy Documentation)
 
 > ⚠️ **DEPRECATED**: v1 indexer is deprecated and will be removed in v3.0.0

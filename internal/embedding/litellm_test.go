@@ -3,9 +3,12 @@ package embedding
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestNewLiteLLMClient(t *testing.T) {
@@ -235,6 +238,216 @@ func TestLiteLLMClient_Available(t *testing.T) {
 			t.Error("expected Available() = false")
 		}
 	})
+}
+
+func TestNewLiteLLMClient_Transport(t *testing.T) {
+	client := NewLiteLLMClient()
+
+	transport, ok := client.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected *http.Transport, got default")
+	}
+	if transport.MaxIdleConnsPerHost != 10 {
+		t.Errorf("MaxIdleConnsPerHost = %d, want 10", transport.MaxIdleConnsPerHost)
+	}
+	if transport.MaxIdleConns != 100 {
+		t.Errorf("MaxIdleConns = %d, want 100", transport.MaxIdleConns)
+	}
+	if transport.IdleConnTimeout != 90*time.Second {
+		t.Errorf("IdleConnTimeout = %v, want 90s", transport.IdleConnTimeout)
+	}
+}
+
+// successResponse returns a valid embedding response JSON for n texts.
+func successResponse(n int) openAIEmbeddingResponse {
+	resp := openAIEmbeddingResponse{}
+	for i := range n {
+		resp.Data = append(resp.Data, struct {
+			Embedding []float32 `json:"embedding"`
+			Index     int       `json:"index"`
+		}{
+			Embedding: []float32{float32(i) * 0.1, float32(i) * 0.2},
+			Index:     i,
+		})
+	}
+	return resp
+}
+
+func TestLiteLLMClient_RetryOnEOF(t *testing.T) {
+	var attempts atomic.Int32
+
+	// Server closes connection on first 2 attempts, succeeds on 3rd
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := attempts.Add(1)
+		if n <= 2 {
+			// Hijack and close to produce EOF
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("server doesn't support hijacking")
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Fatalf("hijack failed: %v", err)
+			}
+			conn.Close()
+			return
+		}
+		json.NewEncoder(w).Encode(successResponse(1))
+	}))
+	defer server.Close()
+
+	client := NewLiteLLMClient(WithLiteLLMBaseURL(server.URL))
+	embeddings, err := client.Embed(context.Background(), []string{"test"})
+
+	if err != nil {
+		t.Fatalf("expected success after retries, got: %v", err)
+	}
+	if len(embeddings) != 1 {
+		t.Fatalf("expected 1 embedding, got %d", len(embeddings))
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Errorf("expected 3 attempts, got %d", got)
+	}
+}
+
+func TestLiteLLMClient_RetryOn429(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := attempts.Add(1)
+		if n <= 2 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte("rate limited"))
+			return
+		}
+		json.NewEncoder(w).Encode(successResponse(1))
+	}))
+	defer server.Close()
+
+	client := NewLiteLLMClient(WithLiteLLMBaseURL(server.URL))
+	embeddings, err := client.Embed(context.Background(), []string{"test"})
+
+	if err != nil {
+		t.Fatalf("expected success after 429 retries, got: %v", err)
+	}
+	if len(embeddings) != 1 {
+		t.Fatalf("expected 1 embedding, got %d", len(embeddings))
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Errorf("expected 3 attempts, got %d", got)
+	}
+}
+
+func TestLiteLLMClient_NoRetryOn400(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("bad request"))
+	}))
+	defer server.Close()
+
+	client := NewLiteLLMClient(WithLiteLLMBaseURL(server.URL))
+	_, err := client.Embed(context.Background(), []string{"test"})
+
+	if err == nil {
+		t.Fatal("expected error for 400")
+	}
+	// 400 is not retryable: batch fails immediately → individual fallback also gets 400 → all fail
+	// But the individual fallback still calls embedBatch for each text (1 text), which itself retries 0 times for 400
+	// So: 1 batch attempt + 1 individual attempt = 2 total
+	if got := attempts.Load(); got != 2 {
+		t.Errorf("expected 2 attempts (batch + 1 individual), got %d", got)
+	}
+}
+
+func TestLiteLLMClient_FallbackAfterMaxRetries(t *testing.T) {
+	var attempts atomic.Int32
+
+	// First maxRetries calls return 503, then succeed (individual fallback)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := attempts.Add(1)
+		if n <= maxRetries {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("unavailable"))
+			return
+		}
+		// Parse to see how many texts
+		var req openAIEmbeddingRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		json.NewEncoder(w).Encode(successResponse(len(req.Input)))
+	}))
+	defer server.Close()
+
+	client := NewLiteLLMClient(WithLiteLLMBaseURL(server.URL))
+	embeddings, err := client.Embed(context.Background(), []string{"test"})
+
+	if err != nil {
+		t.Fatalf("expected success via individual fallback, got: %v", err)
+	}
+	if len(embeddings) != 1 || embeddings[0] == nil {
+		t.Errorf("expected valid embedding, got %v", embeddings)
+	}
+}
+
+func TestLiteLLMClient_IndividualBackoffRespectsContext(t *testing.T) {
+	// Server always closes connection → batch always fails, individual fallback triggered
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("server doesn't support hijacking")
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	client := NewLiteLLMClient(
+		WithLiteLLMBaseURL(server.URL),
+		WithLiteLLMTimeout(200*time.Millisecond),
+	)
+
+	start := time.Now()
+	_, err := client.Embed(ctx, []string{"a", "b", "c", "d", "e"})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected error from cancelled context or all failures")
+	}
+	// Should not hang — context should cancel within ~500ms
+	if elapsed > 3*time.Second {
+		t.Errorf("took %v, expected to return within context deadline", elapsed)
+	}
+}
+
+func TestIsRetryable(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		statusCode int
+		want       bool
+	}{
+		{"EOF error", &net.OpError{Op: "read", Err: net.ErrClosed}, 0, true},
+		{"429 status", nil, 429, true},
+		{"502 status", nil, 502, true},
+		{"503 status", nil, 503, true},
+		{"400 status", nil, 400, false},
+		{"401 status", nil, 401, false},
+		{"no error, 200 status", nil, 200, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isRetryable(tt.err, tt.statusCode)
+			if got != tt.want {
+				t.Errorf("isRetryable(%v, %d) = %v, want %v", tt.err, tt.statusCode, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestNullEmbedder(t *testing.T) {

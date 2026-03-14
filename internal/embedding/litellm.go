@@ -5,9 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"errors"
 	"io"
 	"log/slog"
+	"math"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -81,6 +85,11 @@ func NewLiteLLMClient(opts ...LiteLLMOption) *LiteLLMClient {
 
 	c.httpClient = &http.Client{
 		Timeout: c.timeout,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
 	}
 
 	return c
@@ -129,7 +138,40 @@ func (c *LiteLLMClient) Embed(ctx context.Context, texts []string) ([][]float32,
 	return c.embedIndividualFallback(ctx, texts)
 }
 
-// embedBatch sends all texts in a single API call.
+const (
+	maxRetries     = 3
+	baseRetryDelay = 200 * time.Millisecond
+)
+
+// isRetryable returns true for transient errors worth retrying.
+func isRetryable(err error, statusCode int) bool {
+	if err != nil {
+		// EOF, connection reset, timeout — all transient
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return true
+		}
+		var netErr *net.OpError
+		if errors.As(err, &netErr) {
+			return true
+		}
+		// Check for common transient error strings
+		msg := err.Error()
+		if strings.Contains(msg, "connection reset") ||
+			strings.Contains(msg, "broken pipe") ||
+			strings.Contains(msg, "EOF") {
+			return true
+		}
+	}
+	// Retryable HTTP status codes
+	return statusCode == 429 || statusCode == 502 || statusCode == 503
+}
+
+// retryDelay returns the backoff duration for the given attempt (0-indexed).
+func retryDelay(attempt int) time.Duration {
+	return time.Duration(float64(baseRetryDelay) * math.Pow(2, float64(attempt)))
+}
+
+// embedBatch sends all texts in a single API call with retry logic.
 func (c *LiteLLMClient) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	reqBody := openAIEmbeddingRequest{
 		Model: c.model,
@@ -141,59 +183,101 @@ func (c *LiteLLMClient) embedBatch(ctx context.Context, texts []string) ([][]flo
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/embeddings", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("LiteLLM returned status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	var result openAIEmbeddingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
-	if result.Error != nil {
-		return nil, fmt.Errorf("LiteLLM error: %s", result.Error.Message)
-	}
-
-	if len(result.Data) != len(texts) {
-		return nil, fmt.Errorf("unexpected response: got %d embeddings for %d texts", len(result.Data), len(texts))
-	}
-
-	// Sort by index to ensure correct order
-	embeddings := make([][]float32, len(texts))
-	for _, item := range result.Data {
-		if item.Index < 0 || item.Index >= len(texts) {
-			return nil, fmt.Errorf("invalid index %d in response", item.Index)
+	var lastErr error
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			delay := retryDelay(attempt - 1)
+			slog.Debug("retrying embedding request",
+				"attempt", attempt+1,
+				"delay", delay)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
 		}
-		embeddings[item.Index] = item.Embedding
+
+		req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/embeddings", bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("creating request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		if c.apiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			if isRetryable(err, 0) {
+				lastErr = fmt.Errorf("sending request: %w", err)
+				continue
+			}
+			return nil, fmt.Errorf("sending request: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if isRetryable(nil, resp.StatusCode) {
+				lastErr = fmt.Errorf("LiteLLM returned status %d: %s", resp.StatusCode, string(bodyBytes))
+				continue
+			}
+			return nil, fmt.Errorf("LiteLLM returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		var result openAIEmbeddingResponse
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("decoding response: %w", err)
+		}
+		resp.Body.Close()
+
+		if result.Error != nil {
+			return nil, fmt.Errorf("LiteLLM error: %s", result.Error.Message)
+		}
+
+		if len(result.Data) != len(texts) {
+			return nil, fmt.Errorf("unexpected response: got %d embeddings for %d texts", len(result.Data), len(texts))
+		}
+
+		// Sort by index to ensure correct order
+		embeddings := make([][]float32, len(texts))
+		for _, item := range result.Data {
+			if item.Index < 0 || item.Index >= len(texts) {
+				return nil, fmt.Errorf("invalid index %d in response", item.Index)
+			}
+			embeddings[item.Index] = item.Embedding
+		}
+
+		return embeddings, nil
 	}
 
-	return embeddings, nil
+	return nil, lastErr
 }
 
-// embedIndividualFallback retries each text individually, skipping failures.
+// embedIndividualFallback retries each text individually with backoff, skipping failures.
 // Returns nil entries for texts that fail. Returns error only if ALL texts fail.
 func (c *LiteLLMClient) embedIndividualFallback(ctx context.Context, texts []string) ([][]float32, error) {
 	embeddings := make([][]float32, len(texts))
 	var failures int
 
+	const maxDelay = 2 * time.Second
+
 	for i, text := range texts {
+		// Backoff between requests to avoid hammering a recovering server
+		if i > 0 {
+			delay := time.Duration(i) * 100 * time.Millisecond
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()

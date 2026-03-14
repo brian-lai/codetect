@@ -1,25 +1,23 @@
 # Current Work Summary
 
-Fix LiteLLM HTTP client resilience — EOF errors cascade during `codetect index` due to missing retry/backoff logic and default HTTP transport settings.
+LiteLLM HTTP client resilience — completed and verified.
 
 **Branch:** `pret/litellm-resilience`
-**Master Plan:** context/plans/2026-03-14-litellm-http-resilience.md
-**Phase:** 1 of 1
+**PR:** https://github.com/brian-lai/codetect/pull/77
+**Summary:** context/summaries/2026-03-14-litellm-http-resilience-summary.md
 
 ## To-Do List
-- [ ] Configure custom HTTP Transport with connection pooling
-- [ ] Add retry with exponential backoff to embedBatch
-- [ ] Add backoff delay to embedIndividualFallback
-- [ ] Write tests for all new retry/backoff paths
-
-## Progress Notes
-- Plan created 2026-03-14
+- [x] Configure custom HTTP Transport with connection pooling
+- [x] Add retry with exponential backoff to embedBatch
+- [x] Add backoff delay to embedIndividualFallback
+- [x] Write tests for all new retry/backoff paths
+- [x] Verify with live neon-dash indexing (zero EOF errors)
 
 ---
 
 ```json
 {
-  "active_context": ["context/plans/2026-03-14-litellm-http-resilience.md"],
+  "active_context": [],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
     "context/summaries/2026-02-01-registry-stats-update-summary.md",
@@ -32,8 +30,9 @@ Fix LiteLLM HTTP client resilience — EOF errors cascade during `codetect index
     "context/summaries/2026-02-16-response-token-reduction-summary.md",
     "context/summaries/2026-02-18-codetectignore-global-config-summary.md",
     "context/summaries/2026-02-19-eval-cost-report-improvements-summary.md",
-    "context/summaries/2026-03-01-legacy-cleanup-summary.md"
+    "context/summaries/2026-03-01-legacy-cleanup-summary.md",
+    "context/summaries/2026-03-14-litellm-http-resilience-summary.md"
   ],
-  "last_updated": "2026-03-14T00:00:00Z"
+  "last_updated": "2026-03-14T09:50:00Z"
 }
 ```

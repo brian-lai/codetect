@@ -477,7 +477,7 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 			opts.Progress("Processing files", batchNum, totalBatches)
 		}
 
-		batchResult, err := idx.processBatch(ctx, batch, opts, profile.ChunkWorkers)
+		batchResult, err := idx.processBatch(ctx, batch, opts, profile)
 		if err != nil {
 			idx.logger.Warn("batch processing error", "error", err)
 			continue
@@ -502,9 +502,10 @@ func (idx *Indexer) Index(ctx context.Context, opts IndexOptions) (*IndexResult,
 }
 
 // processBatch processes a batch of files with parallel chunking.
-func (idx *Indexer) processBatch(ctx context.Context, files []string, opts IndexOptions, chunkWorkers int) (*IndexResult, error) {
+func (idx *Indexer) processBatch(ctx context.Context, files []string, opts IndexOptions, profile ConcurrencyProfile) (*IndexResult, error) {
 	result := &IndexResult{}
 
+	chunkWorkers := profile.ChunkWorkers
 	if chunkWorkers < 1 {
 		chunkWorkers = 1
 	}
@@ -589,6 +590,17 @@ func (idx *Indexer) processBatch(ctx context.Context, files []string, opts Index
 
 	if len(allChunks) == 0 {
 		return result, nil
+	}
+
+	// Scale concurrency based on actual chunk count (may exceed file-based estimate).
+	adjusted := AdjustConcurrencyForChunks(profile, len(allChunks), idx.config.EmbeddingProvider)
+	if adjusted.EmbedWorkers != profile.EmbedWorkers {
+		idx.pipeline.SetMaxWorkers(adjusted.EmbedWorkers)
+		if opts.Verbose {
+			idx.logger.Info("concurrency adjusted for chunk count",
+				"chunks", len(allChunks),
+				"embed_workers", adjusted.EmbedWorkers)
+		}
 	}
 
 	// Process through embedding pipeline (parallel)

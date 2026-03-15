@@ -23,8 +23,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Dimensions != 768 {
 		t.Errorf("Dimensions = %d, want 768", cfg.Dimensions)
 	}
-	if cfg.BatchSize != 32 {
-		t.Errorf("BatchSize = %d, want 32", cfg.BatchSize)
+	if cfg.BatchSize != 50 {
+		t.Errorf("BatchSize = %d, want 50", cfg.BatchSize)
 	}
 	if cfg.MaxWorkers != 4 {
 		t.Errorf("MaxWorkers = %d, want 4", cfg.MaxWorkers)
@@ -667,8 +667,8 @@ func TestComputeConcurrency(t *testing.T) {
 			wantEmbed: 4, wantChunk: 8, wantBatch: 500, wantTier: "large",
 		},
 		{
-			name: "litellm small halves embed workers", fileCount: 10, provider: "litellm",
-			wantEmbed: 1, wantChunk: 2, wantBatch: 100, wantTier: "small",
+			name: "litellm small gets minimum 2 workers", fileCount: 10, provider: "litellm",
+			wantEmbed: 2, wantChunk: 2, wantBatch: 100, wantTier: "small",
 		},
 		// User override
 		{
@@ -696,6 +696,56 @@ func TestComputeConcurrency(t *testing.T) {
 			}
 			if p.Tier != tc.wantTier {
 				t.Errorf("Tier = %q, want %q", p.Tier, tc.wantTier)
+			}
+		})
+	}
+}
+
+func TestAdjustConcurrencyForChunks(t *testing.T) {
+	tests := []struct {
+		name       string
+		base       ConcurrencyProfile
+		chunkCount int
+		provider   string
+		wantEmbed  int
+	}{
+		{
+			name:       "small file count, many chunks scales up",
+			base:       ConcurrencyProfile{EmbedWorkers: 2},
+			chunkCount: 2000, provider: "ollama",
+			wantEmbed: 4,
+		},
+		{
+			name:       "500 chunks scales to 3",
+			base:       ConcurrencyProfile{EmbedWorkers: 2},
+			chunkCount: 500, provider: "ollama",
+			wantEmbed: 3,
+		},
+		{
+			name:       "few chunks no upgrade",
+			base:       ConcurrencyProfile{EmbedWorkers: 2},
+			chunkCount: 100, provider: "ollama",
+			wantEmbed: 2,
+		},
+		{
+			name:       "litellm cap at 6",
+			base:       ConcurrencyProfile{EmbedWorkers: 8},
+			chunkCount: 5000, provider: "litellm",
+			wantEmbed: 6,
+		},
+		{
+			name:       "no downgrade from file-based tier",
+			base:       ConcurrencyProfile{EmbedWorkers: 4},
+			chunkCount: 100, provider: "ollama",
+			wantEmbed: 4,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AdjustConcurrencyForChunks(tc.base, tc.chunkCount, tc.provider)
+			if got.EmbedWorkers != tc.wantEmbed {
+				t.Errorf("EmbedWorkers = %d, want %d", got.EmbedWorkers, tc.wantEmbed)
 			}
 		})
 	}

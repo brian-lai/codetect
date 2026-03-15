@@ -157,8 +157,8 @@ func TestProviderConstants(t *testing.T) {
 	if DefaultCharsPerTokenOllama != 2.5 {
 		t.Errorf("DefaultCharsPerTokenOllama = %f, want 2.5", DefaultCharsPerTokenOllama)
 	}
-	if DefaultCharsPerTokenLiteLLM != 1.0 {
-		t.Errorf("DefaultCharsPerTokenLiteLLM = %f, want 1.0", DefaultCharsPerTokenLiteLLM)
+	if DefaultCharsPerTokenLiteLLM != 1.25 {
+		t.Errorf("DefaultCharsPerTokenLiteLLM = %f, want 1.25", DefaultCharsPerTokenLiteLLM)
 	}
 	// LiteLLM ratio should be stricter (lower) than Ollama
 	if DefaultCharsPerTokenLiteLLM >= DefaultCharsPerTokenOllama {

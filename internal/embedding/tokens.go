@@ -18,8 +18,10 @@ const (
 	DefaultCharsPerTokenOllama = 2.5
 
 	// DefaultCharsPerTokenLiteLLM is the chars/token ratio for LiteLLM/OpenAI models.
-	// OpenAI's tiktoken produces ~1.28 chars/token for code; 1.0 ensures safety.
-	DefaultCharsPerTokenLiteLLM = 1.0
+	// OpenAI's tiktoken produces ~1.28 chars/token for code; 1.25 provides ~2%
+	// safety margin while avoiding excessive sub-chunking (previous 1.0 was too
+	// conservative, flagging ~60% of chunks as oversized).
+	DefaultCharsPerTokenLiteLLM = 1.25
 )
 
 // EstimateTokens returns an approximate token count for the given text

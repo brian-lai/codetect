@@ -268,19 +268,21 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 		contents = append(contents, content)
 	}
 
-	// Pre-embed guard: route oversized chunks directly to sub-chunking
-	// instead of truncating them (which would lose data).
+	// Batch-first approach: send all chunks through batch embedding.
+	// Only pre-filter extremely oversized chunks (3x the token limit) that are
+	// guaranteed to fail — these go directly to sub-chunking to avoid wasting API calls.
 	result := make(map[string][]float32)
 	var failedHashes []string     // failed during batch embed — will retry via sub-chunking
 	var trulyFailedHashes []string // already tried sub-chunking and failed
 	maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
+	extremeMaxChars := maxChars * 3 // Only pre-filter truly enormous chunks
 
-	var normalHashes []string
-	var normalContents []string
+	var batchHashes []string
+	var batchContents []string
 	for idx, content := range contents {
-		if maxChars > 0 && len(content) > maxChars {
-			slog.Info("sub-chunking oversized chunk before embedding",
-				"hash", hashes[idx][:12], "content_len", len(content), "max_chars", maxChars)
+		if extremeMaxChars > 0 && len(content) > extremeMaxChars {
+			slog.Info("sub-chunking extremely oversized chunk",
+				"hash", hashes[idx][:12], "content_len", len(content), "extreme_max_chars", extremeMaxChars)
 			subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
 			if len(subEmbeddings) > 0 {
 				result[hashes[idx]] = subEmbeddings[0]
@@ -289,37 +291,37 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 				trulyFailedHashes = append(trulyFailedHashes, hashes[idx])
 			}
 		} else {
-			normalHashes = append(normalHashes, hashes[idx])
-			normalContents = append(normalContents, content)
+			batchHashes = append(batchHashes, hashes[idx])
+			batchContents = append(batchContents, content)
 		}
 	}
 
-	// Embed normal-sized chunks in batches, tolerating per-batch failures
-	for i := 0; i < len(normalContents); i += p.batchSize {
+	// Embed all remaining chunks in batches (including moderately oversized ones)
+	for i := 0; i < len(batchContents); i += p.batchSize {
 		end := i + p.batchSize
-		if end > len(normalContents) {
-			end = len(normalContents)
+		if end > len(batchContents) {
+			end = len(batchContents)
 		}
 
-		batchContents := make([]string, end-i)
-		copy(batchContents, normalContents[i:end])
-		batchHashes := normalHashes[i:end]
+		thisBatchContents := make([]string, end-i)
+		copy(thisBatchContents, batchContents[i:end])
+		thisBatchHashes := batchHashes[i:end]
 
-		embeddings, err := p.embedder.Embed(ctx, batchContents)
+		embeddings, err := p.embedder.Embed(ctx, thisBatchContents)
 		if err != nil {
 			// Entire batch failed — queue all for sub-chunking recovery
 			slog.Debug("batch embedding failed, queuing for sub-chunking",
 				"batch", fmt.Sprintf("%d-%d", i, end),
 				"error", err)
-			failedHashes = append(failedHashes, batchHashes...)
+			failedHashes = append(failedHashes, thisBatchHashes...)
 			continue
 		}
 
 		for j, emb := range embeddings {
 			if emb != nil {
-				result[batchHashes[j]] = emb
+				result[thisBatchHashes[j]] = emb
 			} else {
-				failedHashes = append(failedHashes, batchHashes[j])
+				failedHashes = append(failedHashes, thisBatchHashes[j])
 			}
 		}
 	}

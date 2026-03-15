@@ -91,7 +91,7 @@ func NewPipeline(cache *EmbeddingCache, locations LocationAccess, embedder Embed
 		cache:      cache,
 		locations:  locations,
 		embedder:   embedder,
-		batchSize:  32, // Default batch size
+		batchSize:  50, // Default batch size
 		maxWorkers: 1,  // Default single worker
 	}
 
@@ -559,8 +559,8 @@ func (p *Pipeline) CleanupOrphanedEmbeddings(ctx context.Context) (int, error) {
 // ParallelEmbedChunks embeds chunks using multiple workers.
 // Use this for large batch operations.
 func (p *Pipeline) ParallelEmbedChunks(ctx context.Context, repoRoot string, chunks []Chunk) (*EmbedResult, error) {
-	if p.maxWorkers <= 1 || len(chunks) < p.batchSize*2 {
-		// Fall back to sequential processing for small workloads
+	if p.maxWorkers <= 1 {
+		// Fall back to sequential processing for single worker
 		return p.EmbedChunks(ctx, repoRoot, chunks)
 	}
 

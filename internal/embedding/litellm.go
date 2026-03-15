@@ -256,18 +256,27 @@ func (c *LiteLLMClient) embedBatch(ctx context.Context, texts []string) ([][]flo
 	return nil, lastErr
 }
 
-// embedIndividualFallback retries each text individually with backoff, skipping failures.
+// embedIndividualFallback retries each text individually, skipping failures.
+// Applies backoff only after transient errors (not after fast 400 rejections).
 // Returns nil entries for texts that fail. Returns error only if ALL texts fail.
 func (c *LiteLLMClient) embedIndividualFallback(ctx context.Context, texts []string) ([][]float32, error) {
 	embeddings := make([][]float32, len(texts))
 	var failures int
+	var consecutiveTransient int // tracks transient failures to pace backoff
 
 	const maxDelay = 2 * time.Second
 
 	for i, text := range texts {
-		// Backoff between requests to avoid hammering a recovering server
-		if i > 0 {
-			delay := time.Duration(i) * 100 * time.Millisecond
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		// Only backoff after transient errors (connection issues, 429, 502, 503).
+		// 400s are deterministic and fast — no delay needed between them.
+		if consecutiveTransient > 0 {
+			delay := time.Duration(consecutiveTransient) * 100 * time.Millisecond
 			if delay > maxDelay {
 				delay = maxDelay
 			}
@@ -278,12 +287,6 @@ func (c *LiteLLMClient) embedIndividualFallback(ctx context.Context, texts []str
 			}
 		}
 
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
 		emb, err := c.embedBatch(ctx, []string{text})
 		if err != nil {
 			slog.Warn("skipping chunk that failed to embed",
@@ -291,8 +294,15 @@ func (c *LiteLLMClient) embedIndividualFallback(ctx context.Context, texts []str
 				"text_len", len(text),
 				"error", err)
 			failures++
+			// Only count as transient if it's not a 400-class error
+			if isTransientError(err) {
+				consecutiveTransient++
+			} else {
+				consecutiveTransient = 0 // reset: 400s are not transient
+			}
 			continue // embeddings[i] stays nil
 		}
+		consecutiveTransient = 0 // reset on success
 		embeddings[i] = emb[0]
 	}
 
@@ -301,6 +311,22 @@ func (c *LiteLLMClient) embedIndividualFallback(ctx context.Context, texts []str
 	}
 
 	return embeddings, nil
+}
+
+// isTransientError returns true for errors that warrant a backoff delay before retrying.
+// 400-class errors (context window, bad request) are not transient — they fail fast.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	// 400/401/413 are deterministic — no backoff needed
+	if strings.Contains(msg, "status 400") ||
+		strings.Contains(msg, "status 401") ||
+		strings.Contains(msg, "status 413") {
+		return false
+	}
+	return true
 }
 
 // Available implements Embedder.Available - checks if the provider is ready

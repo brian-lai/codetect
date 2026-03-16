@@ -44,7 +44,8 @@ type Pipeline struct {
 	// Configuration
 	batchSize     int
 	maxWorkers    int
-	charsPerToken float64 // 0 means use default (2.5)
+	charsPerToken float64       // 0 means use default (2.5)
+	tokenCounter  *TokenCounter // nil = use char estimation (Ollama/fallback)
 }
 
 // PipelineOption configures a Pipeline.
@@ -63,6 +64,15 @@ func WithBatchSize(size int) PipelineOption {
 func WithFailureStore(fs *FailureStore) PipelineOption {
 	return func(p *Pipeline) {
 		p.failureStore = fs
+	}
+}
+
+// WithTokenCounter sets an exact token counter for the pipeline.
+// When set, it replaces character-based estimation for pre-filter decisions.
+// Pass nil to use character-based estimation (default, used for Ollama).
+func WithTokenCounter(tc *TokenCounter) PipelineOption {
+	return func(p *Pipeline) {
+		p.tokenCounter = tc
 	}
 }
 
@@ -278,7 +288,7 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 	var normalHashes []string
 	var normalContents []string
 	for idx, content := range contents {
-		if maxChars > 0 && len(content) > maxChars {
+		if p.exceedsTokenLimit(content, maxChars) {
 			slog.Info("sub-chunking oversized chunk before embedding",
 				"hash", hashes[idx][:12], "content_len", len(content), "max_chars", maxChars)
 			subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
@@ -614,7 +624,7 @@ func (p *Pipeline) ParallelEmbedChunks(ctx context.Context, repoRoot string, chu
 	// Parallel embedding
 	if len(toEmbed) > 0 {
 		// Split into work items
-		workItems := splitIntoBatches(toEmbed, p.batchSize)
+		workItems := p.packBatchByTokens(toEmbed)
 
 		// Create worker pool
 		results := make(chan map[string][]float32, len(workItems))
@@ -710,6 +720,48 @@ func splitIntoBatches(chunks []PipelineChunk, batchSize int) [][]PipelineChunk {
 			end = len(chunks)
 		}
 		batches = append(batches, chunks[i:end])
+	}
+	return batches
+}
+
+// exceedsTokenLimit returns true if content exceeds the token limit.
+// Uses exact tiktoken counting when available, falls back to char estimation.
+func (p *Pipeline) exceedsTokenLimit(content string, maxChars int) bool {
+	if p.tokenCounter != nil {
+		return p.tokenCounter.ExceedsLimit(content, DefaultMaxTokens)
+	}
+	return maxChars > 0 && len(content) > maxChars
+}
+
+// maxTokensPerBatch is the total token budget per API request.
+// OpenAI's limit is 2M tokens/min; 100K per batch is safe at any concurrency.
+const maxTokensPerBatch = 100_000
+
+// packBatchByTokens groups chunks into batches by total token budget rather than
+// fixed chunk count. When a TokenCounter is available, this packs small chunks
+// more densely and isolates large chunks, reducing total API calls.
+// Falls back to fixed-size batching when no TokenCounter is set.
+func (p *Pipeline) packBatchByTokens(chunks []PipelineChunk) [][]PipelineChunk {
+	if p.tokenCounter == nil {
+		return splitIntoBatches(chunks, p.batchSize)
+	}
+
+	var batches [][]PipelineChunk
+	var current []PipelineChunk
+	var currentTokens int
+
+	for _, chunk := range chunks {
+		tokens := p.tokenCounter.CountTokens(chunk.Chunk.Content)
+		if currentTokens+tokens > maxTokensPerBatch && len(current) > 0 {
+			batches = append(batches, current)
+			current = nil
+			currentTokens = 0
+		}
+		current = append(current, chunk)
+		currentTokens += tokens
+	}
+	if len(current) > 0 {
+		batches = append(batches, current)
 	}
 	return batches
 }

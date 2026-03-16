@@ -301,7 +301,7 @@ func (idx *Indexer) initComponents() error {
 		idx.failureStore.SetPathMapper(idx.pathMapper)
 	}
 
-	// Create pipeline with provider-aware chars/token ratio
+	// Create pipeline with provider-aware chars/token ratio and optional exact counter
 	var charsPerToken float64
 	switch idx.config.EmbeddingProvider {
 	case "litellm":
@@ -309,6 +309,19 @@ func (idx *Indexer) initComponents() error {
 	default:
 		charsPerToken = embedding.DefaultCharsPerTokenOllama
 	}
+
+	// For LiteLLM/OpenAI, use exact tiktoken counting (cl100k_base covers
+	// text-embedding-3-large, text-embedding-3-small, and ada-002).
+	var tokenCounter *embedding.TokenCounter
+	if idx.config.EmbeddingProvider == "litellm" {
+		tc, err := embedding.NewTokenCounter("cl100k_base")
+		if err != nil {
+			idx.logger.Warn("tiktoken unavailable, falling back to char estimation", "error", err)
+		} else {
+			tokenCounter = tc
+		}
+	}
+
 	idx.pipeline = embedding.NewPipeline(
 		idx.cache,
 		idx.locations,
@@ -317,6 +330,7 @@ func (idx *Indexer) initComponents() error {
 		embedding.WithMaxWorkers(idx.config.MaxWorkers),
 		embedding.WithFailureStore(idx.failureStore),
 		embedding.WithCharsPerToken(charsPerToken),
+		embedding.WithTokenCounter(tokenCounter),
 	)
 
 	return nil

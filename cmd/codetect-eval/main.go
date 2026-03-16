@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"codetect/internal/embedding"
+
 	"codetect/evals"
 	"codetect/internal/datadir"
 	"codetect/internal/logging"
@@ -54,8 +56,9 @@ func runEval(args []string) {
 	casesDir := fs.String("cases", "evals/cases", "Directory containing test case JSONL files")
 	outputDir := fs.String("output", "evals/results", "Output directory for results")
 	categories := fs.String("category", "", "Filter by category (comma-separated: search,navigate,understand)")
-	parallel := fs.Int("parallel", 10, "Number of parallel test case executions")
-	fs.IntVar(parallel, "j", 10, "Short for --parallel (like make -j)")
+	defaultParallel := defaultParallelism()
+	parallel := fs.Int("parallel", defaultParallel, "Number of parallel test case executions (default: 1 for ollama, 10 for litellm)")
+	fs.IntVar(parallel, "j", defaultParallel, "Short for --parallel (like make -j)")
 	timeout := fs.Duration("timeout", 5*time.Minute, "Timeout per test case")
 	model := fs.String("model", "sonnet", "Model to use (sonnet, haiku, opus)")
 	verbose := fs.Bool("verbose", false, "Verbose output")
@@ -380,6 +383,17 @@ func showLogs(args []string) {
 	}
 }
 
+// defaultParallelism returns the appropriate default parallel execution count
+// based on the active embedding provider. Ollama is resource-constrained and
+// should run sequentially; LiteLLM can handle concurrent requests.
+func defaultParallelism() int {
+	cfg := embedding.LoadConfigFromEnv()
+	if cfg.Provider == embedding.ProviderLiteLLM {
+		return 10
+	}
+	return 1
+}
+
 func formatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {
@@ -412,7 +426,7 @@ Run Options:
   --cases <dir>      Test cases directory (default: evals/cases)
   --output <dir>     Output directory (default: evals/results)
   --category <cat>   Filter by category (search,navigate,understand)
-  --parallel <n>     Number of parallel executions (default: 10)
+  --parallel <n>     Number of parallel executions (default: 1 for ollama, 10 for litellm)
   --timeout <dur>    Timeout per test (default: 5m)
   --model <model>    Model to use: sonnet (default), haiku, opus
   --verbose          Verbose output

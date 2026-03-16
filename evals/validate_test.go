@@ -342,7 +342,7 @@ func TestNormalizedContains(t *testing.T) {
 		{"hyphen variant", "uses jwt-verification for auth", "JWT verification", true},
 		{"word window match", "JWT token verification is performed", "JWT verification", true},
 		{"word order preserved", "verification JWT", "JWT verification", false},
-		{"too far apart", "JWT is a well-known open standard that has predated many modern authentication and authorization verification systems by many years", "JWT verification", false},
+		{"too far apart", "JWT one two three four five six seven eight nine ten eleven verification", "JWT verification", false},
 		{"single word", "hello world", "hello", true},
 		{"not present", "something else entirely", "JWT verification", false},
 	}

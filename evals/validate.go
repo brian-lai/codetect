@@ -39,15 +39,15 @@ func (v *Validator) Validate(tc TestCase, result RunResult) ValidationResult {
 
 	output := strings.ToLower(result.Output)
 
-	// Extract files mentioned in output
-	foundFiles := v.extractFiles(result.Output)
+	// Extract files mentioned in output (reused for both scoring and precision denominator)
+	extractedFiles := v.extractFiles(result.Output)
 	expectedFiles := tc.GroundTruth.Files
 
 	// Calculate file metrics
 	if len(expectedFiles) > 0 {
 		for _, f := range expectedFiles {
 			fLower := strings.ToLower(f)
-			if containsPath(foundFiles, fLower) || strings.Contains(output, fLower) {
+			if containsPath(extractedFiles, fLower) || strings.Contains(output, fLower) {
 				vr.FilesFound = append(vr.FilesFound, f)
 			} else {
 				vr.FilesMissed = append(vr.FilesMissed, f)
@@ -81,7 +81,7 @@ func (v *Validator) Validate(tc TestCase, result RunResult) ValidationResult {
 	}
 
 	// Count items extracted from output (for precision denominator)
-	extractedFiles := v.extractFiles(result.Output)
+	// extractedFiles already computed above — reuse it
 	extractedSymbols := v.extractSymbols(result.Output)
 
 	// Calculate precision, recall, F1
@@ -265,12 +265,14 @@ func wordsInWindow(outputWords, words []string, windowSize int) bool {
 }
 
 // extractSymbols extracts code identifier tokens from output text.
-// It looks for CamelCase and snake_case identifiers of 4+ chars to estimate
-// how many distinct symbols the response mentioned (used for precision calculation).
+// It looks for CamelCase identifiers (must have >=2 capital letters, e.g. NewServer,
+// RunAll) and mixed-case identifiers starting lowercase (e.g. handleRequest).
+// Single-capital-letter words like "This", "Find", "Returns" are excluded to avoid
+// inflating the precision denominator with common English prose.
 func (v *Validator) extractSymbols(output string) []string {
-	// Match CamelCase identifiers (e.g. RunServer, NewOllamaClient)
-	// and snake_case identifiers with uppercase (e.g. handleToolsCall)
-	re := regexp.MustCompile(`\b[A-Z][a-zA-Z0-9]{3,}|[a-z][a-zA-Z0-9_]{2,}[A-Z][a-zA-Z0-9]*\b`)
+	// True CamelCase: uppercase letter, lowercase chars, then another uppercase (e.g. RunServer, NewOllamaClient)
+	// Mixed camelCase: lowercase start with uppercase inside (e.g. handleToolsCall, embedNewChunks)
+	re := regexp.MustCompile(`\b[A-Z][a-z]+(?:[A-Z][a-zA-Z0-9]+)+|[a-z][a-zA-Z0-9_]{2,}[A-Z][a-zA-Z0-9]*\b`)
 	matches := re.FindAllString(output, -1)
 
 	// Deduplicate

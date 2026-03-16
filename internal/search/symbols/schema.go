@@ -187,6 +187,68 @@ func ClearAllSymbols(db *sql.DB) error {
 	return err
 }
 
+// createSymbolRefsTable creates the symbol_refs table and its indexes using the adapter dialect.
+// Safe to call on fresh installs and during migration — uses IF NOT EXISTS semantics.
+func createSymbolRefsTable(adapter db.DB, dialect db.Dialect) error {
+	refsColumns := []db.ColumnDef{
+		{Name: "id", Type: db.ColTypeAutoIncrement},
+		{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
+		{Name: "name", Type: db.ColTypeText, Nullable: false},
+		{Name: "qualified_name", Type: db.ColTypeText, Nullable: true},
+		{Name: "kind", Type: db.ColTypeText, Nullable: false},
+		{Name: "source_path", Type: db.ColTypeText, Nullable: false},
+		{Name: "source_line", Type: db.ColTypeInteger, Nullable: false},
+		{Name: "source_scope", Type: db.ColTypeText, Nullable: true},
+	}
+	if _, err := adapter.Exec(dialect.CreateTableSQL("symbol_refs", refsColumns)); err != nil {
+		return fmt.Errorf("creating symbol_refs table: %w", err)
+	}
+	// Unique constraint — ignore "already exists"; CreateIndexSQL uses IF NOT EXISTS on SQLite.
+	// On Postgres, IF NOT EXISTS for indexes requires PG 9.5+ which we require anyway.
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_unique", []string{"repo_root", "source_path", "source_line", "name"}, true)); err != nil {
+		// Non-fatal: unique index may already exist on re-entrant migration
+		_ = err
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_name", []string{"repo_root", "name"}, false)); err != nil {
+		return fmt.Errorf("creating idx_refs_name: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_qualified", []string{"repo_root", "qualified_name"}, false)); err != nil {
+		return fmt.Errorf("creating idx_refs_qualified: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_source", []string{"repo_root", "source_path"}, false)); err != nil {
+		return fmt.Errorf("creating idx_refs_source: %w", err)
+	}
+	return nil
+}
+
+// createTypeRelationsTable creates the type_relations table and its indexes using the adapter dialect.
+// Safe to call on fresh installs and during migration — uses IF NOT EXISTS semantics.
+func createTypeRelationsTable(adapter db.DB, dialect db.Dialect) error {
+	typeRelColumns := []db.ColumnDef{
+		{Name: "id", Type: db.ColTypeAutoIncrement},
+		{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
+		{Name: "child_type", Type: db.ColTypeText, Nullable: false},
+		{Name: "parent_type", Type: db.ColTypeText, Nullable: false},
+		{Name: "relation", Type: db.ColTypeText, Nullable: false},
+		{Name: "path", Type: db.ColTypeText, Nullable: false},
+		{Name: "line", Type: db.ColTypeInteger, Nullable: false},
+	}
+	if _, err := adapter.Exec(dialect.CreateTableSQL("type_relations", typeRelColumns)); err != nil {
+		return fmt.Errorf("creating type_relations table: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_unique", []string{"repo_root", "child_type", "parent_type", "path"}, true)); err != nil {
+		// Non-fatal: unique index may already exist on re-entrant migration
+		_ = err
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_parent", []string{"repo_root", "parent_type"}, false)); err != nil {
+		return fmt.Errorf("creating idx_typerels_parent: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_child", []string{"repo_root", "child_type"}, false)); err != nil {
+		return fmt.Errorf("creating idx_typerels_child: %w", err)
+	}
+	return nil
+}
+
 // initSchemaWithAdapter initializes the database schema using the adapter and dialect.
 // This supports multiple database backends (SQLite, PostgreSQL) by using dialect-aware DDL.
 func initSchemaWithAdapter(adapter db.DB, dialect db.Dialect) error {
@@ -267,54 +329,12 @@ func initSchemaWithAdapter(adapter db.DB, dialect db.Dialect) error {
 			// Ignore error if index already exists
 		}
 
-		// Create symbol_refs table for reference tracking
-		refsColumns := []db.ColumnDef{
-			{Name: "id", Type: db.ColTypeAutoIncrement},
-			{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
-			{Name: "name", Type: db.ColTypeText, Nullable: false},
-			{Name: "qualified_name", Type: db.ColTypeText, Nullable: true},
-			{Name: "kind", Type: db.ColTypeText, Nullable: false},
-			{Name: "source_path", Type: db.ColTypeText, Nullable: false},
-			{Name: "source_line", Type: db.ColTypeInteger, Nullable: false},
-			{Name: "source_scope", Type: db.ColTypeText, Nullable: true},
+		// Create symbol_refs and type_relations tables for reference tracking
+		if err := createSymbolRefsTable(adapter, dialect); err != nil {
+			return err
 		}
-		if _, err := adapter.Exec(dialect.CreateTableSQL("symbol_refs", refsColumns)); err != nil {
-			return fmt.Errorf("creating symbol_refs table: %w", err)
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_unique", []string{"repo_root", "source_path", "source_line", "name"}, true)); err != nil {
-			_ = err
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_name", []string{"repo_root", "name"}, false)); err != nil {
-			return fmt.Errorf("creating refs name index: %w", err)
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_qualified", []string{"repo_root", "qualified_name"}, false)); err != nil {
-			return fmt.Errorf("creating refs qualified_name index: %w", err)
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_source", []string{"repo_root", "source_path"}, false)); err != nil {
-			return fmt.Errorf("creating refs source index: %w", err)
-		}
-
-		// Create type_relations table for type hierarchy tracking
-		typeRelColumns := []db.ColumnDef{
-			{Name: "id", Type: db.ColTypeAutoIncrement},
-			{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
-			{Name: "child_type", Type: db.ColTypeText, Nullable: false},
-			{Name: "parent_type", Type: db.ColTypeText, Nullable: false},
-			{Name: "relation", Type: db.ColTypeText, Nullable: false},
-			{Name: "path", Type: db.ColTypeText, Nullable: false},
-			{Name: "line", Type: db.ColTypeInteger, Nullable: false},
-		}
-		if _, err := adapter.Exec(dialect.CreateTableSQL("type_relations", typeRelColumns)); err != nil {
-			return fmt.Errorf("creating type_relations table: %w", err)
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_unique", []string{"repo_root", "child_type", "parent_type", "path"}, true)); err != nil {
-			_ = err
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_parent", []string{"repo_root", "parent_type"}, false)); err != nil {
-			return fmt.Errorf("creating type_relations parent index: %w", err)
-		}
-		if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_child", []string{"repo_root", "child_type"}, false)); err != nil {
-			return fmt.Errorf("creating type_relations child index: %w", err)
+		if err := createTypeRelationsTable(adapter, dialect); err != nil {
+			return err
 		}
 
 		// Insert schema version
@@ -325,55 +345,11 @@ func initSchemaWithAdapter(adapter db.DB, dialect db.Dialect) error {
 	} else if version < schemaVersion {
 		if version < 3 {
 			// v2 → v3: add symbol_refs and type_relations tables
-			refsColumns := []db.ColumnDef{
-				{Name: "id", Type: db.ColTypeAutoIncrement},
-				{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
-				{Name: "name", Type: db.ColTypeText, Nullable: false},
-				{Name: "qualified_name", Type: db.ColTypeText, Nullable: true},
-				{Name: "kind", Type: db.ColTypeText, Nullable: false},
-				{Name: "source_path", Type: db.ColTypeText, Nullable: false},
-				{Name: "source_line", Type: db.ColTypeInteger, Nullable: false},
-				{Name: "source_scope", Type: db.ColTypeText, Nullable: true},
+			if err := createSymbolRefsTable(adapter, dialect); err != nil {
+				return fmt.Errorf("v3 migration: %w", err)
 			}
-			if _, err := adapter.Exec(dialect.CreateTableSQL("symbol_refs", refsColumns)); err != nil {
-				return fmt.Errorf("v3 migration: creating symbol_refs: %w", err)
-			}
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_name", []string{"repo_root", "name"}, false)); err != nil {
-				// ignore — may already exist
-				_ = err
-			}
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_qualified", []string{"repo_root", "qualified_name"}, false)); err != nil {
-				_ = err
-			}
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_source", []string{"repo_root", "source_path"}, false)); err != nil {
-				_ = err
-			}
-			// Unique constraint on symbol_refs
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_unique", []string{"repo_root", "source_path", "source_line", "name"}, true)); err != nil {
-				_ = err
-			}
-
-			typeRelColumns := []db.ColumnDef{
-				{Name: "id", Type: db.ColTypeAutoIncrement},
-				{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
-				{Name: "child_type", Type: db.ColTypeText, Nullable: false},
-				{Name: "parent_type", Type: db.ColTypeText, Nullable: false},
-				{Name: "relation", Type: db.ColTypeText, Nullable: false},
-				{Name: "path", Type: db.ColTypeText, Nullable: false},
-				{Name: "line", Type: db.ColTypeInteger, Nullable: false},
-			}
-			if _, err := adapter.Exec(dialect.CreateTableSQL("type_relations", typeRelColumns)); err != nil {
-				return fmt.Errorf("v3 migration: creating type_relations: %w", err)
-			}
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_parent", []string{"repo_root", "parent_type"}, false)); err != nil {
-				_ = err
-			}
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_child", []string{"repo_root", "child_type"}, false)); err != nil {
-				_ = err
-			}
-			// Unique constraint on type_relations
-			if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_unique", []string{"repo_root", "child_type", "parent_type", "path"}, true)); err != nil {
-				_ = err
+			if err := createTypeRelationsTable(adapter, dialect); err != nil {
+				return fmt.Errorf("v3 migration: %w", err)
 			}
 		}
 		updateVersionSQL := fmt.Sprintf("UPDATE schema_version SET version = %s", dialect.Placeholder(1))

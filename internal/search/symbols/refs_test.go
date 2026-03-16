@@ -256,6 +256,95 @@ func TestDeleteTypeRelationsByFile(t *testing.T) {
 	}
 }
 
+func TestInsertRefs_DuplicateUpserts(t *testing.T) {
+	idx := newTestIndex(t)
+
+	// Insert a ref, then insert the same (path, line, name) with updated fields.
+	// The upsert should update the existing row rather than error or duplicate.
+	ref := SymbolRef{Name: "Update", QualifiedName: "Index.Update", Kind: "call", SourcePath: "cmd/main.go", SourceLine: 42}
+
+	tx, err := idx.adapter.Begin()
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if err := idx.InsertRefs(tx, []SymbolRef{ref}); err != nil {
+		t.Fatalf("first InsertRefs: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	// Re-insert same (path, line, name) with updated qualified_name
+	ref.QualifiedName = "symbols.Index.Update"
+	tx2, err := idx.adapter.Begin()
+	if err != nil {
+		t.Fatalf("Begin2: %v", err)
+	}
+	if err := idx.InsertRefs(tx2, []SymbolRef{ref}); err != nil {
+		t.Fatalf("second InsertRefs (upsert): %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit2: %v", err)
+	}
+
+	// Should still be exactly 1 row, with updated qualified_name
+	results, err := idx.QueryCallers("Update", 10)
+	if err != nil {
+		t.Fatalf("QueryCallers: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 row after upsert, got %d", len(results))
+	}
+	if results[0].QualifiedName != "symbols.Index.Update" {
+		t.Errorf("expected updated qualified_name, got %q", results[0].QualifiedName)
+	}
+}
+
+func TestQueryCallers_ResultFields(t *testing.T) {
+	idx := newTestIndex(t)
+
+	tx, err := idx.adapter.Begin()
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	refs := []SymbolRef{
+		{Name: "Update", QualifiedName: "Index.Update", Kind: "call", SourcePath: "cmd/main.go", SourceLine: 42, SourceScope: "main"},
+	}
+	if err := idx.InsertRefs(tx, refs); err != nil {
+		t.Fatalf("InsertRefs: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	callers, err := idx.QueryCallers("Update", 10)
+	if err != nil {
+		t.Fatalf("QueryCallers: %v", err)
+	}
+	if len(callers) != 1 {
+		t.Fatalf("expected 1 caller, got %d", len(callers))
+	}
+	c := callers[0]
+	if c.Name != "Update" {
+		t.Errorf("Name: got %q, want %q", c.Name, "Update")
+	}
+	if c.QualifiedName != "Index.Update" {
+		t.Errorf("QualifiedName: got %q, want %q", c.QualifiedName, "Index.Update")
+	}
+	if c.Kind != "call" {
+		t.Errorf("Kind: got %q, want %q", c.Kind, "call")
+	}
+	if c.SourcePath != "cmd/main.go" {
+		t.Errorf("SourcePath: got %q, want %q", c.SourcePath, "cmd/main.go")
+	}
+	if c.SourceLine != 42 {
+		t.Errorf("SourceLine: got %d, want %d", c.SourceLine, 42)
+	}
+	if c.SourceScope != "main" {
+		t.Errorf("SourceScope: got %q, want %q", c.SourceScope, "main")
+	}
+}
+
 func TestMigrateV2ToV3(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "v2.db")

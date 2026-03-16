@@ -52,8 +52,9 @@ func (idx *Index) InsertRefs(tx db.Tx, refs []SymbolRef) error {
 			idx.root, r.Name, nullString(r.QualifiedName), r.Kind,
 			r.SourcePath, r.SourceLine, nullString(r.SourceScope),
 		); err != nil {
-			// Skip duplicate/constraint errors and continue
-			continue
+			// UpsertSQL uses ON CONFLICT DO UPDATE, so constraint violations should
+			// not occur. Any error here is unexpected; surface it rather than losing data.
+			return fmt.Errorf("inserting ref %q at %s:%d: %w", r.Name, r.SourcePath, r.SourceLine, err)
 		}
 	}
 	return nil
@@ -93,7 +94,7 @@ func (idx *Index) InsertTypeRelations(tx db.Tx, relations []TypeRelation) error 
 		if _, err := stmt.Exec(
 			idx.root, r.ChildType, r.ParentType, r.Relation, r.Path, r.Line,
 		); err != nil {
-			continue
+			return fmt.Errorf("inserting type relation %q -> %q at %s:%d: %w", r.ChildType, r.ParentType, r.Path, r.Line, err)
 		}
 	}
 	return nil

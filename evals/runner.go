@@ -307,6 +307,14 @@ func (r *Runner) runTestCase(ctx context.Context, tc TestCase, mode ExecutionMod
 			continue // Skip unparseable lines
 		}
 
+		// Count tool calls
+		if event.Type == "tool_use" {
+			result.ToolCallCount++
+			if event.Name != "" {
+				result.ToolsUsed = append(result.ToolsUsed, event.Name)
+			}
+		}
+
 		// The final "result" event contains the summary
 		if event.Type == "result" {
 			result.Success = event.Subtype == "success"

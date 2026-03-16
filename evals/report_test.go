@@ -6,6 +6,79 @@ import (
 	"time"
 )
 
+func TestGenerateSummary_ToolCallStats(t *testing.T) {
+	reporter := NewReporter()
+	report := &EvalReport{
+		Timestamp: time.Now(),
+		Config:    EvalConfig{RepoPath: "/test/repo", Model: "sonnet"},
+		RawResults: []RunResult{
+			{Mode: ModeWithMCP, Success: true, ToolCallCount: 4},
+			{Mode: ModeWithMCP, Success: true, ToolCallCount: 2},
+			{Mode: ModeWithoutMCP, Success: true, ToolCallCount: 0},
+			{Mode: ModeWithoutMCP, Success: true, ToolCallCount: 0},
+		},
+		Results: []ComparisonResult{
+			{TestCaseID: "t1", WithMCP: ValidationResult{NoToolsWarning: false}, WithoutMCP: ValidationResult{}},
+			{TestCaseID: "t2", WithMCP: ValidationResult{NoToolsWarning: true}, WithoutMCP: ValidationResult{}},
+		},
+	}
+
+	reporter.GenerateSummary(report)
+
+	if report.Summary.WithMCP.TotalToolCalls != 6 {
+		t.Errorf("TotalToolCalls = %d, want 6", report.Summary.WithMCP.TotalToolCalls)
+	}
+	if report.Summary.WithMCP.AvgToolCalls != 3.0 {
+		t.Errorf("AvgToolCalls = %.1f, want 3.0", report.Summary.WithMCP.AvgToolCalls)
+	}
+	if report.Summary.WithMCP.CasesWithNoTools != 1 {
+		t.Errorf("CasesWithNoTools = %d, want 1", report.Summary.WithMCP.CasesWithNoTools)
+	}
+}
+
+func TestPrintReport_NoToolsWarning(t *testing.T) {
+	reporter := NewReporter()
+	report := &EvalReport{
+		Timestamp: time.Now(),
+		Config:    EvalConfig{RepoPath: "/test/repo", Model: "sonnet"},
+		Summary: ReportSummary{
+			WithMCP:    ModeStats{CasesWithNoTools: 2, AvgToolCalls: 1.5},
+			WithoutMCP: ModeStats{},
+		},
+	}
+
+	var sb strings.Builder
+	reporter.PrintReport(report, &sb)
+	out := sb.String()
+
+	if !strings.Contains(out, "2 MCP case(s) had no tool calls") {
+		t.Error("report should warn when MCP cases had no tool calls")
+	}
+	if !strings.Contains(out, "Avg Tool Calls") {
+		t.Error("report should show Avg Tool Calls row")
+	}
+}
+
+func TestPrintReport_NoToolsWarning_NotShownWhenZero(t *testing.T) {
+	reporter := NewReporter()
+	report := &EvalReport{
+		Timestamp: time.Now(),
+		Config:    EvalConfig{RepoPath: "/test/repo", Model: "sonnet"},
+		Summary: ReportSummary{
+			WithMCP:    ModeStats{CasesWithNoTools: 0, AvgToolCalls: 3.0},
+			WithoutMCP: ModeStats{},
+		},
+	}
+
+	var sb strings.Builder
+	reporter.PrintReport(report, &sb)
+	out := sb.String()
+
+	if strings.Contains(out, "had no tool calls") {
+		t.Error("report should NOT warn when all MCP cases used tools")
+	}
+}
+
 func TestPrintReport_CostBreakdown(t *testing.T) {
 	reporter := NewReporter()
 

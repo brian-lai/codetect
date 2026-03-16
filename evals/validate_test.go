@@ -221,6 +221,203 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidate_ToolCallVerification(t *testing.T) {
+	v := NewValidator()
+	tc := TestCase{ID: "tool-001", GroundTruth: GroundTruth{Files: []string{"a.go"}}}
+
+	t.Run("MCP with tools: no warning", func(t *testing.T) {
+		result := RunResult{
+			Mode: ModeWithMCP, Success: true, ToolCallCount: 3,
+			Output: "a.go does the thing",
+		}
+		vr := v.Validate(tc, result)
+		if vr.NoToolsWarning {
+			t.Error("expected NoToolsWarning=false when tools were called")
+		}
+		if vr.ToolCallsMade != 3 {
+			t.Errorf("ToolCallsMade = %d, want 3", vr.ToolCallsMade)
+		}
+	})
+
+	t.Run("MCP with zero tools: warning set", func(t *testing.T) {
+		result := RunResult{
+			Mode: ModeWithMCP, Success: true, ToolCallCount: 0,
+			Output: "a.go does the thing",
+		}
+		vr := v.Validate(tc, result)
+		if !vr.NoToolsWarning {
+			t.Error("expected NoToolsWarning=true when MCP run called no tools")
+		}
+		if vr.ToolCallsMade != 0 {
+			t.Errorf("ToolCallsMade = %d, want 0", vr.ToolCallsMade)
+		}
+	})
+
+	t.Run("without_mcp zero tools: no warning", func(t *testing.T) {
+		result := RunResult{
+			Mode: ModeWithoutMCP, Success: true, ToolCallCount: 0,
+			Output: "a.go does the thing",
+		}
+		vr := v.Validate(tc, result)
+		if vr.NoToolsWarning {
+			t.Error("expected NoToolsWarning=false for without_mcp mode")
+		}
+	})
+
+	t.Run("failed run: no warning even with zero tools", func(t *testing.T) {
+		result := RunResult{
+			Mode: ModeWithMCP, Success: false, ToolCallCount: 0,
+		}
+		vr := v.Validate(tc, result)
+		if vr.NoToolsWarning {
+			t.Error("expected NoToolsWarning=false for failed run")
+		}
+	})
+}
+
+func TestValidate_PrecisionScoring(t *testing.T) {
+	v := NewValidator()
+
+	t.Run("focused response: precision close to recall", func(t *testing.T) {
+		tc := TestCase{
+			ID: "prec-001",
+			GroundTruth: GroundTruth{
+				Files: []string{"internal/auth/handler.go"},
+			},
+		}
+		result := RunResult{
+			Mode: ModeWithMCP, Success: true,
+			// Only mentions the expected file — focused response
+			Output: "The internal/auth/handler.go handles authentication",
+		}
+		vr := v.Validate(tc, result)
+		if vr.Recall != 1.0 {
+			t.Errorf("Recall = %.2f, want 1.0", vr.Recall)
+		}
+		if vr.Precision < 0.5 {
+			t.Errorf("Precision = %.2f, want >= 0.5 for focused response", vr.Precision)
+		}
+	})
+
+	t.Run("dump-everything response: precision lower than recall", func(t *testing.T) {
+		tc := TestCase{
+			ID: "prec-002",
+			GroundTruth: GroundTruth{
+				Files:   []string{"internal/auth/handler.go"},
+				Symbols: []string{"ValidateToken"},
+			},
+		}
+		result := RunResult{
+			Mode: ModeWithMCP, Success: true,
+			// Mentions expected items but also dumps many extra symbols
+			Output: `The ValidateToken function is in internal/auth/handler.go.
+Other functions: NewServer, RunServer, HandleRequest, ProcessPayload, BuildResponse,
+ExtractHeaders, ParseBody, ValidateSchema, WriteResponse, CloseConnection,
+CreateSession, RefreshToken, RevokeAccess, CheckPermissions, LogAuditEvent`,
+		}
+		vr := v.Validate(tc, result)
+		if vr.Recall != 1.0 {
+			t.Errorf("Recall = %.2f, want 1.0 (expected items found)", vr.Recall)
+		}
+		// Precision should be less than 1.0 due to extra symbols in output
+		if vr.Precision >= 1.0 {
+			t.Errorf("Precision = %.2f, want < 1.0 for dump-everything response", vr.Precision)
+		}
+		// F1 should be less than Recall
+		if vr.F1Score >= vr.Recall {
+			t.Errorf("F1 = %.2f should be less than Recall = %.2f", vr.F1Score, vr.Recall)
+		}
+	})
+}
+
+func TestNormalizedContains(t *testing.T) {
+	tests := []struct {
+		name    string
+		output  string
+		snippet string
+		want    bool
+	}{
+		{"exact match", "JWT verification is used", "JWT verification", true},
+		{"case insensitive", "jwt verification is used", "JWT Verification", true},
+		{"hyphen variant", "uses jwt-verification for auth", "JWT verification", true},
+		{"word window match", "JWT token verification is performed", "JWT verification", true},
+		{"word order preserved", "verification JWT", "JWT verification", false},
+		{"too far apart", "JWT one two three four five six seven eight nine ten eleven verification", "JWT verification", false},
+		{"single word", "hello world", "hello", true},
+		{"not present", "something else entirely", "JWT verification", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizedContains(tt.output, tt.snippet)
+			if got != tt.want {
+				t.Errorf("normalizedContains(%q, %q) = %v, want %v", tt.output, tt.snippet, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidate_FuzzyContentMatching(t *testing.T) {
+	v := NewValidator()
+
+	tc := TestCase{
+		ID: "fuzzy-001",
+		GroundTruth: GroundTruth{
+			Content: []string{"exponential backoff", "max retries"},
+		},
+	}
+
+	t.Run("hyphenated variant matches", func(t *testing.T) {
+		result := RunResult{
+			Mode: ModeWithMCP, Success: true,
+			Output: "Uses exponential-backoff with max-retries of 3",
+		}
+		vr := v.Validate(tc, result)
+		if len(vr.ContentFound) != 2 {
+			t.Errorf("ContentFound = %v, want both snippets matched", vr.ContentFound)
+		}
+	})
+
+	t.Run("word window matches paraphrase", func(t *testing.T) {
+		result := RunResult{
+			Mode: ModeWithMCP, Success: true,
+			Output: "Implements exponential delay backoff strategy with configurable max retries limit",
+		}
+		vr := v.Validate(tc, result)
+		if len(vr.ContentFound) != 2 {
+			t.Errorf("ContentFound = %v, want both snippets matched via word window", vr.ContentFound)
+		}
+	})
+}
+
+func TestValidate_ToolCallsRequired(t *testing.T) {
+	v := NewValidator()
+
+	t.Run("meets required tool calls: no warning", func(t *testing.T) {
+		tc := TestCase{
+			ID: "req-001", ToolCallsRequired: 2,
+			GroundTruth: GroundTruth{Files: []string{"a.go"}},
+		}
+		result := RunResult{Mode: ModeWithMCP, Success: true, ToolCallCount: 2, Output: "a.go"}
+		vr := v.Validate(tc, result)
+		if vr.NoToolsWarning {
+			t.Error("should not warn when tool calls meet requirement")
+		}
+	})
+
+	t.Run("below required tool calls: warning", func(t *testing.T) {
+		tc := TestCase{
+			ID: "req-002", ToolCallsRequired: 2,
+			GroundTruth: GroundTruth{Files: []string{"a.go"}},
+		}
+		result := RunResult{Mode: ModeWithMCP, Success: true, ToolCallCount: 1, Output: "a.go"}
+		vr := v.Validate(tc, result)
+		if !vr.NoToolsWarning {
+			t.Error("should warn when tool calls below requirement")
+		}
+	})
+}
+
 func almostEqual(a, b float64) bool {
 	return math.Abs(a-b) < 0.001
 }

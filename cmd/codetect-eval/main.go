@@ -144,8 +144,11 @@ Available tools:
 
 Create JSONL files organized by category:
 
-- search.jsonl: keyword/regex searches, file pattern matching, concept search
+- search.jsonl: keyword/regex searches, file pattern matching, semantic concept search
   Primary tool: hybrid_search_v2 (semantic); search_keyword (regex/literal)
+  Include both keyword cases (search_keyword) AND semantic concept cases (hybrid_search_v2).
+  Semantic concept cases test that codetect surfaces relevant code even when query words
+  don't appear literally — e.g. "rate limiting middleware" → finds the actual middleware.
   Example prompts:
   - "Find all TODO comments"
   - "Search for rate limiting middleware"
@@ -164,9 +167,10 @@ Create JSONL files organized by category:
   - "Find all types that implement the [SomeInterface] interface"
   - "Which files import the [somepackage] package?"
 
-- understand.jsonl: architecture questions requiring multiple tool calls to answer
+- understand.jsonl: code comprehension, architecture questions, multi-tool reasoning
   Primary tool: hybrid_search_v2 (with detail=standard for snippets)
-  IMPORTANT: Each understand case should require AT LEAST 2 tool calls to answer.
+  These test that codetect helps Claude understand HOW the codebase works, not just
+  WHERE things are. Each case should require AT LEAST 2 tool calls to answer.
   Use "tool_calls_required": 2 in the JSON. Single-lookup questions belong in search.
   Example prompts:
   - "How does authentication work in this codebase?"

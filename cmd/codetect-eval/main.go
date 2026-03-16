@@ -144,7 +144,7 @@ Available tools:
 
 Create JSONL files organized by category:
 
-- search.jsonl: keyword/regex searches, file pattern matching, semantic concept search
+- search.jsonl: keyword/regex searches, file pattern matching, concept search
   Primary tool: hybrid_search_v2 (semantic); search_keyword (regex/literal)
   Example prompts:
   - "Find all TODO comments"
@@ -152,7 +152,7 @@ Create JSONL files organized by category:
   - "Find files that import the database package"
   - "Find the CORS configuration"
 
-- navigate.jsonl: definition lookup, symbol kind filtering, file structure exploration
+- navigate.jsonl: definition lookup, symbol kind filtering, cross-file relationships
   Primary tool: symbols (mode=find with kind filter), get_file
   NOTE: codetect finds definitions only — do NOT create cases expecting call graphs,
   callers, or all-references traversal.
@@ -161,22 +161,41 @@ Create JSONL files organized by category:
   - "Find all struct definitions in the handlers package"
   - "Show me the definition of the Config type"
   - "List all exported functions in internal/search/keyword.go"
-  - "Find all constant definitions"
+  - "Find all types that implement the [SomeInterface] interface"
+  - "Which files import the [somepackage] package?"
 
-- understand.jsonl: code comprehension, architecture questions, multi-tool reasoning
+- understand.jsonl: architecture questions requiring multiple tool calls to answer
   Primary tool: hybrid_search_v2 (with detail=standard for snippets)
+  IMPORTANT: Each understand case should require AT LEAST 2 tool calls to answer.
+  Use "tool_calls_required": 2 in the JSON. Single-lookup questions belong in search.
   Example prompts:
   - "How does authentication work in this codebase?"
-  - "Explain the middleware chain"
-  - "What's the flow for processing a card creation request?"
+  - "Trace the full path of a request from entry point to database and back"
+  - "How does incremental indexing detect which files changed?"
+  - "What happens when an embedding fails — how are failures stored and retried?"
+
+- semantic.jsonl: queries that require semantic understanding, NOT keyword matching
+  Primary tool: hybrid_search_v2 ONLY (these queries cannot be answered with grep)
+  These cases validate codetect's semantic search quality. The query words must NOT
+  appear literally in the code — only the concept should match.
+  Example prompts:
+  - "Find code that handles cleanup when a connection drops"
+    (not "connection drop" literally — look for disconnect/close/cleanup logic)
+  - "Where is user input sanitized before being stored?"
+    (not "sanitize" literally — look for validation, escaping, encoding)
+  - "Find the retry logic for failed network requests"
+    (concept, not the word "retry" — look for backoff, sleep, attempt loops)
+  Ground truth: use ONLY content[] snippets (distinctive phrases from correct answers).
+  Do NOT list specific symbol names since the query is concept-based.
 
 Each line should be a JSON object with this structure:
 {
   "id": "unique-id",
-  "category": "search|navigate|understand",
+  "category": "search|navigate|understand|semantic",
   "description": "Brief description of what this tests",
   "prompt": "The actual question/search to ask",
   "difficulty": "easy|medium|hard",
+  "tool_calls_required": 1,
   "ground_truth": {
     "files": ["expected/file/paths.go"],
     "symbols": ["expectedFunctionName"],
@@ -194,6 +213,8 @@ Ground truth best practices:
 - CONTENT: Always populate with 2-3 distinctive phrases a correct answer should
   contain (e.g. ["JWT verification", "Okta provider"]). This provides scoring
   resilience when the model paraphrases instead of citing exact function names.
+- TOOL_CALLS_REQUIRED: Set to 1 for simple lookups, 2+ for multi-hop questions.
+  The eval runner flags cases where Claude answered without using enough tools.
 
 Create 5-10 test cases per category based on this repository's actual code structure.
 Focus on queries that have clear, verifiable answers. Avoid questions that require
@@ -425,7 +446,7 @@ Run Options:
   --repo <path>      Repository to evaluate (default: .)
   --cases <dir>      Test cases directory (default: evals/cases)
   --output <dir>     Output directory (default: evals/results)
-  --category <cat>   Filter by category (search,navigate,understand)
+  --category <cat>   Filter by category (search,navigate,understand,semantic)
   --parallel <n>     Number of parallel executions (default: 1 for ollama, 10 for litellm)
   --timeout <dur>    Timeout per test (default: 5m)
   --model <model>    Model to use: sonnet (default), haiku, opus

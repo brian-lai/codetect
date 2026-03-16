@@ -7,12 +7,13 @@ import (
 
 // TestCase represents a single evaluation test case.
 type TestCase struct {
-	ID          string      `json:"id"`
-	Category    string      `json:"category"` // "search", "navigate", "understand"
-	Description string      `json:"description"`
-	Prompt      string      `json:"prompt"`
-	GroundTruth GroundTruth `json:"ground_truth"`
-	Difficulty  string      `json:"difficulty"` // "easy", "medium", "hard"
+	ID                string      `json:"id"`
+	Category          string      `json:"category"`           // "search", "navigate", "understand", "semantic"
+	Description       string      `json:"description"`
+	Prompt            string      `json:"prompt"`
+	GroundTruth       GroundTruth `json:"ground_truth"`
+	Difficulty        string      `json:"difficulty"`         // "easy", "medium", "hard"
+	ToolCallsRequired int         `json:"tool_calls_required,omitempty"` // minimum MCP tool calls expected
 }
 
 // GroundTruth contains the expected results for a test case.
@@ -47,6 +48,7 @@ type RunResult struct {
 	CostUSD       float64       `json:"cost_usd,omitempty"`
 	NumTurns      int           `json:"num_turns,omitempty"`
 	ToolCallCount int           `json:"tool_call_count,omitempty"`
+	ToolsUsed     []string      `json:"tools_used,omitempty"`
 	Error         string        `json:"error,omitempty"`
 }
 
@@ -63,6 +65,8 @@ type ValidationResult struct {
 	SymbolsMissed []string `json:"symbols_missed"`
 	ContentFound  []string `json:"content_found,omitempty"`
 	ContentMissed []string `json:"content_missed,omitempty"`
+	ToolCallsMade int  `json:"tool_calls_made,omitempty"`
+	NoToolsWarning bool `json:"no_tools_warning,omitempty"` // true when MCP run used no tools
 }
 
 // EvalConfig holds configuration for an evaluation run.
@@ -123,6 +127,8 @@ type ModeStats struct {
 	AvgTurns            float64       `json:"avg_turns"`
 	SuccessRate         float64       `json:"success_rate"`
 	TotalToolCalls      int           `json:"total_tool_calls"`
+	AvgToolCalls        float64       `json:"avg_tool_calls"`
+	CasesWithNoTools    int           `json:"cases_with_no_tools,omitempty"`
 }
 
 // ComparisonResult compares results between modes for a single test case.
@@ -154,6 +160,7 @@ type ClaudeStreamEvent struct {
 	NumTurns  int     `json:"num_turns,omitempty"`
 	TotalCost float64 `json:"total_cost_usd,omitempty"`
 	Usage     *ClaudeUsage `json:"usage,omitempty"`
+	Name      string  `json:"name,omitempty"` // tool name for tool_use events
 }
 
 // ClaudeUsage represents token usage from Claude's output.

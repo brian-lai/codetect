@@ -54,6 +54,13 @@ func (r *Reporter) GenerateSummary(report *EvalReport) {
 		}
 	}
 
+	// Count cases with no tool calls for MCP mode
+	for _, cr := range report.Results {
+		if cr.WithMCP.NoToolsWarning {
+			withMCP.CasesWithNoTools++
+		}
+	}
+
 	// Calculate averages
 	if mcpCount > 0 {
 		withMCP.SuccessRate /= float64(mcpCount)
@@ -65,6 +72,7 @@ func (r *Reporter) GenerateSummary(report *EvalReport) {
 		withMCP.AvgTotalTokens /= float64(mcpCount)
 		withMCP.AvgCostUSD = withMCP.TotalCostUSD / float64(mcpCount)
 		withMCP.AvgTurns /= float64(mcpCount)
+		withMCP.AvgToolCalls = float64(withMCP.TotalToolCalls) / float64(mcpCount)
 	}
 	if noMcpCount > 0 {
 		withoutMCP.SuccessRate /= float64(noMcpCount)
@@ -217,12 +225,20 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 		report.Summary.WithMCP.AvgTurns,
 		report.Summary.WithoutMCP.AvgTurns,
 		report.Summary.WithoutMCP.AvgTurns-report.Summary.WithMCP.AvgTurns)
+	fmt.Fprintf(w, "| %-18s | %15.1f | %15s | %15s |\n",
+		"Avg Tool Calls",
+		report.Summary.WithMCP.AvgToolCalls,
+		"—", "—")
 	fmt.Fprintf(w, "| %-18s | %14.1f%% | %14.1f%% | %+14.1f%% |\n",
 		"Success Rate",
 		report.Summary.WithMCP.SuccessRate*100,
 		report.Summary.WithoutMCP.SuccessRate*100,
 		(report.Summary.WithMCP.SuccessRate-report.Summary.WithoutMCP.SuccessRate)*100)
 	fmt.Fprintln(w, strings.Repeat("-", 75))
+	if report.Summary.WithMCP.CasesWithNoTools > 0 {
+		fmt.Fprintf(w, "⚠  %d MCP case(s) had no tool calls — accuracy may reflect prior knowledge, not codetect.\n",
+			report.Summary.WithMCP.CasesWithNoTools)
+	}
 	fmt.Fprintln(w, "Note: Cache create tokens cost ~12.5x more than cache read tokens.")
 	fmt.Fprintln(w, "      Higher cache creates with MCP reflect tool result overhead (unavoidable).")
 	fmt.Fprintln(w, "      Est. cost rows use hardcoded Sonnet 3.5 prices ($3/$15/$0.30/$3.75 per MTok).")
@@ -247,7 +263,10 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 			winner = "No-MCP"
 		}
 		notes := contentNote(cr.WithMCP, cr.WithoutMCP)
-		fmt.Fprintf(w, "| %-12s | %-10s | %-30s | %7.1f%% | %7.1f%% | %-8s | %-5s |\n",
+		if cr.WithMCP.NoToolsWarning {
+			notes = "⚠noTool"
+		}
+		fmt.Fprintf(w, "| %-12s | %-10s | %-30s | %7.1f%% | %7.1f%% | %-8s | %-7s |\n",
 			cr.TestCaseID,
 			cr.Category,
 			desc,

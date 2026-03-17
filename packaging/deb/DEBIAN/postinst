@@ -1,0 +1,10 @@
+#!/bin/bash
+# Post-installation script for codetect .deb package
+set -e
+
+# Record install method for codetect update
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/codetect"
+mkdir -p "$CONFIG_DIR"
+echo "binary" > "$CONFIG_DIR/install_method"
+
+exit 0

@@ -3,174 +3,258 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ page.title }} | {{ site.title }}</title>
-  <meta name="description" content="{{ site.description }}">
+  <title>codetect — Token-efficient codebase search for LLMs</title>
+  <meta name="description" content="codetect is an open-source MCP server that gives LLMs fast, precise codebase access. Keyword search, semantic search, symbol lookup — all without burning tokens on whole-file reads.">
+  <meta name="keywords" content="MCP server, codebase search, LLM tools, token efficient, Claude Code, Cursor, Windsurf, ripgrep, semantic search, open source">
+  <link rel="canonical" href="{{ '/' | absolute_url }}">
 
-  {% include head_custom.html %}
+  <!-- Open Graph -->
+  <meta property="og:title" content="codetect — Token-efficient codebase search for LLMs">
+  <meta property="og:description" content="Open-source MCP server. Keyword search, semantic search, symbol lookup — works with Claude Code, Cursor, Windsurf, and any MCP client.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ '/' | absolute_url }}">
 
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="codetect — Token-efficient codebase search for LLMs">
+  <meta name="twitter:description" content="Open-source MCP server. Keyword search, semantic search, symbol lookup — works with Claude Code, Cursor, Windsurf, and any MCP client.">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "codetect",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux",
+    "description": "Open-source MCP server providing fast, token-efficient codebase search for LLMs. Combines keyword search, semantic search, and symbol lookup.",
+    "url": "{{ '/' | absolute_url }}",
+    "downloadUrl": "https://github.com/brian-lai/codetect",
+    "license": "https://github.com/brian-lai/codetect/blob/main/LICENSE",
+    "author": {
+      "@type": "Person",
+      "name": "Brian Lai"
+    }
+  }
+  </script>
+
+  <link rel="icon" href="{{ '/assets/images/favicon.svg' | relative_url }}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ '/assets/css/custom.css' | relative_url }}">
 </head>
 <body class="landing-page">
-  <header class="landing-nav">
+
+  <header class="landing-nav" role="banner">
     <div class="landing-nav-inner">
-      <a href="{{ '/' | relative_url }}" class="landing-logo">codetect</a>
-      <nav class="landing-nav-links">
+      <a href="{{ '/' | relative_url }}" class="landing-logo" aria-label="codetect home">codetect</a>
+      <nav class="landing-nav-links" aria-label="Main navigation">
         <a href="{{ '/getting-started/' | relative_url }}">Docs</a>
         <a href="{{ '/performance/' | relative_url }}">Performance</a>
-        <a href="https://github.com/brian-lai/codetect" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/brian-lai/codetect" target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>
     </div>
   </header>
 
-  <main>
-    <!-- Hero -->
-    <section class="hero">
-      <div class="hero-inner">
-        <h1 class="hero-title">codetect</h1>
-        <p class="hero-tagline">Fast, token-efficient codebase search for every LLM.</p>
-        <p class="hero-subtitle">A local MCP server that brings Cursor-like performance to Claude Code and any LLM tool through intelligent codebase indexing.</p>
+  <main id="main-content">
 
-        <div class="hero-metrics">
-          <div class="metric">
+    <!-- Hero -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-grid-bg" aria-hidden="true"></div>
+      <div class="hero-inner">
+        <div class="hero-badge">Open Source &middot; MIT License</div>
+        <h1 id="hero-heading" class="hero-title">Stop wasting tokens<br>on whole-file reads.</h1>
+        <p class="hero-subtitle">codetect is a local MCP server that gives your LLM surgical codebase access &mdash; keyword search, semantic search, symbol lookup, and precise file slicing. Works with any MCP client.</p>
+
+        <div class="hero-metrics" role="list" aria-label="Key metrics">
+          <div class="metric" role="listitem">
             <span class="metric-value">85.7%</span>
-            <span class="metric-label">Accuracy</span>
+            <span class="metric-label">Search accuracy</span>
           </div>
-          <div class="metric">
-            <span class="metric-value">0%</span>
-            <span class="metric-label">Token Overhead</span>
+          <div class="metric-divider" aria-hidden="true"></div>
+          <div class="metric" role="listitem">
+            <span class="metric-value">&lt;1ms</span>
+            <span class="metric-label">Keyword search</span>
           </div>
-          <div class="metric">
+          <div class="metric-divider" aria-hidden="true"></div>
+          <div class="metric" role="listitem">
             <span class="metric-value">4</span>
-            <span class="metric-label">MCP Tools</span>
+            <span class="metric-label">MCP tools</span>
           </div>
         </div>
 
         <div class="hero-cta">
           <a href="{{ '/getting-started/' | relative_url }}" class="btn btn-primary">Get Started</a>
-          <a href="https://github.com/brian-lai/codetect" class="btn btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
+          <a href="https://github.com/brian-lai/codetect" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+
+        <div class="hero-install">
+          <span class="install-label">Quick install</span>
+          <code class="install-cmd">curl -fsSL https://raw.githubusercontent.com/brian-lai/codetect/main/scripts/install-binary.sh | sh</code>
         </div>
       </div>
     </section>
 
-    <!-- Features -->
-    <section class="features">
+    <!-- How it works -->
+    <section class="how-it-works" aria-labelledby="how-heading">
+      <div class="how-inner">
+        <h2 id="how-heading" class="section-label">How it works</h2>
+        <div class="pipeline">
+          <div class="pipeline-step">
+            <span class="pipeline-icon" aria-hidden="true">&#9889;</span>
+            <span class="pipeline-name">ripgrep</span>
+            <span class="pipeline-desc">Instant keyword &amp; regex search across your entire codebase</span>
+          </div>
+          <div class="pipeline-arrow" aria-hidden="true">+</div>
+          <div class="pipeline-step">
+            <span class="pipeline-icon" aria-hidden="true">&#129504;</span>
+            <span class="pipeline-name">Embeddings</span>
+            <span class="pipeline-desc">Semantic search via Ollama or LiteLLM &mdash; runs locally, stays private</span>
+          </div>
+          <div class="pipeline-arrow" aria-hidden="true">+</div>
+          <div class="pipeline-step">
+            <span class="pipeline-icon" aria-hidden="true">&#127919;</span>
+            <span class="pipeline-name">Reranking</span>
+            <span class="pipeline-desc">Reciprocal Rank Fusion merges results for best-match precision</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section class="features" aria-labelledby="tools-heading">
       <div class="features-inner">
-        <h2 class="section-title">4 Tools. Complete Codebase Access.</h2>
+        <h2 id="tools-heading" class="section-label">4 tools. Complete access.</h2>
         <div class="feature-grid">
-          <div class="feature-card">
-            <h3>search_keyword</h3>
-            <p>Fast regex search powered by ripgrep with configurable detail levels &mdash; minimal, standard, or rich context.</p>
-          </div>
-          <div class="feature-card">
-            <h3>get_file</h3>
-            <p>Read any file with optional line-range slicing. Retrieves exactly the code you need without wasting tokens.</p>
-          </div>
-          <div class="feature-card">
-            <h3>symbols</h3>
-            <p>Symbol lookup and file definition listing. Find functions, classes, and types instantly with <code>mode=find</code> or <code>mode=list</code>.</p>
-          </div>
-          <div class="feature-card">
-            <h3>hybrid_search_v2</h3>
-            <p>Combined keyword + semantic search with reranking. Ask natural language questions about your codebase.</p>
-          </div>
+          <article class="feature-card">
+            <h3 class="tool-name">search_keyword</h3>
+            <p>Fast regex search powered by ripgrep. Configurable detail levels &mdash; return only what the model needs, nothing extra.</p>
+          </article>
+          <article class="feature-card">
+            <h3 class="tool-name">get_file</h3>
+            <p>Read any file with line-range slicing. Fetch exactly the 20 lines you need instead of dumping a 1,000-line file.</p>
+          </article>
+          <article class="feature-card">
+            <h3 class="tool-name">symbols</h3>
+            <p>AST-based symbol lookup via ast-grep. Find any function, class, or type definition in milliseconds with <code>mode=find</code> or <code>mode=list</code>.</p>
+          </article>
+          <article class="feature-card">
+            <h3 class="tool-name">hybrid_search_v2</h3>
+            <p>Combined keyword + semantic search with reranking. Ask natural language questions about your codebase &mdash; no full file reads required.</p>
+          </article>
         </div>
       </div>
     </section>
 
     <!-- Quick Start -->
-    <section class="quickstart">
+    <section class="quickstart" aria-labelledby="quickstart-heading">
       <div class="quickstart-inner">
-        <h2 class="section-title">Get Running in 3 Steps</h2>
-        <div class="steps">
-          <div class="step">
-            <div class="step-number">1</div>
-            <h3>Install</h3>
-            <div class="code-block">
-              <pre><code>git clone https://github.com/brian-lai/codetect.git
-cd codetect
-./install.sh</code></pre>
+        <h2 id="quickstart-heading" class="section-label">Up in 3 steps</h2>
+        <ol class="steps" aria-label="Installation steps">
+          <li class="step">
+            <div class="step-header">
+              <span class="step-number" aria-label="Step 1">01</span>
+              <h3>Install</h3>
             </div>
-          </div>
-          <div class="step">
-            <div class="step-number">2</div>
-            <h3>Index your project</h3>
             <div class="code-block">
+              <div class="code-block-header"><span class="code-lang">shell</span></div>
+              <pre><code>curl -fsSL https://raw.githubusercontent.com/brian-lai/codetect/main/scripts/install-binary.sh | sh
+# or: brew install brian-lai/tap/codetect</code></pre>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step-header">
+              <span class="step-number" aria-label="Step 2">02</span>
+              <h3>Index your project</h3>
+            </div>
+            <div class="code-block">
+              <div class="code-block-header"><span class="code-lang">shell</span></div>
               <pre><code>cd /path/to/your/project
-codetect init      # Creates .mcp.json
-codetect index     # Index symbols + embeddings</code></pre>
+codetect init      # writes .mcp.json
+codetect index     # indexes symbols + embeddings</code></pre>
             </div>
-          </div>
-          <div class="step">
-            <div class="step-number">3</div>
-            <h3>Search</h3>
+          </li>
+          <li class="step">
+            <div class="step-header">
+              <span class="step-number" aria-label="Step 3">03</span>
+              <h3>Start your LLM tool</h3>
+            </div>
             <div class="code-block">
-              <pre><code># Start Claude Code — codetect tools are
-# automatically available via MCP
-claude</code></pre>
+              <div class="code-block-header"><span class="code-lang">shell</span></div>
+              <pre><code># codetect tools are auto-registered via MCP
+claude        # Claude Code
+# or open Cursor, Windsurf, Zed -- it just works</code></pre>
             </div>
-          </div>
-        </div>
+          </li>
+        </ol>
       </div>
     </section>
 
     <!-- Compatibility -->
-    <section class="compatibility">
+    <section class="compatibility" aria-labelledby="compat-heading">
       <div class="compatibility-inner">
-        <h2 class="section-title">Works With Any MCP Client</h2>
-        <table class="compat-table">
+        <h2 id="compat-heading" class="section-label">Works with any MCP client</h2>
+        <table class="compat-table" aria-label="Compatibility matrix">
           <thead>
             <tr>
-              <th>Tool</th>
-              <th>MCP Support</th>
-              <th>Status</th>
+              <th scope="col">Tool</th>
+              <th scope="col">MCP support</th>
+              <th scope="col">Status</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>Claude Code</td>
               <td>Native</td>
-              <td class="status-full">Full Support</td>
+              <td><span class="status-badge status-full">&#10003; Full</span></td>
             </tr>
             <tr>
               <td>Claude Desktop</td>
               <td>Native</td>
-              <td class="status-full">Full Support</td>
+              <td><span class="status-badge status-full">&#10003; Full</span></td>
             </tr>
             <tr>
               <td>Cursor</td>
               <td>Native</td>
-              <td class="status-full">Full Support</td>
+              <td><span class="status-badge status-full">&#10003; Full</span></td>
             </tr>
             <tr>
               <td>Windsurf</td>
               <td>Native</td>
-              <td class="status-full">Full Support</td>
+              <td><span class="status-badge status-full">&#10003; Full</span></td>
             </tr>
             <tr>
               <td>VS Code + Continue</td>
               <td>Plugin</td>
-              <td class="status-full">Full Support</td>
+              <td><span class="status-badge status-full">&#10003; Full</span></td>
             </tr>
             <tr>
               <td>Zed</td>
               <td>Native</td>
-              <td class="status-full">Full Support</td>
+              <td><span class="status-badge status-full">&#10003; Full</span></td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
+
   </main>
 
-  <footer class="landing-footer">
+  <footer class="landing-footer" role="contentinfo">
     <div class="landing-footer-inner">
-      <div class="footer-links">
+      <nav class="footer-links" aria-label="Footer navigation">
         <a href="{{ '/getting-started/' | relative_url }}">Documentation</a>
-        <a href="https://github.com/brian-lai/codetect" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/brian-lai/codetect/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
-      </div>
-      <p class="footer-copy">Built for developers who want fast, private codebase search.</p>
+        <a href="{{ '/performance/' | relative_url }}">Performance</a>
+        <a href="https://github.com/brian-lai/codetect" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/brian-lai/codetect/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>
+      </nav>
+      <p class="footer-copy">codetect &mdash; open source, runs locally, your code stays yours.</p>
     </div>
   </footer>
+
 </body>
 </html>

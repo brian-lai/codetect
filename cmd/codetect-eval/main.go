@@ -2,11 +2,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -230,16 +232,28 @@ call-graph traversal or reference tracking (codetect does not support these).
 		os.Exit(1)
 	}
 
+	// Populate run metadata
+	embCfg := embedding.LoadConfigFromEnv()
+	config.CodetectVersion = detectCodetectVersion()
+	config.EmbeddingProvider = string(embCfg.Provider)
+	config.EmbeddingModel = embCfg.Model
+	runner.UpdateConfig(config)
+
 	fmt.Fprintf(os.Stderr, "Running %d test cases against %s\n", len(cases), absRepoPath)
+	fmt.Fprintf(os.Stderr, "codetect: %s  model: %s  embedding: %s/%s\n\n",
+		config.CodetectVersion, config.Model,
+		config.EmbeddingProvider, config.EmbeddingModel)
 	fmt.Fprintf(os.Stderr, "This will run each test case twice (with and without MCP)...\n\n")
 
 	// Run evaluation
 	ctx := context.Background()
+	runStart := time.Now()
 	report, err := runner.RunAll(ctx, cases)
 	if err != nil {
 		logger.Error("error running evaluation", "error", err)
 		os.Exit(1)
 	}
+	report.Config.TotalDuration = time.Since(runStart)
 
 	// Validate results
 	validator := evals.NewValidator()
@@ -406,6 +420,21 @@ func showLogs(args []string) {
 			fmt.Println()
 		}
 	}
+}
+
+// detectCodetectVersion returns the version of the installed codetect binary.
+// Falls back to "unknown" if the binary is not on PATH or returns unexpected output.
+func detectCodetectVersion() string {
+	out, err := exec.Command("codetect", "version").Output()
+	if err != nil {
+		return "unknown"
+	}
+	// Expected output: "codetect v3.7.6\n" — extract the version token
+	line := strings.TrimSpace(string(bytes.TrimPrefix(bytes.TrimSpace(out), []byte("codetect "))))
+	if line == "" {
+		return "unknown"
+	}
+	return line
 }
 
 // defaultParallelism returns the appropriate default parallel execution count

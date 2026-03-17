@@ -28,6 +28,12 @@ func NewRunner(config EvalConfig) *Runner {
 	return &Runner{config: config}
 }
 
+// UpdateConfig replaces the runner's config. Used to inject runtime metadata
+// (codetect version, embedding provider) discovered after the runner is created.
+func (r *Runner) UpdateConfig(config EvalConfig) {
+	r.config = config
+}
+
 // LoadTestCases loads test cases from JSONL files in the cases directory.
 // It first checks for a repo-specific .codetect/evals/cases directory,
 // and falls back to the provided casesDir if not found.

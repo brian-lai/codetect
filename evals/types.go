@@ -79,6 +79,12 @@ type EvalConfig struct {
 	OutputDir     string   `json:"output_dir"`
 	Model         string   `json:"model"`          // Model to use (sonnet, haiku, opus)
 	Verbose       bool     `json:"verbose"`
+
+	// Run metadata — populated at runtime, not user-configurable
+	CodetectVersion    string        `json:"codetect_version,omitempty"`
+	EmbeddingProvider  string        `json:"embedding_provider,omitempty"` // "ollama" | "litellm" | "off"
+	EmbeddingModel     string        `json:"embedding_model,omitempty"`    // e.g. "nomic-embed-text"
+	TotalDuration      time.Duration `json:"total_duration_ns,omitempty"`  // Wall time for entire run
 }
 
 // DefaultConfig returns the default evaluation configuration.

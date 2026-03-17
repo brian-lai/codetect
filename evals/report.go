@@ -133,10 +133,26 @@ func (r *Reporter) PrintReport(report *EvalReport, w io.Writer) {
 	fmt.Fprintln(w, "codetect MCP Evaluation Report")
 	fmt.Fprintln(w, "=================================")
 	fmt.Fprintln(w, "")
-	fmt.Fprintf(w, "Timestamp: %s\n", report.Timestamp.Format(time.RFC3339))
-	fmt.Fprintf(w, "Repository: %s\n", report.Config.RepoPath)
-	fmt.Fprintf(w, "Model: %s\n", report.Config.Model)
-	fmt.Fprintf(w, "Test Cases: %d\n", report.Summary.TotalCases)
+	fmt.Fprintf(w, "Timestamp:          %s\n", report.Timestamp.Format(time.RFC3339))
+	fmt.Fprintf(w, "Repository:         %s\n", report.Config.RepoPath)
+	fmt.Fprintf(w, "Model:              %s\n", report.Config.Model)
+	fmt.Fprintf(w, "Test Cases:         %d\n", report.Summary.TotalCases)
+	if report.Config.CodetectVersion != "" {
+		fmt.Fprintf(w, "codetect version:   %s\n", report.Config.CodetectVersion)
+	}
+	if report.Config.EmbeddingProvider != "" {
+		embModel := report.Config.EmbeddingModel
+		if embModel == "" {
+			embModel = "default"
+		}
+		fmt.Fprintf(w, "Embedding:          %s / %s\n", report.Config.EmbeddingProvider, embModel)
+	}
+	if report.Config.Parallel > 1 {
+		fmt.Fprintf(w, "Parallelism:        %d\n", report.Config.Parallel)
+	}
+	if report.Config.TotalDuration > 0 {
+		fmt.Fprintf(w, "Total run time:     %s\n", report.Config.TotalDuration.Round(time.Second))
+	}
 	fmt.Fprintln(w, "")
 
 	// Summary table

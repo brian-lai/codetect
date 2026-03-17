@@ -192,7 +192,8 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     else
         SHELL_RC="$HOME/.bashrc"
     fi
-    # Only prompt if stdin is a terminal — "curl | bash" has no interactive stdin
+    # Only prompt if stdin is a terminal — non-interactive (curl | bash) defaults
+    # to adding PATH automatically, consistent with rustup/Homebrew behavior.
     if [[ -t 0 ]]; then
         read -r -p "  Add to $SHELL_RC now? [Y/n] " ADD_PATH
     fi

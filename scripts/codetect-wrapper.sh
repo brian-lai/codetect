@@ -1376,9 +1376,8 @@ check_for_updates() {
     now=$(date +%s 2>/dev/null) || return 0
     local last
     last=$(cat "$stamp_file" 2>/dev/null) || last=0
-    if (( now - last < 86400 )); then
-        return 0
-    fi
+    # Use >= to avoid (( expr == 0 )) returning exit code 1 under set -e
+    [[ $(( now - last )) -ge 86400 ]] || return 0
     # Only write timestamp after a successful API response so a network failure
     # doesn't silence the check for 24 hours
     local latest

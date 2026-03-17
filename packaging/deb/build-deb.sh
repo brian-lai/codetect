@@ -15,7 +15,7 @@
 
 set -e
 
-VERSION="${1:-$(git describe --tags --exact-match 2>/dev/null || echo dev)}"
+VERSION="${1:-$(git describe --tags --exact-match 2>/dev/null || git describe --tags --abbrev=0 2>/dev/null || echo dev)}"
 VERSION_NUM="${VERSION#v}"
 ARCH="${2:-amd64}"
 

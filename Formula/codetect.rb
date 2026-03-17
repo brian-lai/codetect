@@ -14,7 +14,7 @@ class Codetect < Formula
   desc "Fast, token-efficient codebase search MCP server for Claude Code and any LLM"
   homepage "https://github.com/brian-lai/codetect"
   url "https://github.com/brian-lai/codetect/archive/refs/tags/v3.7.5.tar.gz"
-  sha256 "PLACEHOLDER_SHA256_UPDATE_ON_RELEASE"
+  sha256 "PLACEHOLDER_SHA256_UPDATE_ON_RELEASE" # TODO: update url, sha256, and version on each release
   license "MIT"
   version "3.7.5"
 

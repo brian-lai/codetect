@@ -10,9 +10,9 @@ else
     USER_HOME="$HOME"
 fi
 
-# Record install method for codetect update
-XDG_CONFIG="${XDG_CONFIG_HOME:-$USER_HOME/.config}"
-CONFIG_DIR="$XDG_CONFIG/codetect"
+# Record install method for codetect update.
+# Do not use $XDG_CONFIG_HOME here — under sudo it belongs to root, not $SUDO_USER.
+CONFIG_DIR="$USER_HOME/.config/codetect"
 mkdir -p "$CONFIG_DIR"
 echo "binary" > "$CONFIG_DIR/install_method"
 

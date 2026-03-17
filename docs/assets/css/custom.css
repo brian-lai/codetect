@@ -159,7 +159,7 @@ body.landing-page {
 }
 
 .hero-metrics {
-  display: flex;
+  display: inline-flex;
   justify-content: center;
   align-items: center;
   gap: 0;
@@ -167,7 +167,6 @@ body.landing-page {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
-  display: inline-flex;
   animation: fadeUp 0.6s 0.2s ease both;
 }
 

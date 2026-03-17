@@ -1322,11 +1322,42 @@ cmd_help() {
 }
 
 #
+# Version staleness check (throttled to once per 24 hours)
+#
+check_for_updates() {
+    local stamp_file="$CONFIG_DIR/last_update_check"
+    local now
+    now=$(date +%s 2>/dev/null) || return 0
+    local last
+    last=$(cat "$stamp_file" 2>/dev/null) || last=0
+    if (( now - last < 86400 )); then
+        return 0
+    fi
+    echo "$now" > "$stamp_file" 2>/dev/null || true
+    local latest
+    latest=$(curl -sf --max-time 3 \
+        "https://api.github.com/repos/brian-lai/codetect/releases/latest" \
+        2>/dev/null | grep '"tag_name"' | cut -d'"' -f4) || return 0
+    [[ -z "$latest" ]] && return 0
+    # Get current version tag (strip leading "codetect " prefix if present)
+    local current
+    current=$(cmd_version 2>/dev/null | awk '{print $NF}') || return 0
+    if [[ -n "$current" && "$latest" != "$current" ]]; then
+        echo -e "  ${CYAN}ℹ${NC}  codetect $latest is available. Run: codetect update" >&2
+    fi
+}
+
+#
 # Main
 #
 main() {
     local cmd="${1:-help}"
     shift || true
+
+    # Check for updates on every command except mcp (long-running server)
+    if [[ "$cmd" != "mcp" ]]; then
+        check_for_updates
+    fi
 
     case "$cmd" in
         mcp)

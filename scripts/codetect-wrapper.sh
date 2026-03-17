@@ -1281,8 +1281,9 @@ cmd_update() {
             exec brew upgrade codetect
             ;;
         go)
-            info "Installed via go install."
-            info "Updating codetect-mcp: go install github.com/brian-lai/codetect/cmd/codetect@latest"
+            info "Installed via go install (updates codetect-mcp only)."
+            info "For a full update including the wrapper and indexer, use brew or the curl installer."
+            info "Running: go install github.com/brian-lai/codetect/cmd/codetect@latest"
             exec go install github.com/brian-lai/codetect/cmd/codetect@latest
             ;;
         binary)
@@ -1378,15 +1379,19 @@ check_for_updates() {
     if (( now - last < 86400 )); then
         return 0
     fi
-    echo "$now" > "$stamp_file" 2>/dev/null || true
+    # Only write timestamp after a successful API response so a network failure
+    # doesn't silence the check for 24 hours
     local latest
     latest=$(curl -sf --max-time 3 \
         "https://api.github.com/repos/brian-lai/codetect/releases/latest" \
         2>/dev/null | grep '"tag_name"' | cut -d'"' -f4) || return 0
     [[ -z "$latest" ]] && return 0
-    # Get current version tag (strip leading "codetect " prefix if present)
+    echo "$now" > "$stamp_file" 2>/dev/null || true
+    # Get current version tag (last word of cmd_version output, e.g. "v3.7.5")
     local current
     current=$(cmd_version 2>/dev/null | awk '{print $NF}') || return 0
+    # Skip nag for dev builds: their version looks like "(abc1234)" not "vX.Y.Z"
+    [[ "$current" == "("* ]] && return 0
     if [[ -n "$current" && "$latest" != "$current" ]]; then
         echo -e "  ${CYAN}ℹ${NC}  codetect $latest is available. Run: codetect update" >&2
     fi

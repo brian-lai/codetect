@@ -36,9 +36,15 @@ class Codetect < Formula
   end
 
   def post_install
-    config_dir = Pathname.new(ENV["HOME"]) / ".config/codetect"
-    config_dir.mkpath
-    (config_dir / "install_method").write("brew\n")
+    # ENV["HOME"] may not be the installing user's home in all sandbox contexts,
+    # but writing the marker is best-effort — never fail the install over it.
+    begin
+      config_dir = Pathname.new(ENV.fetch("HOME", Dir.home)) / ".config/codetect"
+      config_dir.mkpath
+      (config_dir / "install_method").write("brew\n")
+    rescue StandardError
+      # Non-fatal: codetect update will still work via brew upgrade
+    end
   end
 
   test do

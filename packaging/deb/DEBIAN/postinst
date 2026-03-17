@@ -2,8 +2,17 @@
 # Post-installation script for codetect .deb package
 set -e
 
+# Resolve the actual installing user's home directory.
+# When run via "sudo dpkg -i", $HOME is /root but SUDO_USER is the real user.
+if [[ -n "$SUDO_USER" ]]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    USER_HOME="$HOME"
+fi
+
 # Record install method for codetect update
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/codetect"
+XDG_CONFIG="${XDG_CONFIG_HOME:-$USER_HOME/.config}"
+CONFIG_DIR="$XDG_CONFIG/codetect"
 mkdir -p "$CONFIG_DIR"
 echo "binary" > "$CONFIG_DIR/install_method"
 

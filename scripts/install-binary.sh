@@ -160,12 +160,17 @@ if [[ -d "$TMP_DIR/templates" ]]; then
     cp -r "$TMP_DIR/templates/." "$SHARE_DIR/templates/"
 fi
 
-# Store VERSION and a copy of this installer for `codetect update`
+# Store VERSION and a copy of this installer for `codetect update`.
+# When run via "curl | bash", $0 is /dev/stdin so we re-download instead.
 echo "$VERSION_NUM" > "$SHARE_DIR/VERSION"
-cp "$0" "$SHARE_DIR/install-binary.sh" 2>/dev/null || \
+if [[ -f "$0" && "$0" != "/dev/stdin" && "$0" != "bash" ]]; then
+    cp "$0" "$SHARE_DIR/install-binary.sh" 2>/dev/null || true
+fi
+if [[ ! -s "$SHARE_DIR/install-binary.sh" ]]; then
     curl -fsSL --max-time 10 \
         "https://raw.githubusercontent.com/$REPO/main/scripts/install-binary.sh" \
         -o "$SHARE_DIR/install-binary.sh" 2>/dev/null || true
+fi
 chmod +x "$SHARE_DIR/install-binary.sh" 2>/dev/null || true
 
 # Record install method
@@ -187,7 +192,10 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     else
         SHELL_RC="$HOME/.bashrc"
     fi
-    read -r -p "  Add to $SHELL_RC now? [Y/n] " ADD_PATH
+    # Only prompt if stdin is a terminal — "curl | bash" has no interactive stdin
+    if [[ -t 0 ]]; then
+        read -r -p "  Add to $SHELL_RC now? [Y/n] " ADD_PATH
+    fi
     ADD_PATH=${ADD_PATH:-Y}
     if [[ $ADD_PATH =~ ^[Yy] ]]; then
         echo "" >> "$SHELL_RC"

@@ -74,9 +74,13 @@ echo ""
 # Check if source directory exists
 if [[ ! -d "$SOURCE_DIR" ]]; then
     error "Source directory not found: $SOURCE_DIR"
-    info "Set CODETECT_SOURCE to the location of your codetect clone"
-    info "Or clone it:"
+    echo ""
+    info "This updater requires a git clone of codetect."
+    info "If you installed via Homebrew, curl, or apt, run 'codetect update' instead."
+    echo ""
+    info "To use this script, clone the repo first:"
     info "  git clone https://github.com/brian-lai/codetect.git $SOURCE_DIR"
+    info "Or set CODETECT_SOURCE to your existing clone location."
     exit 1
 fi
 

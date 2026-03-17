@@ -1244,6 +1244,12 @@ cmd_version() {
         fi
     fi
 
+    # For brew/binary installs: read VERSION file written at install time
+    if [[ -f "$SHARE_DIR/VERSION" ]]; then
+        echo "codetect $(cat "$SHARE_DIR/VERSION")"
+        return 0
+    fi
+
     # Fallback: ask codetect-index for its version
     if [[ -x "$BIN_DIR/codetect-index" ]]; then
         "$BIN_DIR/codetect-index" version
@@ -1254,16 +1260,55 @@ cmd_version() {
 }
 
 cmd_update() {
-    local source_dir="${CODETECT_SOURCE:-$HOME/dev/codetect}"
+    # Detect how codetect was installed
+    local method
+    method=$(cat "$CONFIG_DIR/install_method" 2>/dev/null) || method=""
 
-    if [[ ! -f "$source_dir/scripts/update.sh" ]]; then
-        error "Update script not found"
-        info "Set CODETECT_SOURCE to the location of your codetect clone"
-        info "Default: $source_dir"
-        return 1
+    # Detect go install if marker absent: binary lives under GOPATH/bin
+    if [[ -z "$method" ]]; then
+        local codetect_bin
+        codetect_bin=$(which codetect 2>/dev/null) || codetect_bin=""
+        local gopath
+        gopath=$(go env GOPATH 2>/dev/null) || gopath=""
+        if [[ -n "$gopath" && "$codetect_bin" == "$gopath/bin/"* ]]; then
+            method="go"
+        fi
     fi
 
-    exec "$source_dir/scripts/update.sh" "$@"
+    case "$method" in
+        brew)
+            info "Installed via Homebrew. Running: brew upgrade codetect"
+            exec brew upgrade codetect
+            ;;
+        go)
+            info "Installed via go install."
+            info "Updating codetect-mcp: go install github.com/brian-lai/codetect/cmd/codetect@latest"
+            exec go install github.com/brian-lai/codetect/cmd/codetect@latest
+            ;;
+        binary)
+            local installer="$SHARE_DIR/install-binary.sh"
+            if [[ -x "$installer" ]]; then
+                exec "$installer" "$@"
+            else
+                info "Re-run the installer to update:"
+                info "  curl -fsSL https://raw.githubusercontent.com/brian-lai/codetect/main/scripts/install-binary.sh | bash"
+                return 0
+            fi
+            ;;
+        git|*)
+            # Legacy / git-clone path — delegate to scripts/update.sh
+            local source_dir="${CODETECT_SOURCE:-$HOME/dev/codetect}"
+            if [[ ! -f "$source_dir/scripts/update.sh" ]]; then
+                error "Update script not found and install method unknown."
+                info "Please reinstall codetect using one of:"
+                info "  brew install brian-lai/tap/codetect"
+                info "  curl -fsSL https://raw.githubusercontent.com/brian-lai/codetect/main/scripts/install-binary.sh | bash"
+                info "  https://github.com/brian-lai/codetect#installation"
+                return 1
+            fi
+            exec "$source_dir/scripts/update.sh" "$@"
+            ;;
+    esac
 }
 
 cmd_help() {

@@ -1199,6 +1199,8 @@ if [[ $INSTALL_GLOBAL =~ ^[Yy] ]]; then
     CONFIG_DIR="$HOME/.config/codetect"
     mkdir -p "$CONFIG_DIR"
     CONFIG_FILE="$CONFIG_DIR/config.env"
+    # Record install method for codetect update
+    echo "git" > "$CONFIG_DIR/install_method"
     INSTALLED_GLOBALLY=true
 else
     warn "Skipping global installation"

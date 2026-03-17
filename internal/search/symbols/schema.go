@@ -11,7 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 const schema = `
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -45,7 +45,67 @@ CREATE TABLE IF NOT EXISTS files (
     indexed_at INTEGER NOT NULL,
     PRIMARY KEY (repo_root, path)
 );
+
+CREATE TABLE IF NOT EXISTS symbol_refs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_root TEXT NOT NULL,
+    name TEXT NOT NULL,
+    qualified_name TEXT,
+    kind TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_line INTEGER NOT NULL,
+    source_scope TEXT,
+    UNIQUE(repo_root, source_path, source_line, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_refs_name      ON symbol_refs(repo_root, name);
+CREATE INDEX IF NOT EXISTS idx_refs_qualified ON symbol_refs(repo_root, qualified_name);
+CREATE INDEX IF NOT EXISTS idx_refs_source    ON symbol_refs(repo_root, source_path);
+
+CREATE TABLE IF NOT EXISTS type_relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_root TEXT NOT NULL,
+    child_type TEXT NOT NULL,
+    parent_type TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    path TEXT NOT NULL,
+    line INTEGER NOT NULL,
+    UNIQUE(repo_root, child_type, parent_type, path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_typerels_parent ON type_relations(repo_root, parent_type);
+CREATE INDEX IF NOT EXISTS idx_typerels_child  ON type_relations(repo_root, child_type);
 `
+
+// v3MigrationStatements adds the symbol_refs and type_relations tables to existing v2 databases.
+var v3MigrationStatements = []string{
+	`CREATE TABLE IF NOT EXISTS symbol_refs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_root TEXT NOT NULL,
+    name TEXT NOT NULL,
+    qualified_name TEXT,
+    kind TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_line INTEGER NOT NULL,
+    source_scope TEXT,
+    UNIQUE(repo_root, source_path, source_line, name)
+)`,
+	`CREATE INDEX IF NOT EXISTS idx_refs_name      ON symbol_refs(repo_root, name)`,
+	`CREATE INDEX IF NOT EXISTS idx_refs_qualified ON symbol_refs(repo_root, qualified_name)`,
+	`CREATE INDEX IF NOT EXISTS idx_refs_source    ON symbol_refs(repo_root, source_path)`,
+	`CREATE TABLE IF NOT EXISTS type_relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_root TEXT NOT NULL,
+    child_type TEXT NOT NULL,
+    parent_type TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    path TEXT NOT NULL,
+    line INTEGER NOT NULL,
+    UNIQUE(repo_root, child_type, parent_type, path)
+)`,
+	`CREATE INDEX IF NOT EXISTS idx_typerels_parent ON type_relations(repo_root, parent_type)`,
+	`CREATE INDEX IF NOT EXISTS idx_typerels_child  ON type_relations(repo_root, child_type)`,
+}
 
 // OpenDB opens or creates the symbol database at the given path
 func OpenDB(dbPath string) (*sql.DB, error) {
@@ -101,8 +161,12 @@ func initSchema(db *sql.DB) error {
 	}
 
 	// Version exists, check for migrations
-	if version < schemaVersion {
-		// Future: add migration logic here
+	if version < 3 {
+		for _, stmt := range v3MigrationStatements {
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("v3 migration: %w", err)
+			}
+		}
 		if _, err := db.Exec("UPDATE schema_version SET version = ?", schemaVersion); err != nil {
 			return fmt.Errorf("updating schema version: %w", err)
 		}
@@ -121,6 +185,68 @@ func ClearSymbols(db *sql.DB, path string) error {
 func ClearAllSymbols(db *sql.DB) error {
 	_, err := db.Exec("DELETE FROM symbols")
 	return err
+}
+
+// createSymbolRefsTable creates the symbol_refs table and its indexes using the adapter dialect.
+// Safe to call on fresh installs and during migration — uses IF NOT EXISTS semantics.
+func createSymbolRefsTable(adapter db.DB, dialect db.Dialect) error {
+	refsColumns := []db.ColumnDef{
+		{Name: "id", Type: db.ColTypeAutoIncrement},
+		{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
+		{Name: "name", Type: db.ColTypeText, Nullable: false},
+		{Name: "qualified_name", Type: db.ColTypeText, Nullable: true},
+		{Name: "kind", Type: db.ColTypeText, Nullable: false},
+		{Name: "source_path", Type: db.ColTypeText, Nullable: false},
+		{Name: "source_line", Type: db.ColTypeInteger, Nullable: false},
+		{Name: "source_scope", Type: db.ColTypeText, Nullable: true},
+	}
+	if _, err := adapter.Exec(dialect.CreateTableSQL("symbol_refs", refsColumns)); err != nil {
+		return fmt.Errorf("creating symbol_refs table: %w", err)
+	}
+	// Unique constraint — ignore "already exists"; CreateIndexSQL uses IF NOT EXISTS on SQLite.
+	// On Postgres, IF NOT EXISTS for indexes requires PG 9.5+ which we require anyway.
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_unique", []string{"repo_root", "source_path", "source_line", "name"}, true)); err != nil {
+		// Non-fatal: unique index may already exist on re-entrant migration
+		_ = err
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_name", []string{"repo_root", "name"}, false)); err != nil {
+		return fmt.Errorf("creating idx_refs_name: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_qualified", []string{"repo_root", "qualified_name"}, false)); err != nil {
+		return fmt.Errorf("creating idx_refs_qualified: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("symbol_refs", "idx_refs_source", []string{"repo_root", "source_path"}, false)); err != nil {
+		return fmt.Errorf("creating idx_refs_source: %w", err)
+	}
+	return nil
+}
+
+// createTypeRelationsTable creates the type_relations table and its indexes using the adapter dialect.
+// Safe to call on fresh installs and during migration — uses IF NOT EXISTS semantics.
+func createTypeRelationsTable(adapter db.DB, dialect db.Dialect) error {
+	typeRelColumns := []db.ColumnDef{
+		{Name: "id", Type: db.ColTypeAutoIncrement},
+		{Name: "repo_root", Type: db.ColTypeText, Nullable: false},
+		{Name: "child_type", Type: db.ColTypeText, Nullable: false},
+		{Name: "parent_type", Type: db.ColTypeText, Nullable: false},
+		{Name: "relation", Type: db.ColTypeText, Nullable: false},
+		{Name: "path", Type: db.ColTypeText, Nullable: false},
+		{Name: "line", Type: db.ColTypeInteger, Nullable: false},
+	}
+	if _, err := adapter.Exec(dialect.CreateTableSQL("type_relations", typeRelColumns)); err != nil {
+		return fmt.Errorf("creating type_relations table: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_unique", []string{"repo_root", "child_type", "parent_type", "path"}, true)); err != nil {
+		// Non-fatal: unique index may already exist on re-entrant migration
+		_ = err
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_parent", []string{"repo_root", "parent_type"}, false)); err != nil {
+		return fmt.Errorf("creating idx_typerels_parent: %w", err)
+	}
+	if _, err := adapter.Exec(dialect.CreateIndexSQL("type_relations", "idx_typerels_child", []string{"repo_root", "child_type"}, false)); err != nil {
+		return fmt.Errorf("creating idx_typerels_child: %w", err)
+	}
+	return nil
 }
 
 // initSchemaWithAdapter initializes the database schema using the adapter and dialect.
@@ -203,13 +329,29 @@ func initSchemaWithAdapter(adapter db.DB, dialect db.Dialect) error {
 			// Ignore error if index already exists
 		}
 
+		// Create symbol_refs and type_relations tables for reference tracking
+		if err := createSymbolRefsTable(adapter, dialect); err != nil {
+			return err
+		}
+		if err := createTypeRelationsTable(adapter, dialect); err != nil {
+			return err
+		}
+
 		// Insert schema version
 		insertVersionSQL := fmt.Sprintf("INSERT INTO schema_version (version) VALUES (%s)", dialect.Placeholder(1))
 		if _, err := adapter.Exec(insertVersionSQL, schemaVersion); err != nil {
 			return fmt.Errorf("setting schema version: %w", err)
 		}
 	} else if version < schemaVersion {
-		// Future: add migration logic here
+		if version < 3 {
+			// v2 → v3: add symbol_refs and type_relations tables
+			if err := createSymbolRefsTable(adapter, dialect); err != nil {
+				return fmt.Errorf("v3 migration: %w", err)
+			}
+			if err := createTypeRelationsTable(adapter, dialect); err != nil {
+				return fmt.Errorf("v3 migration: %w", err)
+			}
+		}
 		updateVersionSQL := fmt.Sprintf("UPDATE schema_version SET version = %s", dialect.Placeholder(1))
 		if _, err := adapter.Exec(updateVersionSQL, schemaVersion); err != nil {
 			return fmt.Errorf("updating schema version: %w", err)

@@ -256,3 +256,62 @@ func TestRunSymbols_CallsCorrectTool(t *testing.T) {
 		t.Errorf("expected some output, got none; code=%d", code)
 	}
 }
+
+// --- hybrid subcommand tests ---
+
+func TestBuildHybridArgs_Defaults(t *testing.T) {
+	args, err := buildHybridArgs([]string{"myquery"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["query"] != "myquery" {
+		t.Errorf("expected query 'myquery', got %v", args["query"])
+	}
+	if _, ok := args["limit"]; ok {
+		t.Error("expected no limit when not specified")
+	}
+	if _, ok := args["rerank"]; ok {
+		t.Error("expected no rerank when not specified")
+	}
+}
+
+func TestBuildHybridArgs_AllFlags(t *testing.T) {
+	args, err := buildHybridArgs([]string{"--limit", "20", "--rerank", "--detail", "rich", "myquery"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["query"] != "myquery" {
+		t.Errorf("expected query 'myquery', got %v", args["query"])
+	}
+	if args["limit"] != float64(20) {
+		t.Errorf("expected limit 20.0, got %v", args["limit"])
+	}
+	if args["rerank"] != true {
+		t.Errorf("expected rerank true, got %v", args["rerank"])
+	}
+	if args["detail"] != "rich" {
+		t.Errorf("expected detail 'rich', got %v", args["detail"])
+	}
+}
+
+func TestBuildHybridArgs_MissingQuery(t *testing.T) {
+	_, err := buildHybridArgs([]string{})
+	if err == nil {
+		t.Error("expected error for missing query")
+	}
+}
+
+func TestRunHybrid_CallsCorrectTool(t *testing.T) {
+	server := newTestServer()
+	var stdout, stderr bytes.Buffer
+	code := runHybridWithServer([]string{"func main"}, server, &stdout, &stderr)
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d; stderr: %s", code, stderr.String())
+	}
+	if stdout.Len() == 0 {
+		t.Error("expected JSON output on stdout")
+	}
+	if !strings.Contains(stdout.String(), "results") {
+		t.Errorf("expected output to contain 'results', got: %s", stdout.String())
+	}
+}

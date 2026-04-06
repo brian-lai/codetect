@@ -211,7 +211,39 @@ func runSymbolsWithServer(args []string, server *mcp.Server, stdout, stderr io.W
 
 // --- hybrid ---
 
+func buildHybridArgs(args []string) (map[string]any, error) {
+	fs := flag.NewFlagSet("hybrid", flag.ContinueOnError)
+	limit := fs.Int("limit", 0, "Max results (default: 10)")
+	rerank := fs.Bool("rerank", false, "Enable reranking")
+	detail := fs.String("detail", "", "Response detail: minimal, standard, rich")
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if fs.NArg() == 0 {
+		return nil, fmt.Errorf("query is required")
+	}
+	m := map[string]any{"query": fs.Arg(0)}
+	if *limit > 0 {
+		m["limit"] = float64(*limit)
+	}
+	if *rerank {
+		m["rerank"] = true
+	}
+	if *detail != "" {
+		m["detail"] = *detail
+	}
+	return m, nil
+}
+
 func runHybrid(args []string, stdout, stderr io.Writer) int {
-	fmt.Fprintln(stderr, "error: hybrid not yet implemented")
-	return 1
+	return runHybridWithServer(args, newServer(), stdout, stderr)
+}
+
+func runHybridWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {
+	m, err := buildHybridArgs(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	return callTool(server, "hybrid_search_v2", m, stdout, stderr)
 }

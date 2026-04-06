@@ -10,6 +10,7 @@ import (
 	"codetect/internal/tools"
 )
 
+// Keep in sync with cmd/codetect/main.go serverVersion
 const cliVersion = "3.7.7"
 
 func main() {
@@ -57,11 +58,17 @@ Commands:
   help     Show this help`)
 }
 
-func newServer() *mcp.Server {
+// newServerWithCleanup creates a server with all tools registered and returns a cleanup function.
+func newServerWithCleanup() (*mcp.Server, func()) {
 	server := mcp.NewServer("codetect-cli", cliVersion)
 	toolsConfig := tools.DefaultConfigWithEnrichment()
 	tools.RegisterAll(server, toolsConfig)
-	return server
+	cleanup := func() {
+		if toolsConfig.Pool != nil {
+			toolsConfig.Pool.Close()
+		}
+	}
+	return server, cleanup
 }
 
 // callTool invokes a registered tool and writes the result to stdout.
@@ -106,7 +113,9 @@ func buildSearchArgs(args []string) (map[string]any, error) {
 }
 
 func runSearch(args []string, stdout, stderr io.Writer) int {
-	return runSearchWithServer(args, newServer(), stdout, stderr)
+	server, cleanup := newServerWithCleanup()
+	defer cleanup()
+	return runSearchWithServer(args, server, stdout, stderr)
 }
 
 func runSearchWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {
@@ -141,7 +150,9 @@ func buildFileArgs(args []string) (map[string]any, error) {
 }
 
 func runFile(args []string, stdout, stderr io.Writer) int {
-	return runFileWithServer(args, newServer(), stdout, stderr)
+	server, cleanup := newServerWithCleanup()
+	defer cleanup()
+	return runFileWithServer(args, server, stdout, stderr)
 }
 
 func runFileWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {
@@ -197,7 +208,9 @@ func buildSymbolsArgs(args []string) (map[string]any, error) {
 }
 
 func runSymbols(args []string, stdout, stderr io.Writer) int {
-	return runSymbolsWithServer(args, newServer(), stdout, stderr)
+	server, cleanup := newServerWithCleanup()
+	defer cleanup()
+	return runSymbolsWithServer(args, server, stdout, stderr)
 }
 
 func runSymbolsWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {
@@ -236,7 +249,9 @@ func buildHybridArgs(args []string) (map[string]any, error) {
 }
 
 func runHybrid(args []string, stdout, stderr io.Writer) int {
-	return runHybridWithServer(args, newServer(), stdout, stderr)
+	server, cleanup := newServerWithCleanup()
+	defer cleanup()
+	return runHybridWithServer(args, server, stdout, stderr)
 }
 
 func runHybridWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {

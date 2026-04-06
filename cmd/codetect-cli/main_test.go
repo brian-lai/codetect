@@ -20,14 +20,18 @@ func TestRun_NoArgs(t *testing.T) {
 	}
 }
 
-func TestRun_Help(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	code := run([]string{"help"}, &stdout, &stderr)
-	if code != 0 {
-		t.Errorf("expected exit code 0, got %d", code)
-	}
-	if stdout.Len() == 0 {
-		t.Error("expected usage message on stdout")
+func TestRun_HelpVariants(t *testing.T) {
+	for _, arg := range []string{"help", "-h", "--help"} {
+		t.Run(arg, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run([]string{arg}, &stdout, &stderr)
+			if code != 0 {
+				t.Errorf("expected exit code 0 for %q, got %d", arg, code)
+			}
+			if stdout.Len() == 0 {
+				t.Errorf("expected usage message on stdout for %q", arg)
+			}
+		})
 	}
 }
 
@@ -48,13 +52,15 @@ func TestRun_Version(t *testing.T) {
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d", code)
 	}
-	if stdout.Len() == 0 {
-		t.Error("expected version on stdout")
+	if !strings.Contains(stdout.String(), cliVersion) {
+		t.Errorf("expected version %q in output, got: %s", cliVersion, stdout.String())
 	}
 }
 
-// --- Helper to create a server with all tools registered ---
-
+// newTestServer creates a server with DefaultConfig (no pool, no enrichment).
+// This differs from production which uses DefaultConfigWithEnrichment().
+// Tools that need a ResourcePool (symbols, hybrid semantic) will gracefully
+// degrade in tests — this is intentional and tests the degradation path.
 func newTestServer() *mcp.Server {
 	server := mcp.NewServer("test", "1.0")
 	config := tools.DefaultConfig()

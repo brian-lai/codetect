@@ -1,26 +1,15 @@
 # Current Work Summary
 
-Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B testing token cost differences between MCP and CLI tool usage in Claude Code.
+CLI A/B testing feature complete. PR open for review.
 
-**Branch:** `para/cli-ab-testing`
-**Plan:** context/plans/2026-04-05-cli-interface-ab-testing.md
-
-## To-Do List (TDD: red → green → commit)
-- [x] Scaffold CLI with usage/help and subcommand routing + tests
-- [x] Implement `search` subcommand + tests
-- [x] Implement `file` subcommand + tests
-- [x] Implement `symbols find` and `symbols list` subcommands + tests
-- [x] Implement `hybrid` subcommand + tests
-- [x] Add Makefile targets; verify `make build-cli`
-- [x] Smoke test all subcommands end-to-end
+**PR:** https://github.com/brian-lai/codetect/pull/85
+**Summary:** context/summaries/2026-04-06-cli-ab-testing-summary.md
 
 ---
 
 ```json
 {
-  "active_context": [
-    "context/plans/2026-04-05-cli-interface-ab-testing.md"
-  ],
+  "active_context": [],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
     "context/summaries/2026-02-01-registry-stats-update-summary.md",
@@ -34,15 +23,9 @@ Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B tes
     "context/summaries/2026-02-18-codetectignore-global-config-summary.md",
     "context/summaries/2026-02-19-eval-cost-report-improvements-summary.md",
     "context/summaries/2026-03-01-legacy-cleanup-summary.md",
-    "context/summaries/2026-03-14-litellm-http-resilience-summary.md"
+    "context/summaries/2026-03-14-litellm-http-resilience-summary.md",
+    "context/summaries/2026-04-06-cli-ab-testing-summary.md"
   ],
-  "last_updated": "2026-04-06T00:00:00Z",
-  "workflow": {
-    "mode": "auto",
-    "current_step": "pr",
-    "current_phase": 1,
-    "phases_completed": [],
-    "started": "2026-04-06T00:00:00Z"
-  }
+  "last_updated": "2026-04-06T02:20:00Z"
 }
 ```

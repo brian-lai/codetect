@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"testing"
+
+	"codetect/internal/mcp"
+	"codetect/internal/tools"
 )
 
 func TestRun_NoArgs(t *testing.T) {
@@ -46,5 +50,72 @@ func TestRun_Version(t *testing.T) {
 	}
 	if stdout.Len() == 0 {
 		t.Error("expected version on stdout")
+	}
+}
+
+// --- Helper to create a server with all tools registered ---
+
+func newTestServer() *mcp.Server {
+	server := mcp.NewServer("test", "1.0")
+	config := tools.DefaultConfig()
+	tools.RegisterAll(server, config)
+	return server
+}
+
+// --- search subcommand tests ---
+
+func TestBuildSearchArgs_Defaults(t *testing.T) {
+	args, err := buildSearchArgs([]string{"myquery"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["query"] != "myquery" {
+		t.Errorf("expected query 'myquery', got %v", args["query"])
+	}
+	if _, ok := args["top_k"]; ok {
+		t.Error("expected no top_k when not specified")
+	}
+	if _, ok := args["detail"]; ok {
+		t.Error("expected no detail when not specified")
+	}
+}
+
+func TestBuildSearchArgs_AllFlags(t *testing.T) {
+	args, err := buildSearchArgs([]string{"--top-k", "5", "--detail", "rich", "myquery"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["query"] != "myquery" {
+		t.Errorf("expected query 'myquery', got %v", args["query"])
+	}
+	if args["top_k"] != float64(5) {
+		t.Errorf("expected top_k 5.0, got %v", args["top_k"])
+	}
+	if args["detail"] != "rich" {
+		t.Errorf("expected detail 'rich', got %v", args["detail"])
+	}
+}
+
+func TestBuildSearchArgs_MissingQuery(t *testing.T) {
+	_, err := buildSearchArgs([]string{})
+	if err == nil {
+		t.Error("expected error for missing query")
+	}
+}
+
+func TestRunSearch_CallsCorrectTool(t *testing.T) {
+	server := newTestServer()
+	var stdout, stderr bytes.Buffer
+	// search for a pattern that exists in this repo
+	code := runSearchWithServer([]string{"func main"}, server, &stdout, &stderr)
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d; stderr: %s", code, stderr.String())
+	}
+	if stdout.Len() == 0 {
+		t.Error("expected JSON output on stdout")
+	}
+	// Output should be valid JSON with results
+	if !strings.Contains(stdout.String(), "results") {
+		t.Errorf("expected output to contain 'results', got: %s", stdout.String())
 	}
 }

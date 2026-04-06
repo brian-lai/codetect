@@ -7,7 +7,7 @@ Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B tes
 
 ## To-Do List (TDD: red → green → commit)
 - [x] Scaffold CLI with usage/help and subcommand routing + tests
-- [ ] Implement `search` subcommand + tests
+- [x] Implement `search` subcommand + tests
 - [ ] Implement `file` subcommand + tests
 - [ ] Implement `symbols find` and `symbols list` subcommands + tests
 - [ ] Implement `hybrid` subcommand + tests

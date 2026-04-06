@@ -12,7 +12,7 @@ Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B tes
 - [x] Implement `symbols find` and `symbols list` subcommands + tests
 - [x] Implement `hybrid` subcommand + tests
 - [x] Add Makefile targets; verify `make build-cli`
-- [ ] Smoke test all subcommands end-to-end
+- [x] Smoke test all subcommands end-to-end
 
 ---
 
@@ -39,7 +39,7 @@ Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B tes
   "last_updated": "2026-04-06T00:00:00Z",
   "workflow": {
     "mode": "auto",
-    "current_step": "execute",
+    "current_step": "pr",
     "current_phase": 1,
     "phases_completed": [],
     "started": "2026-04-06T00:00:00Z"

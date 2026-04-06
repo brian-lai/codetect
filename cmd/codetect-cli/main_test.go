@@ -119,3 +119,60 @@ func TestRunSearch_CallsCorrectTool(t *testing.T) {
 		t.Errorf("expected output to contain 'results', got: %s", stdout.String())
 	}
 }
+
+// --- file subcommand tests ---
+
+func TestBuildFileArgs_PathOnly(t *testing.T) {
+	args, err := buildFileArgs([]string{"src/main.go"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["path"] != "src/main.go" {
+		t.Errorf("expected path 'src/main.go', got %v", args["path"])
+	}
+	if _, ok := args["start_line"]; ok {
+		t.Error("expected no start_line when not specified")
+	}
+	if _, ok := args["end_line"]; ok {
+		t.Error("expected no end_line when not specified")
+	}
+}
+
+func TestBuildFileArgs_WithLineRange(t *testing.T) {
+	args, err := buildFileArgs([]string{"--start-line", "10", "--end-line", "20", "src/main.go"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["path"] != "src/main.go" {
+		t.Errorf("expected path 'src/main.go', got %v", args["path"])
+	}
+	if args["start_line"] != float64(10) {
+		t.Errorf("expected start_line 10.0, got %v", args["start_line"])
+	}
+	if args["end_line"] != float64(20) {
+		t.Errorf("expected end_line 20.0, got %v", args["end_line"])
+	}
+}
+
+func TestBuildFileArgs_MissingPath(t *testing.T) {
+	_, err := buildFileArgs([]string{})
+	if err == nil {
+		t.Error("expected error for missing path")
+	}
+}
+
+func TestRunFile_CallsCorrectTool(t *testing.T) {
+	server := newTestServer()
+	var stdout, stderr bytes.Buffer
+	// Use the test file itself (guaranteed to exist in the test's working directory)
+	code := runFileWithServer([]string{"main.go"}, server, &stdout, &stderr)
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d; stderr: %s", code, stderr.String())
+	}
+	if stdout.Len() == 0 {
+		t.Error("expected JSON output on stdout")
+	}
+	if !strings.Contains(stdout.String(), "content") {
+		t.Errorf("expected output to contain 'content', got: %s", stdout.String())
+	}
+}

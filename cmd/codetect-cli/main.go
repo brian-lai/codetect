@@ -120,9 +120,37 @@ func runSearchWithServer(args []string, server *mcp.Server, stdout, stderr io.Wr
 
 // --- file ---
 
+func buildFileArgs(args []string) (map[string]any, error) {
+	fs := flag.NewFlagSet("file", flag.ContinueOnError)
+	startLine := fs.Int("start-line", 0, "Start line, 1-indexed")
+	endLine := fs.Int("end-line", 0, "End line, 1-indexed")
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if fs.NArg() == 0 {
+		return nil, fmt.Errorf("path is required")
+	}
+	m := map[string]any{"path": fs.Arg(0)}
+	if *startLine > 0 {
+		m["start_line"] = float64(*startLine)
+	}
+	if *endLine > 0 {
+		m["end_line"] = float64(*endLine)
+	}
+	return m, nil
+}
+
 func runFile(args []string, stdout, stderr io.Writer) int {
-	fmt.Fprintln(stderr, "error: file not yet implemented")
-	return 1
+	return runFileWithServer(args, newServer(), stdout, stderr)
+}
+
+func runFileWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {
+	m, err := buildFileArgs(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	return callTool(server, "get_file", m, stdout, stderr)
 }
 
 // --- symbols ---

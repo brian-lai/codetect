@@ -1,23 +1,26 @@
 # Current Work Summary
 
-LiteLLM HTTP client resilience — completed and verified.
+Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B testing token cost differences between MCP and CLI tool usage in Claude Code.
 
-**Branch:** `pret/litellm-resilience`
-**PR:** https://github.com/brian-lai/codetect/pull/77
-**Summary:** context/summaries/2026-03-14-litellm-http-resilience-summary.md
+**Branch:** `para/cli-ab-testing`
+**Plan:** context/plans/2026-04-05-cli-interface-ab-testing.md
 
-## To-Do List
-- [x] Configure custom HTTP Transport with connection pooling
-- [x] Add retry with exponential backoff to embedBatch
-- [x] Add backoff delay to embedIndividualFallback
-- [x] Write tests for all new retry/backoff paths
-- [x] Verify with live neon-dash indexing (zero EOF errors)
+## To-Do List (TDD: red → green → commit)
+- [ ] Scaffold CLI with usage/help and subcommand routing + tests
+- [ ] Implement `search` subcommand + tests
+- [ ] Implement `file` subcommand + tests
+- [ ] Implement `symbols find` and `symbols list` subcommands + tests
+- [ ] Implement `hybrid` subcommand + tests
+- [ ] Add Makefile targets; verify `make build-cli`
+- [ ] Smoke test all subcommands end-to-end
 
 ---
 
 ```json
 {
-  "active_context": [],
+  "active_context": [
+    "context/plans/2026-04-05-cli-interface-ab-testing.md"
+  ],
   "completed_summaries": [
     "context/summaries/2026-01-14-postgres-pgvector-support-complete-summary.md",
     "context/summaries/2026-02-01-registry-stats-update-summary.md",
@@ -33,6 +36,13 @@ LiteLLM HTTP client resilience — completed and verified.
     "context/summaries/2026-03-01-legacy-cleanup-summary.md",
     "context/summaries/2026-03-14-litellm-http-resilience-summary.md"
   ],
-  "last_updated": "2026-03-14T09:50:00Z"
+  "last_updated": "2026-04-06T00:00:00Z",
+  "workflow": {
+    "mode": "auto",
+    "current_step": "execute",
+    "current_phase": 1,
+    "phases_completed": [],
+    "started": "2026-04-06T00:00:00Z"
+  }
 }
 ```

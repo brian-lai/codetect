@@ -155,9 +155,58 @@ func runFileWithServer(args []string, server *mcp.Server, stdout, stderr io.Writ
 
 // --- symbols ---
 
+func buildSymbolsArgs(args []string) (map[string]any, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("subcommand required: find or list")
+	}
+
+	mode := args[0]
+	switch mode {
+	case "find":
+		fs := flag.NewFlagSet("symbols find", flag.ContinueOnError)
+		kind := fs.String("kind", "", "Symbol kind filter: function, type, class, etc.")
+		limit := fs.Int("limit", 0, "Max results (default: 20)")
+		if err := fs.Parse(args[1:]); err != nil {
+			return nil, err
+		}
+		if fs.NArg() == 0 {
+			return nil, fmt.Errorf("name is required for find mode")
+		}
+		m := map[string]any{"mode": "find", "name": fs.Arg(0)}
+		if *kind != "" {
+			m["kind"] = *kind
+		}
+		if *limit > 0 {
+			m["limit"] = float64(*limit)
+		}
+		return m, nil
+
+	case "list":
+		fs := flag.NewFlagSet("symbols list", flag.ContinueOnError)
+		if err := fs.Parse(args[1:]); err != nil {
+			return nil, err
+		}
+		if fs.NArg() == 0 {
+			return nil, fmt.Errorf("path is required for list mode")
+		}
+		return map[string]any{"mode": "list", "path": fs.Arg(0)}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown symbols subcommand %q: use find or list", mode)
+	}
+}
+
 func runSymbols(args []string, stdout, stderr io.Writer) int {
-	fmt.Fprintln(stderr, "error: symbols not yet implemented")
-	return 1
+	return runSymbolsWithServer(args, newServer(), stdout, stderr)
+}
+
+func runSymbolsWithServer(args []string, server *mcp.Server, stdout, stderr io.Writer) int {
+	m, err := buildSymbolsArgs(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	return callTool(server, "symbols", m, stdout, stderr)
 }
 
 // --- hybrid ---

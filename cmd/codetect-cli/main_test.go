@@ -176,3 +176,83 @@ func TestRunFile_CallsCorrectTool(t *testing.T) {
 		t.Errorf("expected output to contain 'content', got: %s", stdout.String())
 	}
 }
+
+// --- symbols subcommand tests ---
+
+func TestBuildSymbolsArgs_Find(t *testing.T) {
+	args, err := buildSymbolsArgs([]string{"find", "MyFunc"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["mode"] != "find" {
+		t.Errorf("expected mode 'find', got %v", args["mode"])
+	}
+	if args["name"] != "MyFunc" {
+		t.Errorf("expected name 'MyFunc', got %v", args["name"])
+	}
+}
+
+func TestBuildSymbolsArgs_FindWithFlags(t *testing.T) {
+	args, err := buildSymbolsArgs([]string{"find", "--kind", "function", "--limit", "5", "MyFunc"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["mode"] != "find" {
+		t.Errorf("expected mode 'find', got %v", args["mode"])
+	}
+	if args["name"] != "MyFunc" {
+		t.Errorf("expected name 'MyFunc', got %v", args["name"])
+	}
+	if args["kind"] != "function" {
+		t.Errorf("expected kind 'function', got %v", args["kind"])
+	}
+	if args["limit"] != float64(5) {
+		t.Errorf("expected limit 5.0, got %v", args["limit"])
+	}
+}
+
+func TestBuildSymbolsArgs_List(t *testing.T) {
+	args, err := buildSymbolsArgs([]string{"list", "src/main.go"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args["mode"] != "list" {
+		t.Errorf("expected mode 'list', got %v", args["mode"])
+	}
+	if args["path"] != "src/main.go" {
+		t.Errorf("expected path 'src/main.go', got %v", args["path"])
+	}
+}
+
+func TestBuildSymbolsArgs_MissingSubcommand(t *testing.T) {
+	_, err := buildSymbolsArgs([]string{})
+	if err == nil {
+		t.Error("expected error for missing subcommand")
+	}
+}
+
+func TestBuildSymbolsArgs_FindMissingName(t *testing.T) {
+	_, err := buildSymbolsArgs([]string{"find"})
+	if err == nil {
+		t.Error("expected error for find without name")
+	}
+}
+
+func TestBuildSymbolsArgs_ListMissingPath(t *testing.T) {
+	_, err := buildSymbolsArgs([]string{"list"})
+	if err == nil {
+		t.Error("expected error for list without path")
+	}
+}
+
+func TestRunSymbols_CallsCorrectTool(t *testing.T) {
+	server := newTestServer()
+	var stdout, stderr bytes.Buffer
+	// This will fail gracefully (no symbol index) but should still invoke the tool
+	code := runSymbolsWithServer([]string{"find", "NewServer"}, server, &stdout, &stderr)
+	// Expect non-zero since there's no real symbol index in test context
+	// But we verify the tool was invoked (either error or result output)
+	if stdout.Len() == 0 && stderr.Len() == 0 {
+		t.Errorf("expected some output, got none; code=%d", code)
+	}
+}

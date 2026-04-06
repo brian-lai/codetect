@@ -9,7 +9,7 @@ Building a CLI interface (`codetect-cli`) parallel to the MCP server for A/B tes
 - [x] Scaffold CLI with usage/help and subcommand routing + tests
 - [x] Implement `search` subcommand + tests
 - [x] Implement `file` subcommand + tests
-- [ ] Implement `symbols find` and `symbols list` subcommands + tests
+- [x] Implement `symbols find` and `symbols list` subcommands + tests
 - [ ] Implement `hybrid` subcommand + tests
 - [ ] Add Makefile targets; verify `make build-cli`
 - [ ] Smoke test all subcommands end-to-end

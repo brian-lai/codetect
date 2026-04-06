@@ -1,17 +1,9 @@
 # Current Work Summary
 
-LiteLLM HTTP client resilience — completed and verified.
+CLI A/B testing feature complete. PR open for review.
 
-**Branch:** `pret/litellm-resilience`
-**PR:** https://github.com/brian-lai/codetect/pull/77
-**Summary:** context/summaries/2026-03-14-litellm-http-resilience-summary.md
-
-## To-Do List
-- [x] Configure custom HTTP Transport with connection pooling
-- [x] Add retry with exponential backoff to embedBatch
-- [x] Add backoff delay to embedIndividualFallback
-- [x] Write tests for all new retry/backoff paths
-- [x] Verify with live neon-dash indexing (zero EOF errors)
+**PR:** https://github.com/brian-lai/codetect/pull/85
+**Summary:** context/summaries/2026-04-06-cli-ab-testing-summary.md
 
 ---
 
@@ -31,8 +23,9 @@ LiteLLM HTTP client resilience — completed and verified.
     "context/summaries/2026-02-18-codetectignore-global-config-summary.md",
     "context/summaries/2026-02-19-eval-cost-report-improvements-summary.md",
     "context/summaries/2026-03-01-legacy-cleanup-summary.md",
-    "context/summaries/2026-03-14-litellm-http-resilience-summary.md"
+    "context/summaries/2026-03-14-litellm-http-resilience-summary.md",
+    "context/summaries/2026-04-06-cli-ab-testing-summary.md"
   ],
-  "last_updated": "2026-03-14T09:50:00Z"
+  "last_updated": "2026-04-06T02:20:00Z"
 }
 ```

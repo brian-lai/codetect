@@ -2,6 +2,7 @@ BINARY=dist/codetect
 INDEXER=dist/codetect-index
 DAEMON=dist/codetect-daemon
 EVAL=dist/codetect-eval
+CLI=dist/codetect-cli
 MIGRATE=dist/migrate-to-postgres
 
 # Installation prefix (default: ~/.local)
@@ -9,7 +10,7 @@ PREFIX ?= $(HOME)/.local
 BIN_DIR = $(PREFIX)/bin
 SHARE_DIR = $(PREFIX)/share/codetect
 
-.PHONY: build mcp index embed doctor clean test bench bench-all install uninstall eval migrate-to-postgres postgres-up postgres-down postgres-logs postgres-shell
+.PHONY: build build-cli mcp index embed doctor clean test bench bench-all install uninstall eval migrate-to-postgres postgres-up postgres-down postgres-logs postgres-shell
 
 # Build all binaries
 build:
@@ -18,7 +19,13 @@ build:
 	go build -o $(INDEXER) ./cmd/codetect-index
 	go build -o $(DAEMON) ./cmd/codetect-daemon
 	go build -o $(EVAL) ./cmd/codetect-eval
+	go build -o $(CLI) ./cmd/codetect-cli
 	go build -o $(MIGRATE) ./cmd/migrate-to-postgres
+
+# Build CLI only
+build-cli:
+	@mkdir -p dist
+	go build -o $(CLI) ./cmd/codetect-cli
 
 # Run MCP server (used by .mcp.json)
 mcp: build
@@ -159,10 +166,11 @@ install: build
 	@cp $(INDEXER) $(BIN_DIR)/codetect-index
 	@cp $(DAEMON) $(BIN_DIR)/codetect-daemon
 	@cp $(EVAL) $(BIN_DIR)/codetect-eval
+	@cp $(CLI) $(BIN_DIR)/codetect-cli
 	@cp $(MIGRATE) $(BIN_DIR)/migrate-to-postgres
 	@cp scripts/codetect-wrapper.sh $(BIN_DIR)/codetect
-	@chmod +x $(BIN_DIR)/codetect $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres
-	@codesign --sign - --force $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres 2>/dev/null || true
+	@chmod +x $(BIN_DIR)/codetect $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/codetect-cli $(BIN_DIR)/migrate-to-postgres
+	@codesign --sign - --force $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/codetect-cli $(BIN_DIR)/migrate-to-postgres 2>/dev/null || true
 	@cp templates/mcp.json $(SHARE_DIR)/templates/
 	@echo ""
 	@echo "✓ Installed to $(PREFIX)"
@@ -184,7 +192,7 @@ install: build
 # Uninstall
 uninstall:
 	@echo "Uninstalling from $(PREFIX)..."
-	@rm -f $(BIN_DIR)/codetect $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres
+	@rm -f $(BIN_DIR)/codetect $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/codetect-cli $(BIN_DIR)/migrate-to-postgres
 	@rm -rf $(SHARE_DIR)
 	@echo "✓ Uninstalled"
 

@@ -1018,3 +1018,187 @@ func BenchmarkCacheHitRate(b *testing.B) {
 		pipeline.EmbedChunks(ctx, "/project2", chunks)
 	}
 }
+
+// sizeLimitMockEmbedder wraps mockEmbedder but returns error for inputs
+// exceeding a configurable maxInputLen. Tracks all input lengths received.
+type sizeLimitMockEmbedder struct {
+	*mockEmbedder
+	maxInputLen int
+	inputLens   []int // track all input lengths seen
+}
+
+func newSizeLimitMockEmbedder(dims, maxInputLen int) *sizeLimitMockEmbedder {
+	return &sizeLimitMockEmbedder{
+		mockEmbedder: newMockEmbedder(dims),
+		maxInputLen:  maxInputLen,
+	}
+}
+
+func (m *sizeLimitMockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	result := make([][]float32, len(texts))
+	var failures int
+	for i, text := range texts {
+		m.inputLens = append(m.inputLens, len(text))
+		if len(text) > m.maxInputLen {
+			failures++
+			continue
+		}
+		emb := make([]float32, m.mockEmbedder.dimensions)
+		for j := 0; j < m.mockEmbedder.dimensions; j++ {
+			emb[j] = float32(len(text)+j) / float32(m.mockEmbedder.dimensions)
+		}
+		result[i] = emb
+		m.embedCount.Add(1)
+	}
+	if failures == len(texts) {
+		return nil, fmt.Errorf("all %d texts exceeded size limit of %d", len(texts), m.maxInputLen)
+	}
+	return result, nil
+}
+
+// errorMockEmbedder always returns an error.
+type errorMockEmbedder struct {
+	*mockEmbedder
+}
+
+func newErrorMockEmbedder(dims int) *errorMockEmbedder {
+	return &errorMockEmbedder{mockEmbedder: newMockEmbedder(dims)}
+}
+
+func (m *errorMockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, fmt.Errorf("embedding always fails")
+}
+
+func TestSplitAndEmbed_SmallText(t *testing.T) {
+	pipeline, _ := setupTestPipeline(t)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // 1.25
+	ctx := context.Background()
+
+	text := strings.Repeat("a", 100) // 100 chars, well under maxChars (9375)
+	result := pipeline.splitAndEmbed(ctx, text)
+	if len(result) != 1 {
+		t.Errorf("splitAndEmbed returned %d embeddings, want 1 (small text should embed directly)", len(result))
+	}
+}
+
+func TestSplitAndEmbed_LargeText(t *testing.T) {
+	embedder := newSizeLimitMockEmbedder(768, 9375)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
+	ctx := context.Background()
+
+	// 50,000 chars with newlines every 100 chars
+	var sb strings.Builder
+	for i := 0; i < 500; i++ {
+		sb.WriteString(strings.Repeat("x", 99))
+		sb.WriteByte('\n')
+	}
+	text := sb.String() // 50,000 chars
+
+	result := pipeline.splitAndEmbed(ctx, text)
+	if len(result) == 0 {
+		t.Fatal("splitAndEmbed returned nil for large text")
+	}
+
+	// Verify no input exceeded maxChars
+	for _, l := range embedder.inputLens {
+		if l > 9375 {
+			t.Errorf("embedder received input of %d chars, exceeding maxChars 9375", l)
+		}
+	}
+
+	// Should produce ~6 pieces (50000/9375 = 5.33, ceil = 6)
+	if len(result) < 5 || len(result) > 8 {
+		t.Errorf("splitAndEmbed returned %d embeddings, expected 5-8 pieces for 50K text", len(result))
+	}
+}
+
+func TestSplitAndEmbed_NoNewlines(t *testing.T) {
+	embedder := newSizeLimitMockEmbedder(768, 9375)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
+	ctx := context.Background()
+
+	// 20,000 char single-line text (no newlines)
+	text := strings.Repeat("x", 20000)
+	result := pipeline.splitAndEmbed(ctx, text)
+	if len(result) == 0 {
+		t.Fatal("splitAndEmbed returned nil for no-newline text")
+	}
+
+	// Verify no input exceeded maxChars
+	for _, l := range embedder.inputLens {
+		if l > 9375 {
+			t.Errorf("embedder received input of %d chars, exceeding maxChars 9375", l)
+		}
+	}
+}
+
+func TestSplitAndEmbed_EmptyText(t *testing.T) {
+	pipeline, _ := setupTestPipeline(t)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
+	ctx := context.Background()
+
+	result := pipeline.splitAndEmbed(ctx, "")
+	if result != nil {
+		t.Errorf("splitAndEmbed returned %v for empty text, want nil", result)
+	}
+}
+
+func TestSplitAndEmbed_SparseNewlines(t *testing.T) {
+	embedder := newSizeLimitMockEmbedder(768, 9375)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
+	ctx := context.Background()
+
+	// 20,000 char text with newlines only at positions 0 and 12,000
+	text := strings.Repeat("a", 12000) + "\n" + strings.Repeat("b", 7999)
+	result := pipeline.splitAndEmbed(ctx, text)
+	if len(result) == 0 {
+		t.Fatal("splitAndEmbed returned nil for sparse-newline text")
+	}
+
+	// Defensive char-boundary fallback should kick in — verify all pieces ≤ maxChars
+	for _, l := range embedder.inputLens {
+		if l > 9375 {
+			t.Errorf("embedder received input of %d chars, exceeding maxChars 9375", l)
+		}
+	}
+}
+
+func TestSplitAndEmbed_EmbedderRejectsOversized(t *testing.T) {
+	embedder := newSizeLimitMockEmbedder(768, 9375)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
+	ctx := context.Background()
+
+	// 50,000 chars
+	var sb strings.Builder
+	for i := 0; i < 500; i++ {
+		sb.WriteString(strings.Repeat("x", 99))
+		sb.WriteByte('\n')
+	}
+	text := sb.String()
+
+	pipeline.splitAndEmbed(ctx, text)
+
+	// Verify NO inputs > 9375 reached the embedder
+	for _, l := range embedder.inputLens {
+		if l > 9375 {
+			t.Errorf("oversized input of %d chars reached the embedder (max: 9375)", l)
+		}
+	}
+}
+
+func TestSplitAndEmbed_EmbedReturnsError(t *testing.T) {
+	embedder := newErrorMockEmbedder(768)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
+	ctx := context.Background()
+
+	// Should return nil, not panic
+	result := pipeline.splitAndEmbed(ctx, "some text to embed")
+	if result != nil {
+		t.Errorf("splitAndEmbed should return nil when embedder returns error, got %d embeddings", len(result))
+	}
+}

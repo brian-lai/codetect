@@ -655,19 +655,28 @@ func setupTestPipelineWithEmbedder(t *testing.T, embedder Embedder) *Pipeline {
 }
 
 func TestEmbedChunksPartialFailure(t *testing.T) {
-	// One chunk exceeds the max length (50 chars), 4 are under.
-	// The oversized chunk will be recovered via recursive sub-chunking:
-	// 103 chars → split into ~51 char halves → split again into ~25 char quarters → embed OK.
-	embedder := newFailingMockEmbedder(768, 50)
+	// One chunk exceeds maxChars (9375), 4 are under.
+	// The oversized chunk is routed to splitAndEmbed by the pre-embed guard,
+	// split into correctly-sized pieces, and the first piece's embedding is used.
+	embedder := newSizeLimitMockEmbedder(768, 9375)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
+	// Build an oversized chunk (~20K chars with newlines every 100 chars)
+	var sb strings.Builder
+	for i := 0; i < 200; i++ {
+		sb.WriteString(strings.Repeat("x", 99))
+		sb.WriteByte('\n')
+	}
+	bigContent := sb.String() // 20,000 chars
+
 	chunks := []Chunk{
-		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},           // 12 chars - OK
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},           // 12 chars - OK
-		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},           // 12 chars - OK
-		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "func d() {}"},           // 12 chars - OK
-		{Path: "e.go", StartLine: 1, EndLine: 100, Content: "// " + string(make([]byte, 100))}, // >50 chars - sub-chunked
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},
+		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},
+		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "func d() {}"},
+		{Path: "e.go", StartLine: 1, EndLine: 100, Content: bigContent}, // >9375 chars - split and embedded
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -678,12 +687,12 @@ func TestEmbedChunksPartialFailure(t *testing.T) {
 	if result.Total != 5 {
 		t.Errorf("Total = %d, want 5", result.Total)
 	}
-	// All 5 should be embedded now (4 direct + 1 recovered via sub-chunking)
+	// All 5 should be embedded (4 direct + 1 recovered via splitting)
 	if result.Embedded != 5 {
 		t.Errorf("Embedded = %d, want 5", result.Embedded)
 	}
 	if result.Truncated != 1 {
-		t.Errorf("Truncated = %d, want 1 (one chunk recovered via sub-chunking)", result.Truncated)
+		t.Errorf("Truncated = %d, want 1 (one chunk recovered via splitting)", result.Truncated)
 	}
 	if result.Errors != 0 {
 		t.Errorf("Errors = %d, want 0", result.Errors)
@@ -694,27 +703,47 @@ func TestEmbedChunksPartialFailure(t *testing.T) {
 	if len(locs) != 5 {
 		t.Errorf("expected 5 locations, got %d", len(locs))
 	}
+
+	// Verify no oversized inputs reached the embedder
+	for _, l := range embedder.inputLens {
+		if l > 9375 {
+			t.Errorf("embedder received input of %d chars, exceeding maxChars 9375", l)
+		}
+	}
 }
 
 func TestEmbedChunksAllFail(t *testing.T) {
-	// All chunks exceed the max length, and sub-chunking recovers them.
-	// With maxLen=5, texts like "func a() {}" (12 chars) get sub-chunked
-	// into progressively smaller pieces until they fit.
-	embedder := newFailingMockEmbedder(768, 5)
+	// All chunks exceed maxChars (9375), and iterative splitting recovers them.
+	embedder := newSizeLimitMockEmbedder(768, 9375)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
+	// Build two oversized chunks (~15K chars each)
+	var sb strings.Builder
+	for i := 0; i < 150; i++ {
+		sb.WriteString(strings.Repeat("a", 99))
+		sb.WriteByte('\n')
+	}
+	bigA := sb.String()
+	sb.Reset()
+	for i := 0; i < 150; i++ {
+		sb.WriteString(strings.Repeat("b", 99))
+		sb.WriteByte('\n')
+	}
+	bigB := sb.String()
+
 	chunks := []Chunk{
-		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},  // 12 chars > 5, but sub-chunks will fit
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},  // 12 chars > 5, but sub-chunks will fit
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: bigA}, // >9375 chars
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: bigB}, // >9375 chars
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
 	if err != nil {
-		t.Fatalf("EmbedChunks should succeed via sub-chunking: %v", err)
+		t.Fatalf("EmbedChunks should succeed via splitting: %v", err)
 	}
 
-	// Both chunks should be recovered via sub-chunking
+	// Both chunks should be recovered via splitting
 	if result.Truncated != 2 {
 		t.Errorf("Truncated = %d, want 2", result.Truncated)
 	}
@@ -725,19 +754,34 @@ func TestEmbedChunksAllFail(t *testing.T) {
 
 func TestEmbedChunksMixedBatches(t *testing.T) {
 	// Use batch size of 2 so chunks spread across multiple batches.
-	// Some chunks in each batch will initially fail but get recovered
-	// via sub-chunking (34 char strings split into ~17 char halves which fit under 20).
-	embedder := newFailingMockEmbedder(768, 20)
+	// Two oversized chunks (>9375 chars) are routed to splitAndEmbed
+	// by the pre-embed guard and recovered via iterative splitting.
+	embedder := newSizeLimitMockEmbedder(768, 9375)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
-	pipeline.batchSize = 2 // Force small batches
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
+	pipeline.batchSize = 2                                // Force small batches
 	ctx := context.Background()
 
+	// Build two oversized chunks (~12K chars each)
+	var sb strings.Builder
+	for i := 0; i < 120; i++ {
+		sb.WriteString(strings.Repeat("x", 99))
+		sb.WriteByte('\n')
+	}
+	bigB := sb.String()
+	sb.Reset()
+	for i := 0; i < 120; i++ {
+		sb.WriteString(strings.Repeat("y", 99))
+		sb.WriteByte('\n')
+	}
+	bigD := sb.String()
+
 	chunks := []Chunk{
-		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},                        // 12 chars - OK (batch 1)
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "// long comment that exceeds limit"}, // 34 chars - sub-chunked
-		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},                        // 12 chars - OK (batch 2)
-		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "// another oversized content here"},  // 34 chars - sub-chunked
-		{Path: "e.go", StartLine: 1, EndLine: 10, Content: "func e() {}"},                        // 12 chars - OK (batch 3)
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},  // OK (batch 1)
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: bigB},           // >9375 - split
+		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},  // OK (batch 2)
+		{Path: "d.go", StartLine: 1, EndLine: 10, Content: bigD},           // >9375 - split
+		{Path: "e.go", StartLine: 1, EndLine: 10, Content: "func e() {}"},  // OK (batch 3)
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -748,12 +792,12 @@ func TestEmbedChunksMixedBatches(t *testing.T) {
 	if result.Total != 5 {
 		t.Errorf("Total = %d, want 5", result.Total)
 	}
-	// All 5 should be embedded (3 direct + 2 recovered via sub-chunking)
+	// All 5 should be embedded (3 direct + 2 recovered via splitting)
 	if result.Embedded != 5 {
 		t.Errorf("Embedded = %d, want 5", result.Embedded)
 	}
 	if result.Truncated != 2 {
-		t.Errorf("Truncated = %d, want 2 (two chunks recovered via sub-chunking)", result.Truncated)
+		t.Errorf("Truncated = %d, want 2 (two chunks recovered via splitting)", result.Truncated)
 	}
 	if result.Errors != 0 {
 		t.Errorf("Errors = %d, want 0", result.Errors)
@@ -761,14 +805,21 @@ func TestEmbedChunksMixedBatches(t *testing.T) {
 }
 
 func TestSubChunkRecovery(t *testing.T) {
-	// Create an embedder that fails on texts > 30 chars
-	// A 60-char text should be split into two ~30-char halves that succeed
-	embedder := newFailingMockEmbedder(768, 30)
+	// An oversized chunk (>9375 chars) is routed to splitAndEmbed by the
+	// pre-embed guard and recovered via iterative splitting.
+	embedder := newSizeLimitMockEmbedder(768, 9375)
 	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
-	// 45 chars — too big for direct embed, but halves (~22 chars) will fit
-	bigContent := "line one of the big chunk\nline two of the chunk"
+	// ~15K chars with newlines
+	var sb strings.Builder
+	for i := 0; i < 150; i++ {
+		sb.WriteString(strings.Repeat("z", 99))
+		sb.WriteByte('\n')
+	}
+	bigContent := sb.String()
+
 	chunks := []Chunk{
 		{Path: "big.go", StartLine: 1, EndLine: 10, Content: bigContent},
 	}
@@ -785,7 +836,7 @@ func TestSubChunkRecovery(t *testing.T) {
 		t.Errorf("FailedChunks = %d, want 0", result.FailedChunks)
 	}
 	if result.Embedded != 1 {
-		t.Errorf("Embedded = %d, want 1 (recovered via sub-chunk representative)", result.Embedded)
+		t.Errorf("Embedded = %d, want 1 (recovered via split representative)", result.Embedded)
 	}
 }
 

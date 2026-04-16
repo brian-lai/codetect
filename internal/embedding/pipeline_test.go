@@ -978,24 +978,21 @@ func TestPipelineWithFailureStore(t *testing.T) {
 
 	ctx := context.Background()
 
-	// A chunk with short content that succeeds
-	// and one chunk that's too long and will fail even after sub-chunking at depth 3
-	// (content is all one character repeated, so splits always produce >5 char pieces)
+	// A chunk with short content that succeeds,
+	// and one chunk that's too long for the embedder (>5 chars).
+	// With default charsPerToken (2.5), maxChars=18750, so 100 chars is under maxChars.
+	// The 100-char chunk goes through batch embedding, the mock rejects it (>5 chars),
+	// it's queued for splitAndEmbed, but since 100 <= maxChars it embeds directly —
+	// which the mock also rejects. The chunk is a true failure.
 	chunks := []Chunk{
 		{Path: "ok.go", StartLine: 1, EndLine: 1, Content: "ab"},
 		{Path: "fail.go", StartLine: 1, EndLine: 50, Content: strings.Repeat("x", 100)},
 	}
 
-	// The batch embed will fail because the 100-char chunk fails,
-	// and the 2-char chunk is in the same batch — but the embedder returns
-	// nil for the failing one and succeeds for the short one.
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
 	if err != nil {
 		t.Fatalf("EmbedChunks failed: %v", err)
 	}
-
-	// The 100-char chunk sub-chunks into 50-char halves, then 25-char quarters, then ~12-char eighths.
-	// All still > 5 chars, so all fail. The chunk is a true failure.
 	if result.FailedChunks != 1 {
 		t.Errorf("FailedChunks = %d, want 1", result.FailedChunks)
 	}

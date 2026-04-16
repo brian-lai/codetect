@@ -73,7 +73,7 @@ func WithTokenCounter(tc *TokenCounter) PipelineOption {
 }
 
 // WithCharsPerToken sets the chars/token ratio for token estimation.
-// Use DefaultCharsPerTokenLiteLLM (1.0) for OpenAI/LiteLLM providers.
+// Use DefaultCharsPerTokenLiteLLM (1.25) for OpenAI/LiteLLM providers.
 func WithCharsPerToken(ratio float64) PipelineOption {
 	return func(p *Pipeline) {
 		if ratio > 0 {

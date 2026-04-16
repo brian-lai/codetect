@@ -1120,6 +1120,56 @@ func (m *errorMockEmbedder) Embed(ctx context.Context, texts []string) ([][]floa
 	return nil, fmt.Errorf("embedding always fails")
 }
 
+func TestEmbedNewChunks_OversizedContent(t *testing.T) {
+	// Integration test: feed a 100K string through embedNewChunks with a
+	// size-limiting mock embedder that rejects inputs > 9375 chars.
+	embedder := newSizeLimitMockEmbedder(768, 9375)
+	pipeline := setupTestPipelineWithEmbedder(t, embedder)
+	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
+	ctx := context.Background()
+
+	// Build a 100K string with newlines every 100 chars
+	var sb strings.Builder
+	for i := 0; i < 1000; i++ {
+		sb.WriteString(strings.Repeat("x", 99))
+		sb.WriteByte('\n')
+	}
+	bigContent := sb.String() // 100,000 chars
+	hash := HashContent(bigContent)
+
+	chunks := []PipelineChunk{
+		{
+			Chunk:       Chunk{Path: "big.go", StartLine: 1, EndLine: 1000, Content: bigContent},
+			ContentHash: hash,
+		},
+	}
+
+	result, stats, err := pipeline.embedNewChunks(ctx, chunks, "/project")
+	if err != nil {
+		t.Fatalf("embedNewChunks should not return error: %v", err)
+	}
+
+	// Should have recovered via splitting
+	if stats.Recovered != 1 {
+		t.Errorf("stats.Recovered = %d, want 1", stats.Recovered)
+	}
+	if stats.Failed != 0 {
+		t.Errorf("stats.Failed = %d, want 0", stats.Failed)
+	}
+
+	// Result should have an entry for the hash
+	if _, ok := result[hash]; !ok {
+		t.Error("result should contain an entry for the oversized chunk's hash")
+	}
+
+	// No inputs > 9375 chars should have reached the embedder
+	for _, l := range embedder.inputLens {
+		if l > 9375 {
+			t.Errorf("embedder received input of %d chars, exceeding maxChars 9375", l)
+		}
+	}
+}
+
 func TestSplitAndEmbed_SmallText(t *testing.T) {
 	pipeline, _ := setupTestPipeline(t)
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // 1.25

@@ -8,6 +8,23 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
+// DefaultIgnoreExtensionPatterns are built-in gitignore patterns for non-code
+// asset file extensions. These are prepended at lowest priority in
+// LoadCodetectIgnoreHierarchy, so user patterns (including negation like
+// !*.svg) naturally override them.
+var DefaultIgnoreExtensionPatterns = []string{
+	// Images
+	"*.svg", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.bmp", "*.webp",
+	// Fonts
+	"*.woff", "*.woff2", "*.ttf", "*.eot", "*.otf",
+	// Media
+	"*.mp3", "*.mp4", "*.wav", "*.avi", "*.mov",
+	// Archives
+	"*.zip", "*.tar", "*.gz", "*.tgz", "*.bz2", "*.rar", "*.7z",
+	// Other non-code
+	"*.pdf", "*.map", "*.min.js", "*.min.css",
+}
+
 // xdgCodetectConfigDir returns the XDG-based codetect config directory,
 // consistent with the config directory used by registry.go.
 func xdgCodetectConfigDir() string {
@@ -61,7 +78,10 @@ func LoadCodetectIgnore(repoRoot string) (*ignore.GitIgnore, error) {
 //  2. ~/.codetectignore — legacy global (loads with deprecation warning)
 //  3. <repoRoot>/.codetectignore — project-specific (highest priority)
 func LoadCodetectIgnoreHierarchy(repoRoot string) (*ignore.GitIgnore, error) {
-	var patterns []string
+	// Start with default extension patterns at lowest priority (position 0).
+	// User patterns appended later override these via gitignore last-match-wins semantics.
+	patterns := make([]string, len(DefaultIgnoreExtensionPatterns))
+	copy(patterns, DefaultIgnoreExtensionPatterns)
 
 	xdgIgnoreFile := filepath.Join(xdgCodetectConfigDir(), "ignore")
 
@@ -86,10 +106,6 @@ func LoadCodetectIgnoreHierarchy(repoRoot string) (*ignore.GitIgnore, error) {
 	projectFile := filepath.Join(repoRoot, ".codetectignore")
 	if content, err := os.ReadFile(projectFile); err == nil {
 		patterns = append(patterns, parseIgnoreLines(string(content))...)
-	}
-
-	if len(patterns) == 0 {
-		return nil, nil
 	}
 
 	return ignore.CompileIgnoreLines(patterns...), nil

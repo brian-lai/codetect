@@ -8,11 +8,11 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
-// DefaultIgnoreExtensionPatterns are built-in gitignore patterns for non-code
+// defaultIgnoreExtensionPatterns are built-in gitignore patterns for non-code
 // asset file extensions. These are prepended at lowest priority in
 // LoadCodetectIgnoreHierarchy, so user patterns (including negation like
 // !*.svg) naturally override them.
-var DefaultIgnoreExtensionPatterns = []string{
+var defaultIgnoreExtensionPatterns = []string{
 	// Images
 	"*.svg", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.bmp", "*.webp",
 	// Fonts
@@ -80,8 +80,8 @@ func LoadCodetectIgnore(repoRoot string) (*ignore.GitIgnore, error) {
 func LoadCodetectIgnoreHierarchy(repoRoot string) (*ignore.GitIgnore, error) {
 	// Start with default extension patterns at lowest priority (position 0).
 	// User patterns appended later override these via gitignore last-match-wins semantics.
-	patterns := make([]string, len(DefaultIgnoreExtensionPatterns))
-	copy(patterns, DefaultIgnoreExtensionPatterns)
+	patterns := make([]string, len(defaultIgnoreExtensionPatterns))
+	copy(patterns, defaultIgnoreExtensionPatterns)
 
 	xdgIgnoreFile := filepath.Join(xdgCodetectConfigDir(), "ignore")
 

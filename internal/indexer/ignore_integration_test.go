@@ -156,7 +156,7 @@ func TestCodetectIgnoreEmpty(t *testing.T) {
 
 	// Without .codetectignore, default extension patterns still apply.
 	// vendor/ is excluded by DefaultIgnorePatterns in builder.
-	// app.min.js is excluded by DefaultIgnoreExtensionPatterns (*.min.js).
+	// app.min.js is excluded by defaultIgnoreExtensionPatterns (*.min.js).
 	// Only main.go should be indexed.
 	expectedFiles := 1
 

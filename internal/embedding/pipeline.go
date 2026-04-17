@@ -277,15 +277,15 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 	// Pre-embed guard: route oversized chunks directly to sub-chunking
 	// instead of truncating them (which would lose data).
 	result := make(map[string][]float32)
-	var failedHashes []string     // failed during batch embed — will retry via sub-chunking
-	var trulyFailedHashes []string // already tried sub-chunking and failed
+	var failedHashes []string     // failed during batch embed — will retry via splitting
+	var trulyFailedHashes []string // already tried splitting and failed
 	maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
 
 	var normalHashes []string
 	var normalContents []string
 	for idx, content := range contents {
 		if p.exceedsTokenLimit(content, maxChars) {
-			slog.Info("sub-chunking oversized chunk before embedding",
+			slog.Info("splitting oversized chunk before embedding",
 				"hash", hashes[idx][:12], "content_len", len(content), "max_chars", maxChars)
 			subEmbeddings := p.splitAndEmbed(ctx, content)
 			if len(subEmbeddings) > 0 {
@@ -330,7 +330,7 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 		}
 	}
 
-	// Try iterative splitting for chunks that failed during batch embedding
+	// Retry failed chunks via iterative splitting
 	for _, hash := range failedHashes {
 		content := hashToContent[hash]
 		subEmbeddings := p.splitAndEmbed(ctx, content)
@@ -338,21 +338,21 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 			// Use first sub-chunk's embedding as representative
 			result[hash] = subEmbeddings[0]
 			stats.Recovered++
-			slog.Info("recovered chunk via sub-chunking",
+			slog.Info("recovered chunk via splitting",
 				"hash", hash[:12],
-				"sub_chunks", len(subEmbeddings),
+				"pieces", len(subEmbeddings),
 				"content_len", len(content))
 		} else {
 			trulyFailedHashes = append(trulyFailedHashes, hash)
 		}
 	}
 
-	// Record true failures (failed even after sub-chunking)
+	// Record true failures (failed even after splitting)
 	for _, hash := range trulyFailedHashes {
 		stats.Failed++
 		content := hashToContent[hash]
 		pc := hashToChunk[hash]
-		slog.Warn("chunk failed even after sub-chunking",
+		slog.Warn("chunk failed even after splitting",
 			"path", pc.Path,
 			"lines", fmt.Sprintf("%d-%d", pc.StartLine, pc.EndLine),
 			"content_len", len(content),
@@ -363,7 +363,7 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 			numPieces := int(math.Ceil(float64(len(content)) / float64(maxChars)))
 			_ = p.failureStore.RecordFailure(
 				repoRoot, pc.Path, pc.StartLine, pc.EndLine,
-				content, "embedding failed after sub-chunking",
+				content, "embedding failed after splitting",
 				model, numPieces, // TODO: rename column max_depth_reached to num_pieces_attempted
 			)
 		}
@@ -407,10 +407,14 @@ func (p *Pipeline) splitAndEmbed(ctx context.Context, text string) [][]float32 {
 			break
 		}
 
-		// Find nearest newline to target position
+		// Find nearest newline to target position (bounded to avoid oversized pieces)
 		splitIdx := target
 		leftNL := strings.LastIndex(text[start:target], "\n")
-		rightNL := strings.Index(text[target:], "\n")
+		rightBound := target + targetSize
+		if rightBound > len(text) {
+			rightBound = len(text)
+		}
+		rightNL := strings.Index(text[target:rightBound], "\n")
 
 		if leftNL >= 0 && rightNL >= 0 {
 			leftAbs := start + leftNL + 1

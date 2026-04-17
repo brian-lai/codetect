@@ -584,48 +584,17 @@ func TestEmbedChunksTiming(t *testing.T) {
 		result.Duration, result.EmbedTime, result.CacheTime)
 }
 
-// failingMockEmbedder returns nil for texts exceeding a configurable character length,
-// simulating what happens when Ollama rejects oversized chunks.
-type failingMockEmbedder struct {
-	maxLen     int // texts longer than this will "fail"
-	dimensions int
-	embedCount int // successfully embedded
-	failCount  int // failed to embed
-}
-
-func newFailingMockEmbedder(dims, maxLen int) *failingMockEmbedder {
-	return &failingMockEmbedder{
-		maxLen:     maxLen,
-		dimensions: dims,
+// buildLargeText creates a string of approximately lines*100 chars with newlines every 100 chars.
+// The fill character varies by line to produce unique content.
+func buildLargeText(lines int, fill byte) string {
+	var sb strings.Builder
+	sb.Grow(lines * 100)
+	for i := 0; i < lines; i++ {
+		sb.WriteString(strings.Repeat(string(fill), 99))
+		sb.WriteByte('\n')
 	}
+	return sb.String()
 }
-
-func (m *failingMockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	result := make([][]float32, len(texts))
-	var failures int
-	for i, text := range texts {
-		if len(text) > m.maxLen {
-			// Simulate failure for oversized text — return nil slot
-			failures++
-			m.failCount++
-			continue
-		}
-		emb := make([]float32, m.dimensions)
-		for j := 0; j < m.dimensions; j++ {
-			emb[j] = float32(len(text)+j) / float32(m.dimensions)
-		}
-		result[i] = emb
-		m.embedCount++
-	}
-	if failures == len(texts) {
-		return nil, fmt.Errorf("all %d texts failed to embed", len(texts))
-	}
-	return result, nil
-}
-
-func (m *failingMockEmbedder) Available() bool     { return true }
-func (m *failingMockEmbedder) ProviderID() string   { return "mock-failing:test" }
-func (m *failingMockEmbedder) Dimensions() int      { return m.dimensions }
 
 // setupTestPipelineWithEmbedder creates a pipeline with a custom embedder for testing.
 func setupTestPipelineWithEmbedder(t *testing.T, embedder Embedder) *Pipeline {
@@ -663,20 +632,12 @@ func TestEmbedChunksPartialFailure(t *testing.T) {
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
-	// Build an oversized chunk (~20K chars with newlines every 100 chars)
-	var sb strings.Builder
-	for i := 0; i < 200; i++ {
-		sb.WriteString(strings.Repeat("x", 99))
-		sb.WriteByte('\n')
-	}
-	bigContent := sb.String() // 20,000 chars
-
 	chunks := []Chunk{
 		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},
 		{Path: "b.go", StartLine: 1, EndLine: 10, Content: "func b() {}"},
 		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},
 		{Path: "d.go", StartLine: 1, EndLine: 10, Content: "func d() {}"},
-		{Path: "e.go", StartLine: 1, EndLine: 100, Content: bigContent}, // >9375 chars - split and embedded
+		{Path: "e.go", StartLine: 1, EndLine: 100, Content: buildLargeText(200, 'x')}, // 20K chars - split and embedded
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -719,23 +680,9 @@ func TestEmbedChunksAllFail(t *testing.T) {
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
-	// Build two oversized chunks (~15K chars each)
-	var sb strings.Builder
-	for i := 0; i < 150; i++ {
-		sb.WriteString(strings.Repeat("a", 99))
-		sb.WriteByte('\n')
-	}
-	bigA := sb.String()
-	sb.Reset()
-	for i := 0; i < 150; i++ {
-		sb.WriteString(strings.Repeat("b", 99))
-		sb.WriteByte('\n')
-	}
-	bigB := sb.String()
-
 	chunks := []Chunk{
-		{Path: "a.go", StartLine: 1, EndLine: 10, Content: bigA}, // >9375 chars
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: bigB}, // >9375 chars
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: buildLargeText(150, 'a')}, // ~15K chars
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: buildLargeText(150, 'b')}, // ~15K chars
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -762,26 +709,12 @@ func TestEmbedChunksMixedBatches(t *testing.T) {
 	pipeline.batchSize = 2                                // Force small batches
 	ctx := context.Background()
 
-	// Build two oversized chunks (~12K chars each)
-	var sb strings.Builder
-	for i := 0; i < 120; i++ {
-		sb.WriteString(strings.Repeat("x", 99))
-		sb.WriteByte('\n')
-	}
-	bigB := sb.String()
-	sb.Reset()
-	for i := 0; i < 120; i++ {
-		sb.WriteString(strings.Repeat("y", 99))
-		sb.WriteByte('\n')
-	}
-	bigD := sb.String()
-
 	chunks := []Chunk{
-		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},  // OK (batch 1)
-		{Path: "b.go", StartLine: 1, EndLine: 10, Content: bigB},           // >9375 - split
-		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},  // OK (batch 2)
-		{Path: "d.go", StartLine: 1, EndLine: 10, Content: bigD},           // >9375 - split
-		{Path: "e.go", StartLine: 1, EndLine: 10, Content: "func e() {}"},  // OK (batch 3)
+		{Path: "a.go", StartLine: 1, EndLine: 10, Content: "func a() {}"},              // OK (batch 1)
+		{Path: "b.go", StartLine: 1, EndLine: 10, Content: buildLargeText(120, 'x')},   // ~12K - split
+		{Path: "c.go", StartLine: 1, EndLine: 10, Content: "func c() {}"},              // OK (batch 2)
+		{Path: "d.go", StartLine: 1, EndLine: 10, Content: buildLargeText(120, 'y')},   // ~12K - split
+		{Path: "e.go", StartLine: 1, EndLine: 10, Content: "func e() {}"},              // OK (batch 3)
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -812,16 +745,8 @@ func TestSubChunkRecovery(t *testing.T) {
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
-	// ~15K chars with newlines
-	var sb strings.Builder
-	for i := 0; i < 150; i++ {
-		sb.WriteString(strings.Repeat("z", 99))
-		sb.WriteByte('\n')
-	}
-	bigContent := sb.String()
-
 	chunks := []Chunk{
-		{Path: "big.go", StartLine: 1, EndLine: 10, Content: bigContent},
+		{Path: "big.go", StartLine: 1, EndLine: 10, Content: buildLargeText(150, 'z')}, // ~15K chars
 	}
 
 	result, err := pipeline.EmbedChunks(ctx, "/project", chunks)
@@ -971,7 +896,7 @@ func TestPipelineWithFailureStore(t *testing.T) {
 	failStore, _ := NewFailureStore(database, cfg.Dialect())
 
 	// Embedder that only accepts texts <= 5 chars
-	embedder := newFailingMockEmbedder(768, 5)
+	embedder := newSizeLimitMockEmbedder(768, 5)
 
 	pipeline := NewPipeline(cache, locations, embedder,
 		WithFailureStore(failStore))
@@ -1125,13 +1050,7 @@ func TestEmbedNewChunks_OversizedContent(t *testing.T) {
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM // maxChars = 9375
 	ctx := context.Background()
 
-	// Build a 100K string with newlines every 100 chars
-	var sb strings.Builder
-	for i := 0; i < 1000; i++ {
-		sb.WriteString(strings.Repeat("x", 99))
-		sb.WriteByte('\n')
-	}
-	bigContent := sb.String() // 100,000 chars
+	bigContent := buildLargeText(1000, 'x') // 100,000 chars
 	hash := HashContent(bigContent)
 
 	chunks := []PipelineChunk{
@@ -1185,13 +1104,7 @@ func TestSplitAndEmbed_LargeText(t *testing.T) {
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
 	ctx := context.Background()
 
-	// 50,000 chars with newlines every 100 chars
-	var sb strings.Builder
-	for i := 0; i < 500; i++ {
-		sb.WriteString(strings.Repeat("x", 99))
-		sb.WriteByte('\n')
-	}
-	text := sb.String() // 50,000 chars
+	text := buildLargeText(500, 'x') // 50,000 chars
 
 	result := pipeline.splitAndEmbed(ctx, text)
 	if len(result) == 0 {
@@ -1270,13 +1183,7 @@ func TestSplitAndEmbed_EmbedderRejectsOversized(t *testing.T) {
 	pipeline.charsPerToken = DefaultCharsPerTokenLiteLLM
 	ctx := context.Background()
 
-	// 50,000 chars
-	var sb strings.Builder
-	for i := 0; i < 500; i++ {
-		sb.WriteString(strings.Repeat("x", 99))
-		sb.WriteByte('\n')
-	}
-	text := sb.String()
+	text := buildLargeText(500, 'x') // 50,000 chars
 
 	pipeline.splitAndEmbed(ctx, text)
 

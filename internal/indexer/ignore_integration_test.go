@@ -154,10 +154,11 @@ func TestCodetectIgnoreEmpty(t *testing.T) {
 		t.Fatalf("indexing: %v", err)
 	}
 
-	// Without .codetectignore, only default patterns apply
-	// main.go and app.min.js should be indexed (vendor/ is in default ignore patterns)
-	// So we expect 2 files
-	expectedFiles := 2
+	// Without .codetectignore, default extension patterns still apply.
+	// vendor/ is excluded by DefaultIgnorePatterns in builder.
+	// app.min.js is excluded by defaultIgnoreExtensionPatterns (*.min.js).
+	// Only main.go should be indexed.
+	expectedFiles := 1
 
 	if result.FilesProcessed != expectedFiles {
 		t.Errorf("Expected %d files indexed without .codetectignore, got %d", expectedFiles, result.FilesProcessed)

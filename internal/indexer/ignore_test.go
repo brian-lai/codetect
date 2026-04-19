@@ -206,13 +206,13 @@ func TestLoadCodetectIgnoreHierarchy(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg-config"))
 
-	t.Run("no ignore files", func(t *testing.T) {
+	t.Run("no ignore files returns non-nil with defaults", func(t *testing.T) {
 		ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
 		if err != nil {
 			t.Errorf("LoadCodetectIgnoreHierarchy() error = %v", err)
 		}
-		if ig != nil {
-			t.Errorf("LoadCodetectIgnoreHierarchy() should return nil when no files exist")
+		if ig == nil {
+			t.Errorf("LoadCodetectIgnoreHierarchy() should return non-nil (default extension patterns)")
 		}
 	})
 
@@ -350,6 +350,117 @@ func TestLoadCodetectIgnoreHierarchy(t *testing.T) {
 			t.Errorf("Expected deprecation warning in log output, got: %q", buf.String())
 		}
 	})
+}
+
+func TestDefaultExtensionPatternsApplied(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpHome := t.TempDir()
+
+	// Isolate from real home dir and XDG config — no .codetectignore files exist
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg-config"))
+
+	ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadCodetectIgnoreHierarchy() error = %v", err)
+	}
+	if ig == nil {
+		t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil even with no .codetectignore files (default extension patterns)")
+	}
+
+	tests := []struct {
+		path     string
+		excluded bool
+	}{
+		{"icon.svg", true},
+		{"main.go", false},
+		{"photo.png", true},
+		{"bundle.min.js", true},
+		{"app.js", false},
+		{"Makefile", false},
+		{"LICENSE", false},
+		{"font.woff2", true},
+		{"archive.tar.gz", true},
+		{"style.min.css", true},
+		{"data.map", true},
+		{"report.pdf", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := ig.MatchesPath(tt.path); got != tt.excluded {
+				t.Errorf("MatchesPath(%q) = %v, want %v", tt.path, got, tt.excluded)
+			}
+		})
+	}
+}
+
+func TestDefaultExtensionPatternsOverriddenByNegation(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpHome := t.TempDir()
+
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg-config"))
+
+	// Create project .codetectignore with negation to re-include SVGs
+	projectIgnore := filepath.Join(tmpDir, ".codetectignore")
+	if err := os.WriteFile(projectIgnore, []byte("!*.svg\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadCodetectIgnoreHierarchy() error = %v", err)
+	}
+	if ig == nil {
+		t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil")
+	}
+
+	// SVGs should NOT be excluded — user negation wins
+	if ig.MatchesPath("icon.svg") {
+		t.Error("MatchesPath(\"icon.svg\") = true, want false (user negation !*.svg should override default)")
+	}
+
+	// Other default patterns should still be active
+	if !ig.MatchesPath("photo.png") {
+		t.Error("MatchesPath(\"photo.png\") = false, want true (PNG still excluded by default)")
+	}
+}
+
+func TestDefaultExtensionPatternsOverriddenByGlobalNegation(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpHome := t.TempDir()
+
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg-config"))
+
+	// Create XDG global ignore with negation to re-include .map files
+	xdgDir := filepath.Join(tmpHome, "xdg-config", "codetect")
+	if err := os.MkdirAll(xdgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	xdgIgnoreFile := filepath.Join(xdgDir, "ignore")
+	if err := os.WriteFile(xdgIgnoreFile, []byte("!*.map\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ig, err := LoadCodetectIgnoreHierarchy(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadCodetectIgnoreHierarchy() error = %v", err)
+	}
+	if ig == nil {
+		t.Fatal("LoadCodetectIgnoreHierarchy() should return non-nil")
+	}
+
+	// .map files should NOT be excluded — XDG global negation wins
+	if ig.MatchesPath("data.map") {
+		t.Error("MatchesPath(\"data.map\") = true, want false (global negation !*.map should override default)")
+	}
+
+	// Other default patterns should still be active
+	if !ig.MatchesPath("photo.png") {
+		t.Error("MatchesPath(\"photo.png\") = false, want true (PNG still excluded by default)")
+	}
 }
 
 func TestPatternMatching(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -27,11 +28,6 @@ type EmbedResult struct {
 	ChunksPerSec float64       `json:"chunks_per_sec"` // Throughput
 }
 
-const (
-	// maxSubChunkDepth is the maximum recursion depth for sub-chunking.
-	// Depth 3 → up to 2^3 = 8 sub-chunks per original chunk.
-	maxSubChunkDepth = 3
-)
 
 // Pipeline provides a cache-aware embedding pipeline.
 // It coordinates between the embedding cache, location store, and embedding provider.
@@ -77,7 +73,7 @@ func WithTokenCounter(tc *TokenCounter) PipelineOption {
 }
 
 // WithCharsPerToken sets the chars/token ratio for token estimation.
-// Use DefaultCharsPerTokenLiteLLM (1.0) for OpenAI/LiteLLM providers.
+// Use DefaultCharsPerTokenLiteLLM (1.25) for OpenAI/LiteLLM providers.
 func WithCharsPerToken(ratio float64) PipelineOption {
 	return func(p *Pipeline) {
 		if ratio > 0 {
@@ -281,17 +277,17 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 	// Pre-embed guard: route oversized chunks directly to sub-chunking
 	// instead of truncating them (which would lose data).
 	result := make(map[string][]float32)
-	var failedHashes []string     // failed during batch embed — will retry via sub-chunking
-	var trulyFailedHashes []string // already tried sub-chunking and failed
+	var failedHashes []string     // failed during batch embed — will retry via splitting
+	var trulyFailedHashes []string // already tried splitting and failed
 	maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
 
 	var normalHashes []string
 	var normalContents []string
 	for idx, content := range contents {
 		if p.exceedsTokenLimit(content, maxChars) {
-			slog.Info("sub-chunking oversized chunk before embedding",
+			slog.Info("splitting oversized chunk before embedding",
 				"hash", hashes[idx][:12], "content_len", len(content), "max_chars", maxChars)
-			subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
+			subEmbeddings := p.splitAndEmbed(ctx, content)
 			if len(subEmbeddings) > 0 {
 				result[hashes[idx]] = subEmbeddings[0]
 				stats.Recovered++
@@ -334,29 +330,29 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 		}
 	}
 
-	// Try recursive sub-chunking for chunks that failed during batch embedding
+	// Retry failed chunks via iterative splitting
 	for _, hash := range failedHashes {
 		content := hashToContent[hash]
-		subEmbeddings := p.subChunkAndEmbed(ctx, content, 0)
+		subEmbeddings := p.splitAndEmbed(ctx, content)
 		if len(subEmbeddings) > 0 {
 			// Use first sub-chunk's embedding as representative
 			result[hash] = subEmbeddings[0]
 			stats.Recovered++
-			slog.Info("recovered chunk via sub-chunking",
+			slog.Info("recovered chunk via splitting",
 				"hash", hash[:12],
-				"sub_chunks", len(subEmbeddings),
+				"pieces", len(subEmbeddings),
 				"content_len", len(content))
 		} else {
 			trulyFailedHashes = append(trulyFailedHashes, hash)
 		}
 	}
 
-	// Record true failures (failed even after sub-chunking)
+	// Record true failures (failed even after splitting)
 	for _, hash := range trulyFailedHashes {
 		stats.Failed++
 		content := hashToContent[hash]
 		pc := hashToChunk[hash]
-		slog.Warn("chunk failed even after sub-chunking",
+		slog.Warn("chunk failed even after splitting",
 			"path", pc.Path,
 			"lines", fmt.Sprintf("%d-%d", pc.StartLine, pc.EndLine),
 			"content_len", len(content),
@@ -364,10 +360,11 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 
 		if p.failureStore != nil {
 			model := p.embedder.ProviderID()
+			numPieces := int(math.Ceil(float64(len(content)) / float64(maxChars)))
 			_ = p.failureStore.RecordFailure(
 				repoRoot, pc.Path, pc.StartLine, pc.EndLine,
-				content, "embedding failed after sub-chunking",
-				model, maxSubChunkDepth,
+				content, "embedding failed after splitting",
+				model, numPieces, // TODO: rename column max_depth_reached to num_pieces_attempted
 			)
 		}
 	}
@@ -375,71 +372,119 @@ func (p *Pipeline) embedNewChunks(ctx context.Context, chunks []PipelineChunk, r
 	return result, stats, nil
 }
 
-// subChunkAndEmbed recursively splits text in half and tries to embed each half.
+// splitAndEmbed splits text into correctly-sized pieces and embeds them.
+// Uses iterative equal splitting (no recursion or depth limits).
 // Returns all successful embeddings. Returns nil if nothing can be embedded.
-func (p *Pipeline) subChunkAndEmbed(ctx context.Context, text string, depth int) [][]float32 {
-	if depth >= maxSubChunkDepth || len(text) == 0 {
+func (p *Pipeline) splitAndEmbed(ctx context.Context, text string) [][]float32 {
+	if len(text) == 0 {
 		return nil
 	}
 
-	// Split at nearest newline to the midpoint
-	mid := len(text) / 2
-	splitIdx := mid
+	maxChars := MaxCharsForTokensWithRatio(DefaultMaxTokens, p.charsPerToken)
 
-	// Search for nearest newline around midpoint
-	leftNL := strings.LastIndex(text[:mid], "\n")
-	rightNL := strings.Index(text[mid:], "\n")
-	if rightNL >= 0 {
-		rightNL += mid
-	}
-
-	if leftNL >= 0 && rightNL >= 0 {
-		// Pick the one closer to midpoint
-		if mid-leftNL <= rightNL-mid {
-			splitIdx = leftNL + 1
-		} else {
-			splitIdx = rightNL + 1
+	// Small text: embed directly
+	if len(text) <= maxChars {
+		embs, err := p.embedder.Embed(ctx, []string{text})
+		if err != nil {
+			return nil
 		}
-	} else if leftNL >= 0 {
-		splitIdx = leftNL + 1
-	} else if rightNL >= 0 {
-		splitIdx = rightNL + 1
+		if len(embs) > 0 && embs[0] != nil {
+			return embs
+		}
+		return nil
 	}
 
-	// Ensure we don't create empty halves
-	if splitIdx <= 0 || splitIdx >= len(text) {
-		splitIdx = mid
+	// Calculate number of pieces needed
+	numPieces := int(math.Ceil(float64(len(text)) / float64(maxChars)))
+	targetSize := len(text) / numPieces
+
+	// Split at nearest newline boundaries
+	var pieces []string
+	start := 0
+	for i := 0; i < numPieces-1; i++ {
+		target := start + targetSize
+		if target >= len(text) {
+			break
+		}
+
+		// Find nearest newline to target position (bounded to avoid oversized pieces)
+		splitIdx := target
+		leftNL := strings.LastIndex(text[start:target], "\n")
+		rightBound := target + targetSize
+		if rightBound > len(text) {
+			rightBound = len(text)
+		}
+		rightNL := strings.Index(text[target:rightBound], "\n")
+
+		if leftNL >= 0 && rightNL >= 0 {
+			leftAbs := start + leftNL + 1
+			rightAbs := target + rightNL + 1
+			if target-leftAbs <= rightAbs-target {
+				splitIdx = leftAbs
+			} else {
+				splitIdx = rightAbs
+			}
+		} else if leftNL >= 0 {
+			splitIdx = start + leftNL + 1
+		} else if rightNL >= 0 {
+			splitIdx = target + rightNL + 1
+		}
+
+		// Don't create empty pieces
+		if splitIdx <= start {
+			splitIdx = target
+		}
+		if splitIdx >= len(text) {
+			break
+		}
+
+		pieces = append(pieces, text[start:splitIdx])
+		start = splitIdx
+	}
+	// Last piece
+	if start < len(text) {
+		pieces = append(pieces, text[start:])
 	}
 
-	firstHalf := text[:splitIdx]
-	secondHalf := text[splitIdx:]
+	// Defensive post-split check: if any piece exceeds maxChars,
+	// re-split it at raw char-boundary intervals
+	var finalPieces []string
+	for _, piece := range pieces {
+		if len(piece) <= maxChars {
+			finalPieces = append(finalPieces, piece)
+		} else {
+			// Re-split oversized piece at char boundaries
+			for j := 0; j < len(piece); j += maxChars {
+				end := j + maxChars
+				if end > len(piece) {
+					end = len(piece)
+				}
+				finalPieces = append(finalPieces, piece[j:end])
+			}
+		}
+	}
+
+	// Batch embed all pieces
+	embs, err := p.embedder.Embed(ctx, finalPieces)
+	if err != nil {
+		slog.Warn("splitAndEmbed: batch embed failed",
+			"pieces", len(finalPieces), "error", err)
+		return nil
+	}
 
 	var result [][]float32
-
-	// Try embedding first half
-	if len(firstHalf) > 0 {
-		embs, err := p.embedder.Embed(ctx, []string{firstHalf})
-		if err == nil && len(embs) > 0 && embs[0] != nil {
-			result = append(result, embs[0])
+	for i, emb := range embs {
+		if emb != nil {
+			result = append(result, emb)
 		} else {
-			// Recurse on first half
-			subResult := p.subChunkAndEmbed(ctx, firstHalf, depth+1)
-			result = append(result, subResult...)
+			slog.Warn("splitAndEmbed: nil embedding for piece",
+				"piece_index", i, "piece_len", len(finalPieces[i]))
 		}
 	}
 
-	// Try embedding second half
-	if len(secondHalf) > 0 {
-		embs, err := p.embedder.Embed(ctx, []string{secondHalf})
-		if err == nil && len(embs) > 0 && embs[0] != nil {
-			result = append(result, embs[0])
-		} else {
-			// Recurse on second half
-			subResult := p.subChunkAndEmbed(ctx, secondHalf, depth+1)
-			result = append(result, subResult...)
-		}
+	if len(result) == 0 {
+		return nil
 	}
-
 	return result
 }
 

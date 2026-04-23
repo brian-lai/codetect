@@ -29,18 +29,27 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and [Migration Guide](docs/
 
 ## Quick Start
 
+**macOS (Homebrew):**
 ```bash
-# Clone and run interactive installer
-git clone https://github.com/brian-lai/codetect.git
-cd codetect
-./install.sh
+brew tap brian-lai/tap
+brew install codetect
 ```
 
-The installer will:
-- ✓ Check for required dependencies (Go, ripgrep)
-- ✓ Guide you through Ollama setup for semantic search (with prominent warnings if missing)
-- ✓ Build and install globally to `~/.local/bin`
-- ✓ Configure your shell PATH automatically
+**Linux / macOS (curl):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/brian-lai/codetect/main/scripts/install-binary.sh | bash
+```
+
+**Debian / Ubuntu (.deb):**
+```bash
+curl -LO https://github.com/brian-lai/codetect/releases/latest/download/codetect_amd64.deb
+sudo dpkg -i codetect_amd64.deb
+```
+
+**From source:**
+```bash
+git clone https://github.com/brian-lai/codetect.git && cd codetect && ./install.sh
+```
 
 Then in any project:
 
@@ -59,9 +68,9 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 
 | Dependency | Required | Purpose |
 |------------|----------|---------|
-| Go 1.21+ | Yes | Building from source |
-| [ripgrep](https://github.com/BurntSushi/ripgrep) | Yes | Keyword search |
+| [ripgrep](https://github.com/BurntSushi/ripgrep) | Yes | Keyword search (auto-installed by Homebrew) |
 | [Ollama](https://ollama.ai) | No | Semantic search (local embeddings) |
+| Go 1.21+ | Build from source only | Compiling binaries |
 
 **Note:** v3 uses ast-grep for symbol extraction. No external ctags dependency required.
 

@@ -164,6 +164,11 @@ install: build
 	@chmod +x $(BIN_DIR)/codetect $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres
 	@codesign --sign - --force $(BIN_DIR)/codetect-mcp $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/codetect-eval $(BIN_DIR)/migrate-to-postgres 2>/dev/null || true
 	@cp templates/mcp.json $(SHARE_DIR)/templates/
+	@# Write VERSION file so non-git installs can report their version.
+	@# Use --abbrev=0 to get the nearest tag without the dirty commit suffix.
+	@git describe --tags --exact-match 2>/dev/null > $(SHARE_DIR)/VERSION || \
+		git describe --tags --abbrev=0 2>/dev/null > $(SHARE_DIR)/VERSION || \
+		echo "dev" > $(SHARE_DIR)/VERSION
 	@echo ""
 	@echo "✓ Installed to $(PREFIX)"
 	@echo ""

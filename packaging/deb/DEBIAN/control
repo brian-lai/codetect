@@ -1,0 +1,14 @@
+Package: codetect
+Version: VERSION_PLACEHOLDER
+Architecture: ARCH_PLACEHOLDER
+Maintainer: Brian Lai <brian@example.com>
+Depends: ripgrep
+Recommends: ollama
+Section: devel
+Priority: optional
+Homepage: https://github.com/brian-lai/codetect
+Description: Fast, token-efficient codebase search MCP server
+ codetect is a local MCP server that brings Cursor-like codebase intelligence
+ to Claude Code and any LLM tool. It provides fast keyword search (ripgrep),
+ symbol indexing (AST-based), and semantic search (Ollama embeddings) through
+ four focused MCP tools.

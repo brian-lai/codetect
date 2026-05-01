@@ -89,10 +89,10 @@ func TestE2E_FreshInstallGoldenPath(t *testing.T) {
 	// Step 2: codetect index → exits 0 (symbols not yet in phase 1; ok)
 	runCmd(t, bin, repoDir, append(env, "CODETECT_EMBEDDING_PROVIDER=off"), 0, "index")
 
-	// Step 3: codetect stats --json → parses, has chunks_created > 0
+	// Step 3: codetect stats --json → parses, has total_chunks > 0 (v2 indexer field)
 	out := runCmdOutput(t, bin, repoDir, append(env, "CODETECT_EMBEDDING_PROVIDER=off"), 0, "stats", "--json")
-	if !strings.Contains(out, "chunks_created") {
-		t.Errorf("codetect stats --json: expected 'chunks_created' in output, got:\n%s", out)
+	if !strings.Contains(out, "total_chunks") {
+		t.Errorf("codetect stats --json: expected 'total_chunks' in output, got:\n%s", out)
 	}
 
 	// Step 4: codetect version → prints version and exits 0

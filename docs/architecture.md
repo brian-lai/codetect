@@ -510,9 +510,9 @@ Features:
 - PID file and Unix socket for process management
 
 Commands:
-- `codetect-daemon start` - Start the daemon
-- `codetect-daemon stop` - Stop the daemon
-- `codetect-daemon status` - Show daemon status
+- `codetect daemon start` - Start the daemon
+- `codetect daemon stop` - Stop the daemon
+- `codetect daemon status` - Show daemon status
 
 ## Project Registry (`internal/registry/`)
 

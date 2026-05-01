@@ -67,17 +67,18 @@ See [Installation Guide](docs/installation.md) for detailed setup instructions.
 
 ## CLI Commands
 
+All commands are subcommands of the single `codetect` binary:
+
 ### Main Commands
 
 ```bash
-codetect init        # Initialize in current directory (.mcp.json)
+codetect init        # Create .mcp.json in current directory
 codetect index       # Index symbols + generate embeddings (if Ollama available)
 codetect embed       # Re-embed with different provider/model settings
 codetect doctor      # Check dependencies and configuration
 codetect stats       # Show index statistics
-codetect migrate     # Discover existing indexes and register them
-codetect update      # Update to latest version
 codetect help        # Show all commands
+codetect version     # Print version
 ```
 
 **Index flags:**
@@ -97,7 +98,6 @@ codetect help        # Show all commands
 codetect daemon start    # Start background indexing daemon
 codetect daemon stop     # Stop daemon
 codetect daemon status   # Show daemon status
-codetect daemon logs     # View daemon logs
 ```
 
 ### Registry Commands
@@ -108,6 +108,25 @@ codetect registry add      # Add current project to registry
 codetect registry remove   # Remove a project from registry
 codetect registry stats    # Show aggregate statistics
 ```
+
+### Migration (SQLite → PostgreSQL)
+
+```bash
+codetect migrate-to-postgres   # Migrate embeddings to PostgreSQL
+```
+
+### Deprecation Notice (v3.8.0)
+
+The following standalone binaries are deprecated in v3.8.0 and will be removed in v4.0.0.
+Shim scripts are installed alongside `codetect` to preserve backward compatibility:
+
+| Old binary | Replacement |
+|---|---|
+| `codetect-index <cmd>` | `codetect <cmd>` |
+| `codetect-daemon <cmd>` | `codetect daemon <cmd>` |
+| `migrate-to-postgres` | `codetect migrate-to-postgres` |
+
+See [MIGRATION.md](docs/MIGRATION.md) for upgrade instructions.
 
 ### Evaluation Commands
 

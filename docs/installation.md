@@ -111,7 +111,7 @@ The installer runs in 6 steps:
   - Falls back to SQLite if PostgreSQL setup fails
 
 **Step 4: Build and Install**
-- Builds all binaries (codetect-mcp, codetect-index, codetect-daemon)
+- Builds the `codetect` binary (unified CLI + MCP server) and `codetect-eval`
 - Asks if you want to install globally
 - If yes:
   - Installs to `~/.local/bin`
@@ -467,10 +467,11 @@ After `make install`, files are placed at:
 ```
 ~/.local/
 ├── bin/
-│   ├── codetect          # Main CLI (wrapper script)
-│   ├── codetect-mcp      # MCP server binary
-│   ├── codetect-index    # Indexer binary
-│   └── codetect-daemon   # Background daemon binary
+│   ├── codetect           # Unified CLI + MCP server
+│   ├── codetect-eval      # Developer evaluation tool
+│   ├── codetect-index     # Deprecated shim → codetect index (removed v4.0)
+│   ├── codetect-daemon    # Deprecated shim → codetect daemon (removed v4.0)
+│   └── migrate-to-postgres  # Deprecated shim → codetect migrate-to-postgres (removed v4.0)
 └── share/
     └── codetect/
         └── templates/

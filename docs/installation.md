@@ -478,6 +478,17 @@ After `make install`, files are placed at:
             └── mcp.json     # Template for new projects
 ```
 
+## Upgrading from v3.7.x
+
+Run `make install` again from a fresh clone. The new install:
+1. Replaces the old `codetect` wrapper script with the real unified binary.
+2. Installs deprecation shims for `codetect-index`, `codetect-daemon`, and `migrate-to-postgres` — these now print a warning on stderr and delegate to `codetect <subcmd>`.
+3. Removes the separate `codetect-mcp` binary (its functionality is now `codetect mcp`).
+
+Any existing shell aliases or editor configs that call `codetect-index` will continue to work via the shim until v4.0.0.
+
+> **If you see the red embedding-health banner:** run `codetect doctor` for diagnosis. See the [FAQ](https://github.com/brian-lai/codetect/issues) for common causes.
+
 Configuration and registry are stored at:
 
 ```

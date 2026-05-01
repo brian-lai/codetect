@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"codetect/internal/logging"
@@ -37,7 +38,7 @@ func RunRegistry(args []string) ExitCode {
 	}
 }
 
-func printRegistryUsage(w interface{ Write(p []byte) (int, error) }) {
+func printRegistryUsage(w io.Writer) {
 	fmt.Fprintf(w, "Usage: codetect registry <command>\n\n")
 	fmt.Fprintf(w, "Commands:\n")
 	fmt.Fprintf(w, "  list      List registered projects\n")
@@ -129,6 +130,3 @@ func registryStats(logger interface{ Error(msg string, args ...any) }) ExitCode 
 	return ExitOK
 }
 
-// daemonUsageWriter is a minimal writer interface needed by printDaemonUsage and printRegistryUsage.
-// Using os.Stderr directly avoids needing an io.Writer dependency.
-var _ = os.Stdout

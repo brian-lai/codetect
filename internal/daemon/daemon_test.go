@@ -3,7 +3,6 @@ package daemon
 import (
 	"context"
 	"log/slog"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -32,15 +31,18 @@ func TestDaemon_InvokesCodetectIndex_WithCorrectArgv(t *testing.T) {
 		return exec.CommandContext(ctx, "true")
 	}
 
-	// Set up a minimal registry in a temp dir so SetLastIndexed doesn't panic
+	// Set up a minimal registry in a temp dir so SetLastIndexed doesn't panic.
+	// Use t.TempDir() for both the registry and the fake project path so parallel
+	// test runs don't race on shared filesystem state.
 	tmpDir := t.TempDir()
 	reg, err := registry.NewRegistryAt(filepath.Join(tmpDir, "registry.json"))
 	if err != nil {
 		t.Fatalf("creating test registry: %v", err)
 	}
-	// Register the fake project so SetLastIndexed can find it
-	_ = os.MkdirAll("/tmp/fake-project", 0755)
-	_ = reg.Add("/tmp/fake-project")
+	projectPath := filepath.Join(tmpDir, "fake-project")
+	if err := reg.Add(projectPath); err != nil {
+		t.Fatalf("registering fake project: %v", err)
+	}
 
 	d := &Daemon{
 		registry:    reg,
@@ -49,12 +51,10 @@ func TestDaemon_InvokesCodetectIndex_WithCorrectArgv(t *testing.T) {
 		logger:      slog.Default(),
 		execFn:      fakeExec,
 	}
-	_ = time.Timer{} // ensure time import is used
 	ctx, cancel := context.WithCancel(context.Background())
 	d.ctx = ctx
 	d.cancel = cancel
 
-	projectPath := "/tmp/fake-project"
 	d.runIndex(projectPath)
 
 	if capturedName != "codetect" {

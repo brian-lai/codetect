@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -41,7 +42,7 @@ func RunDaemon(args []string) ExitCode {
 	}
 }
 
-func printDaemonUsage(w interface{ Write(p []byte) (int, error) }) {
+func printDaemonUsage(w io.Writer) {
 	fmt.Fprintf(w, "Usage: codetect daemon <command>\n\n")
 	fmt.Fprintf(w, "Commands:\n")
 	fmt.Fprintf(w, "  start     Start the daemon\n")

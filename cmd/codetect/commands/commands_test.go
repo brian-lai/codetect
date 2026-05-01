@@ -90,12 +90,9 @@ func TestDispatch_Routes(t *testing.T) {
 	}
 }
 
-// TestDispatch_Routes_MCP verifies that mcp/serve are routable (compile-time check).
-// RunMCP blocks on stdin, so we can't call it in a unit test without stdin manipulation.
-// TestE2E_FreshInstallGoldenPath exercises the MCP server indirectly.
-func TestDispatch_Routes_MCP(t *testing.T) {
-	_ = commands.Dispatch // compile-time: verifies dispatch symbol is exported
-}
+// NOTE: `mcp` and `serve` routes are not unit-tested here because RunMCP blocks
+// on stdin. TestE2E_FreshInstallGoldenPath exercises the full MCP flow by
+// running the built binary with a real temp repo.
 
 // TestDispatch_NoArgsRoutesToMCP verifies that invoking with no args routes to RunMCP
 // (not to an error). RunMCP is now implemented; we verify it doesn't panic.

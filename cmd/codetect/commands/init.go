@@ -1,23 +1,14 @@
 package commands
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 )
 
-// mcpJSONTemplate is the content written by `codetect init`.
-// Go's //go:embed does not support ../ paths, so the template is inlined here
-// rather than embedded from templates/mcp.json. The content must match that file.
-var mcpJSONTemplate = []byte(`{
-  "mcpServers": {
-    "codetect": {
-      "command": "codetect",
-      "args": ["mcp"]
-    }
-  }
-}
-`)
+//go:embed templates/mcp.json
+var mcpJSONTemplate []byte
 
 // RunInit writes .mcp.json in the current directory from templates/mcp.json.
 // Flags: --force (overwrite existing .mcp.json).

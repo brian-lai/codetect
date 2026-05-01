@@ -152,7 +152,7 @@ clean:
 # old binary names (codetect-index, codetect-daemon, migrate-to-postgres).
 install: build
 	@echo "Installing to $(PREFIX)..."
-	@mkdir -p $(BIN_DIR) $(SHARE_DIR)/templates
+	@mkdir -p $(BIN_DIR)
 	# Main binaries
 	@cp $(BINARY) $(BIN_DIR)/codetect
 	@cp $(EVAL) $(BIN_DIR)/codetect-eval
@@ -163,7 +163,8 @@ install: build
 	@cp scripts/shims/codetect-daemon.sh $(BIN_DIR)/codetect-daemon
 	@cp scripts/shims/migrate-to-postgres.sh $(BIN_DIR)/migrate-to-postgres
 	@chmod +x $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/migrate-to-postgres
-	@cp templates/mcp.json $(SHARE_DIR)/templates/
+	# Note: .mcp.json template is embedded in the codetect binary via //go:embed;
+	# no separate share/ install is needed (previously installed to $(SHARE_DIR)/templates/).
 	# Warn if old pre-3.8 binaries are still on PATH
 	@if command -v codetect-index >/dev/null 2>&1 && [ "$$(command -v codetect-index)" != "$(BIN_DIR)/codetect-index" ]; then \
 		echo "warning: found lingering codetect-index at $$(command -v codetect-index); consider deleting"; \
@@ -190,7 +191,7 @@ uninstall:
 	@echo "Uninstalling from $(PREFIX)..."
 	@rm -f $(BIN_DIR)/codetect $(BIN_DIR)/codetect-eval
 	@rm -f $(BIN_DIR)/codetect-index $(BIN_DIR)/codetect-daemon $(BIN_DIR)/migrate-to-postgres
-	@rm -rf $(SHARE_DIR)
+	@rm -rf $(SHARE_DIR)  # legacy share dir from pre-3.8 installs; ignored by new builds
 	@echo "✓ Uninstalled"
 
 # Run MCP evaluation tests

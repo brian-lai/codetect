@@ -33,6 +33,10 @@ type Daemon struct {
 	cancel      context.CancelFunc
 	logger      *slog.Logger
 	logFile     *os.File
+
+	// execFn is the function used to create exec.Cmd for re-indexing.
+	// Defaults to exec.CommandContext. Injectable for testing.
+	execFn func(ctx context.Context, name string, args ...string) *exec.Cmd
 }
 
 // DaemonStatus represents the current state of the daemon
@@ -98,6 +102,7 @@ func New(reg *registry.Registry, cfg Config) (*Daemon, error) {
 		debounceMap: make(map[string]*time.Timer),
 		ctx:         ctx,
 		cancel:      cancel,
+		execFn:      exec.CommandContext,
 		logger:      logger,
 		logFile:     logFile,
 	}, nil
@@ -336,12 +341,13 @@ func (d *Daemon) indexWorker() {
 	}
 }
 
-// runIndex executes the indexer for a project
+// runIndex executes the indexer for a project using the unified `codetect` binary.
+// Formerly called `codetect-index index`; now calls `codetect index` to reflect
+// the binary collapse in phase 1. Uses the injectable execFn for testability.
 func (d *Daemon) runIndex(projectPath string) {
 	d.logger.Info("indexing", "project", projectPath)
 
-	// Run codetect-index
-	cmd := exec.CommandContext(d.ctx, "codetect-index", "index", projectPath)
+	cmd := d.execFn(d.ctx, "codetect", "index", projectPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		d.logger.Error("index failed", "project", projectPath, "error", err, "output", string(output))

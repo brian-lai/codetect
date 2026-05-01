@@ -111,7 +111,7 @@ The installer runs in 6 steps:
   - Falls back to SQLite if PostgreSQL setup fails
 
 **Step 4: Build and Install**
-- Builds all binaries (codetect-mcp, codetect-index, codetect-daemon)
+- Builds the `codetect` binary (unified CLI + MCP server) and `codetect-eval`
 - Asks if you want to install globally
 - If yes:
   - Installs to `~/.local/bin`
@@ -467,15 +467,27 @@ After `make install`, files are placed at:
 ```
 ~/.local/
 ├── bin/
-│   ├── codetect          # Main CLI (wrapper script)
-│   ├── codetect-mcp      # MCP server binary
-│   ├── codetect-index    # Indexer binary
-│   └── codetect-daemon   # Background daemon binary
+│   ├── codetect           # Unified CLI + MCP server
+│   ├── codetect-eval      # Developer evaluation tool
+│   ├── codetect-index     # Deprecated shim → codetect index (removed v4.0)
+│   ├── codetect-daemon    # Deprecated shim → codetect daemon (removed v4.0)
+│   └── migrate-to-postgres  # Deprecated shim → codetect migrate-to-postgres (removed v4.0)
 └── share/
     └── codetect/
         └── templates/
             └── mcp.json     # Template for new projects
 ```
+
+## Upgrading from v3.7.x
+
+Run `make install` again from a fresh clone. The new install:
+1. Replaces the old `codetect` wrapper script with the real unified binary.
+2. Installs deprecation shims for `codetect-index`, `codetect-daemon`, and `migrate-to-postgres` — these now print a warning on stderr and delegate to `codetect <subcmd>`.
+3. Removes the separate `codetect-mcp` binary (its functionality is now `codetect mcp`).
+
+Any existing shell aliases or editor configs that call `codetect-index` will continue to work via the shim until v4.0.0.
+
+> **If you see the red embedding-health banner:** run `codetect doctor` for diagnosis. See the [FAQ](https://github.com/brian-lai/codetect/issues) for common causes.
 
 Configuration and registry are stored at:
 

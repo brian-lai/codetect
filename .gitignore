@@ -34,3 +34,4 @@ Thumbs.db
 # Jekyll
 docs/_site/
 docs/.jekyll-cache/
+.para-worktrees/

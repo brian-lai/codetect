@@ -1,10 +1,16 @@
 // Package commands dispatches subcommands for the unified `codetect` binary.
 //
-// STUB — created by /para:plan for 2026-05-01-codetect-tier1-unbreak.
-// Implementation is provided by plan phase 1. Each Dispatch* function currently
-// returns 501 / "not implemented" so that wiring can be tested before moving
-// the real logic from cmd/codetect-index, cmd/codetect-daemon, and
-// cmd/migrate-to-postgres into this package.
+// Each subcommand is implemented in its own file:
+//   - mcp.go    → RunMCP (MCP server on stdio)
+//   - init.go   → RunInit (write .mcp.json)
+//   - index.go  → RunIndex (index a project)
+//   - embed.go  → RunEmbed (generate embeddings)
+//   - stats.go  → RunStats (show index statistics)
+//   - doctor.go → RunDoctor (health checks)
+//   - daemon.go → RunDaemon (daemon start/stop/status)
+//   - registry.go → RunRegistry (project registry)
+//   - migrate.go  → RunMigrate (SQLite→Postgres migration)
+//   - version.go  → RunVersion (print version)
 package commands
 
 import (
@@ -76,63 +82,6 @@ func Dispatch(argv []string) ExitCode {
 		PrintHelp(os.Stderr)
 		return ExitUnknownArg
 	}
-}
-
-// RunMCP starts the MCP server on stdio. No flags; reads stdin until EOF.
-func RunMCP(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunMCP")
-}
-
-// RunInit writes .mcp.json in cwd from templates/mcp.json.
-// Flags: --force (overwrite existing .mcp.json).
-func RunInit(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunInit")
-}
-
-// RunIndex performs incremental or full indexing of the given path (default ".").
-// Flags match today's codetect-index index: --force/-f, --clear-cache, --v1
-// (removed in phase 4), --verbose/-v, --json, --parallel/-j.
-// Exit code 2 if embedding health check trips (phase 3).
-func RunIndex(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunIndex")
-}
-
-// RunEmbed generates embeddings for an existing chunked index.
-// Flags match today's codetect-index embed.
-// Exit code 2 if health check trips.
-func RunEmbed(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunEmbed")
-}
-
-// RunStats prints index statistics. Flags: --json.
-func RunStats(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunStats")
-}
-
-// RunDoctor runs system health checks. See spec §3.6.
-// Exit code 0 healthy, 1 unhealthy (sentinel present or check failed), 2 fatal.
-func RunDoctor(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunDoctor")
-}
-
-// RunDaemon dispatches to daemon subcommands: start, stop, status, logs.
-func RunDaemon(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunDaemon")
-}
-
-// RunRegistry dispatches to registry subcommands: list, add, remove, stats.
-func RunRegistry(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunRegistry")
-}
-
-// RunMigrate runs the SQLite→Postgres migration utility (formerly cmd/migrate-to-postgres).
-func RunMigrate(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunMigrate")
-}
-
-// RunVersion prints the version string and exits.
-func RunVersion(args []string) ExitCode {
-	panic("not implemented: cmd/codetect/commands.RunVersion")
 }
 
 // PrintHelp writes help text listing all subcommands to w.
